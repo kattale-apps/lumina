@@ -1,3 +1,4 @@
+import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -10,6 +11,8 @@ export const appRole = v.union(
 );
 
 export default defineSchema({
+  ...authTables,
+
   tenants: defineTable({
     name: v.string(),
     slug: v.string(),
@@ -23,6 +26,7 @@ export default defineSchema({
     .index("by_status", ["status"]),
 
   userProfiles: defineTable({
+    // Stable Convex Auth user ID, not the session-specific JWT subject.
     authSubject: v.string(),
     email: v.optional(v.string()),
     displayName: v.string(),
