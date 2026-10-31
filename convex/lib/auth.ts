@@ -1,3 +1,4 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
@@ -29,9 +30,17 @@ export async function requireIdentity(ctx: AuthContext) {
 
 export async function requireUserProfile(ctx: AuthContext) {
   const identity = await requireIdentity(ctx);
+  const authUserId = await getAuthUserId(ctx);
+
+  if (!authUserId) {
+    throw new AuthorizationError("Authentication is required.");
+  }
+
   const profile = await ctx.db
     .query("userProfiles")
-    .withIndex("by_auth_subject", (q) => q.eq("authSubject", identity.subject))
+    .withIndex("by_auth_subject", (q) =>
+      q.eq("authSubject", authUserId)
+    )
     .unique();
 
   if (!profile || profile.status !== "active") {
@@ -82,10 +91,7 @@ export async function requireAnyActiveMembership(ctx: AuthContext) {
     if (membership.status !== "active") continue;
     const tenant = await ctx.db.get(membership.tenantId);
     if (tenant?.status === "active") {
-      activeMemberships.push({
-        membership,
-        tenant
-      });
+      activeMemberships.push({ membership, tenant });
     }
   }
 
