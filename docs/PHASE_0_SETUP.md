@@ -60,6 +60,39 @@ dashboard build command.
 3. Locally: `npm run typecheck` (requires `npx convex dev` to have generated
    `convex/_generated`).
 
+## 5. Provision the first company and administrator
+Self-registration never grants access. After the owner registers at `/sign-in`
+(they will see "Waiting for company access"), an operator with Convex dashboard
+or CLI access runs the internal `admin:bootstrapTenant` function:
+
+```
+npx convex run admin:bootstrapTenant \
+  '{"companyName":"<Company name>","slug":"<company-slug>","adminEmail":"<owner email>"}' --prod
+```
+
+Optional fields: `"defaultCurrency"` (default `UGX`) and
+`"supportedCurrencies"` (e.g. `["UGX","USD"]`). Omit `--prod` to run against
+your development deployment. The same function can be run from the Convex
+dashboard: **Functions → admin:bootstrapTenant → Run function**.
+
+Until the in-app user administration screen exists, grant further staff roles
+after they register:
+
+```
+npx convex run admin:grantMembership \
+  '{"tenantSlug":"<company-slug>","email":"<staff email>","role":"sales_agent"}' --prod
+```
+
+Roles: `super_admin`, `inventory_admin`, `sales_manager`, `technician`,
+`sales_agent`. Both functions are `internalMutation`s, so browsers and clients
+cannot call them, and both write audit events. The user's open "Waiting for
+company access" page switches to the workspace automatically once access is
+granted.
+
+## 6. Tests
+`npm test` runs the backend tests (Vitest + `convex-test`, in-memory, no
+deployment needed). `convex/_generated` must exist first (`npx convex dev`).
+
 ## Authentication model
 Lumina uses Convex Auth with the password provider through the client-side React
 integration; it intentionally does not use the experimental Next.js server-side
@@ -76,8 +109,8 @@ accessing company data.
 
 Do not expose a public mutation that lets users create tenants, grant memberships,
 or assign themselves `super_admin`. The first company and first administrator must
-be provisioned through a restricted operator-controlled procedure (planned as an
-internal, CLI-only Convex function).
+be provisioned through a restricted operator-controlled procedure: the internal
+`admin:bootstrapTenant` function described above.
 
 ## Environment and security
 Never commit `.env.local`, deploy keys, JWT keys, provider secrets or customer

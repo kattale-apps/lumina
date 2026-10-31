@@ -1,5 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
 export const APP_ROLES = [
@@ -28,26 +28,54 @@ export async function requireIdentity(ctx: AuthContext) {
   return identity;
 }
 
-export async function requireUserProfile(ctx: AuthContext) {
-  const identity = await requireIdentity(ctx);
+/** Looks up the Lumina profile for the signed-in user without throwing. */
+export async function findViewerProfile(ctx: AuthContext) {
   const authUserId = await getAuthUserId(ctx);
-
-  if (!authUserId) {
-    throw new AuthorizationError("Authentication is required.");
-  }
+  if (!authUserId) return null;
 
   const profile = await ctx.db
     .query("userProfiles")
-    .withIndex("by_auth_subject", (q) =>
-      q.eq("authSubject", authUserId)
-    )
+    .withIndex("by_auth_subject", (q) => q.eq("authSubject", authUserId))
     .unique();
 
+  return { authUserId, profile };
+}
+
+export async function requireUserProfile(ctx: AuthContext) {
+  const identity = await requireIdentity(ctx);
+  const viewer = await findViewerProfile(ctx);
+
+  if (!viewer) {
+    throw new AuthorizationError("Authentication is required.");
+  }
+
+  const { profile } = viewer;
   if (!profile || profile.status !== "active") {
     throw new AuthorizationError("Your Lumina user profile is not active.");
   }
 
   return { identity, profile };
+}
+
+/** Active memberships whose company is also active. */
+export async function listActiveMemberships(
+  ctx: AuthContext,
+  profileId: Id<"userProfiles">
+) {
+  const memberships = await ctx.db
+    .query("memberships")
+    .withIndex("by_user", (q) => q.eq("userId", profileId))
+    .collect();
+
+  const active: { membership: Doc<"memberships">; tenant: Doc<"tenants"> }[] = [];
+  for (const membership of memberships) {
+    if (membership.status !== "active") continue;
+    const tenant = await ctx.db.get(membership.tenantId);
+    if (tenant?.status === "active") {
+      active.push({ membership, tenant });
+    }
+  }
+  return active;
 }
 
 export async function requireTenantMembership(
@@ -81,19 +109,6 @@ export async function requireTenantMembership(
 
 export async function requireAnyActiveMembership(ctx: AuthContext) {
   const { identity, profile } = await requireUserProfile(ctx);
-  const memberships = await ctx.db
-    .query("memberships")
-    .withIndex("by_user", (q) => q.eq("userId", profile._id))
-    .collect();
-
-  const activeMemberships = [];
-  for (const membership of memberships) {
-    if (membership.status !== "active") continue;
-    const tenant = await ctx.db.get(membership.tenantId);
-    if (tenant?.status === "active") {
-      activeMemberships.push({ membership, tenant });
-    }
-  }
-
-  return { identity, profile, memberships: activeMemberships };
+  const memberships = await listActiveMemberships(ctx, profile._id);
+  return { identity, profile, memberships };
 }

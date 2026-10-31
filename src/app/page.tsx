@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const modules = [
   {
     number: "01",
@@ -25,11 +27,13 @@ export default function HomePage() {
   return (
     <main className="shell">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="Lumina home">
+        <Link className="brand" href="/" aria-label="Lumina home">
           <span className="brand-mark">L</span>
           <span>LUMINA</span>
-        </a>
-        <span className="environment">PROJECT FOUNDATION</span>
+        </Link>
+        <Link className="button button-small" href="/sign-in">
+          Sign in
+        </Link>
       </header>
 
       <section className="hero">
