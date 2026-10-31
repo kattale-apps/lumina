@@ -1,15 +1,24 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { useConvexAuth } from "convex/react";
 
 function SignInForm() {
   const { signIn } = useAuthActions();
+  const { isAuthenticated } = useConvexAuth();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Covers both a successful sign-in and arriving here already signed in.
+  useEffect(() => {
+    if (isAuthenticated) router.replace("/dashboard");
+  }, [isAuthenticated, router]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
