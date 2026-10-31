@@ -1,6 +1,7 @@
 import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
 import type { DataModel } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [
@@ -16,7 +17,9 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
     })
   ],
   callbacks: {
-    async afterUserCreatedOrUpdated(ctx, { userId, profile }) {
+    async afterUserCreatedOrUpdated(authCtx, { userId, profile }) {
+      // The auth library types ctx against an untyped data model; narrow it.
+      const ctx = authCtx as unknown as MutationCtx;
       const authSubject = String(userId);
       const existing = await ctx.db
         .query("userProfiles")
