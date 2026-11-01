@@ -11,10 +11,12 @@
 import type * as admin from "../admin.js";
 import type * as auth from "../auth.js";
 import type * as catalogue from "../catalogue.js";
+import type * as files from "../files.js";
 import type * as http from "../http.js";
 import type * as lib_audit from "../lib/audit.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_catalogueDefaults from "../lib/catalogueDefaults.js";
+import type * as lib_files from "../lib/files.js";
 import type * as lib_money from "../lib/money.js";
 import type * as lib_pricing from "../lib/pricing.js";
 import type * as lib_specFields from "../lib/specFields.js";
@@ -38,10 +40,12 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   auth: typeof auth;
   catalogue: typeof catalogue;
+  files: typeof files;
   http: typeof http;
   "lib/audit": typeof lib_audit;
   "lib/auth": typeof lib_auth;
   "lib/catalogueDefaults": typeof lib_catalogueDefaults;
+  "lib/files": typeof lib_files;
   "lib/money": typeof lib_money;
   "lib/pricing": typeof lib_pricing;
   "lib/specFields": typeof lib_specFields;

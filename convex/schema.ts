@@ -208,7 +208,9 @@ export default defineSchema({
     size: v.number(),
     createdAt: v.number(),
     createdBy: v.string()
-  }).index("by_product", ["productId"]),
+  })
+    .index("by_product", ["productId"])
+    .index("by_storage", ["storageId"]),
 
   warehouses: defineTable({
     tenantId: v.id("tenants"),

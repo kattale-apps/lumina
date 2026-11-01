@@ -600,3 +600,32 @@ a.module-link:focus-visible { outline: 3px solid #26a269; outline-offset: 2px; }
   font: inherit;
   font-size: 15px;
 }
+
+/* Product files */
+.files-panel { display: grid; gap: 12px; margin-top: 8px; }
+
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.image-grid li { display: grid; gap: 6px; align-content: start; }
+
+.image-grid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+}
+
+.file-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.upload-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+label.button[aria-disabled="true"] { opacity: .6; cursor: wait; }
+label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { CompanyPage, ConfiguredOnly, errorMessage } from "../workspace";
@@ -347,6 +347,146 @@ function ProductMarginForm({ product, tenantId }: { product: Product; tenantId: 
   );
 }
 
+const ACCEPT = "image/png,image/jpeg,image/webp,application/pdf";
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+
+function formatSize(bytes: number) {
+  return bytes >= 1024 * 1024
+    ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function ProductFiles({
+  product,
+  tenantId,
+  canManage
+}: {
+  product: Product;
+  tenantId: Id<"tenants">;
+  canManage: boolean;
+}) {
+  const productId = product.id as Id<"products">;
+  const files = useQuery(api.files.listFiles, { tenantId, productId });
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const attachFile = useAction(api.files.attachFile);
+  const removeFile = useMutation(api.files.removeFile);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
+
+  async function upload(list: FileList | null) {
+    if (!list || list.length === 0) return;
+    setBusy(true);
+    setNotice(null);
+    let added = 0;
+    try {
+      for (const file of Array.from(list)) {
+        if (file.size > MAX_UPLOAD_BYTES) {
+          throw new Error(`"${file.name}" is larger than 15 MB.`);
+        }
+        const url = await generateUploadUrl({ tenantId, productId });
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": file.type || "application/octet-stream" },
+          body: file
+        });
+        if (!response.ok) throw new Error(`Upload of "${file.name}" failed. Please try again.`);
+        const { storageId } = (await response.json()) as { storageId: Id<"_storage"> };
+        await attachFile({ tenantId, productId, storageId, fileName: file.name });
+        added += 1;
+      }
+      setNotice({ ok: true, text: `${added} file${added === 1 ? "" : "s"} added.` });
+    } catch (error) {
+      const text = error instanceof Error && !("data" in error) ? error.message : errorMessage(error);
+      setNotice({ ok: false, text: added > 0 ? `${added} added. ${text}` : text });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!files) return <p className="muted">Loading files…</p>;
+  const images = files.filter((f) => f.kind === "image");
+  const sheets = files.filter((f) => f.kind === "datasheet");
+
+  const remove = async (id: Id<"productFiles">) => {
+    setNotice(null);
+    try {
+      await removeFile({ fileId: id });
+    } catch (error) {
+      setNotice({ ok: false, text: errorMessage(error) });
+    }
+  };
+
+  return (
+    <div className="files-panel">
+      {images.length > 0 ? (
+        <ul className="image-grid">
+          {images.map((file) => (
+            <li key={file.id}>
+              {file.url ? (
+                <a href={file.url} target="_blank" rel="noopener noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={file.url} alt={`${product.name}: ${file.fileName}`} loading="lazy" />
+                </a>
+              ) : null}
+              <span className="record-meta">{file.fileName}</span>
+              {canManage ? (
+                <button type="button" className="button button-secondary button-small" onClick={() => remove(file.id)}>
+                  Remove
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {sheets.length > 0 ? (
+        <ul className="record-list">
+          {sheets.map((file) => (
+            <li className="file-row" key={file.id}>
+              {file.url ? (
+                <a className="link-summary" href={file.url} target="_blank" rel="noopener noreferrer">
+                  {file.fileName}
+                </a>
+              ) : (
+                <span>{file.fileName}</span>
+              )}
+              <span className="record-meta">PDF · {formatSize(file.size)}</span>
+              {canManage ? (
+                <button type="button" className="button button-secondary button-small" onClick={() => remove(file.id)}>
+                  Remove
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {files.length === 0 ? <p className="hint">No images or datasheets yet.</p> : null}
+
+      {canManage ? (
+        <div className="upload-row">
+          <label className="button button-secondary button-small" aria-disabled={busy}>
+            {busy ? "Uploading…" : "Add images or PDF datasheets"}
+            <input
+              className="visually-hidden"
+              type="file"
+              accept={ACCEPT}
+              multiple
+              disabled={busy}
+              onChange={(e) => {
+                void upload(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <span className="hint">PNG, JPEG or WebP up to 5 MB (max 8) · PDF up to 15 MB (max 5).</span>
+        </div>
+      ) : null}
+      <NoticeText notice={notice} />
+    </div>
+  );
+}
+
 function ProductCard({
   product,
   tenantId,
@@ -446,6 +586,15 @@ function ProductCard({
           </dl>
         </details>
       ) : null}
+
+      <details>
+
+        <summary className="link-summary">Images &amp; datasheets</summary>
+
+        <ProductFiles product={product} tenantId={tenantId} canManage={canManage} />
+
+      </details>
+
 
       {canManage && product.pricing ? (
         <div className="pricing-box">
