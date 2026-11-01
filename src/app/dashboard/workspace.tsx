@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
+import { idbAvailable, idbBackend } from "../../lib/offline/idb";
+import { OfflineStore, pendingCount } from "../../lib/offline/store";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 
@@ -45,7 +47,16 @@ export function SignOutButton() {
       onClick={async () => {
         setBusy(true);
         try {
+          // Work saved for offline use is removed from this device on sign-out, so warn before losing unsent changes.
+          const local = idbAvailable() ? new OfflineStore(idbBackend) : null;
+          if (local) {
+            const unsent = pendingCount(await local.read().catch(() => ({ outbox: [], localCustomers: [], localSites: [], work: [] }) as never));
+            if (unsent > 0 && !window.confirm(`${unsent} change(s) have not been sent yet and will be lost if you sign out. Sign out anyway?`)) {
+              return;
+            }
+          }
           await signOut();
+          await local?.clear().catch(() => undefined);
           router.replace("/sign-in");
         } finally {
           setBusy(false);
@@ -62,6 +73,7 @@ export function WorkspaceHeader({ role }: { role?: string }) {
   const crm = role !== undefined && role !== "inventory_admin";
   const links = [
     { href: "/dashboard", label: "Home", show: true },
+    { href: "/dashboard/field", label: "Field work", show: crm },
     { href: "/dashboard/customers", label: "Customers", show: crm },
     { href: "/dashboard/assessments", label: "Assessments", show: crm },
     { href: "/dashboard/quotations", label: "Quotations", show: crm },

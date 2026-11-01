@@ -1,6 +1,6 @@
 # Lumina Development Roadmap
 
-**Status as of 2026-11-01:** Phase 0 is mostly complete (tooling items outstanding). Phase 1 is feature-complete and live on production. Phases 2 and 3 are live; Phase 4 is feature-complete. Phases 5–6 are not started.
+**Status as of 2026-11-01:** Phase 0 is mostly complete (tooling items outstanding). Phase 1 is feature-complete and live on production. Phases 2, 3 and 4 are live, and Phase 5 is built but untested on devices. Phase 6 is not started.
 
 Legend: ✅ done and deployed · 🟡 partly done · ⬜ not started
 
@@ -141,12 +141,38 @@ Pricing and price snapshots; illustrative PDF/watermark; technician queue/checkl
 - Quotations cannot be marked superseded when a replacement is issued.
 - The PDF is plain: no logo, terms template or customer address.
 
-## Phase 5 — Offline and Android — ⬜ not started
+## Phase 5 — Offline and Android — ✅ built, not yet tested on devices
 IndexedDB cache/outbox; idempotent sync/conflict resolution; stale stock/price indicators and server revalidation; PWA hardening; Capacitor Android packaging and release process.
 
 **Exit:** Offline work is retained and reconciled; no offline draft becomes official automatically.
 
-*Groundwork in place:* stock movements accept client idempotency keys.
+Details, security notes and limits are in `docs/OFFLINE_AND_ANDROID.md`.
+
+| Item | Status | Where |
+|---|---|---|
+| Field work screen usable offline: customers, sites, assessments, appliance library | ✅ | `/dashboard/field` |
+| IndexedDB device store with ordered outbox; one coalesced unsent save per assessment | ✅ | `src/lib/offline/store.ts` |
+| Idempotent push: every change has an id the server remembers; replays are safe | ✅ | `convex/sync.ts`, tested |
+| Dependent changes (site → customer → assessment) resolved by device ids | ✅ | tested |
+| Conflicts held on the server and resolved by a person ("use mine" / "keep server's") | ✅ | tested |
+| Rejected changes stay visible with a reason; discarding removes dependants | ✅ | tested |
+| Offline work can only create or save drafts; completing, sizing and quoting are online-only | ✅ | tested |
+| Cached catalogue prices with download time and 24-hour stale warning; revalidated at issue | ✅ | field page |
+| Different user on a device cannot see or send another's work; sign-out clears the device | ✅ | tested |
+| PWA: manifest, icons, service worker for the app shell, offline fallback page | ✅ | `public/` |
+| Capacitor Android project and release process | 🟡 generated, never built or run | `android/`, `docs/ANDROID_RELEASE.md` |
+
+**Exit criteria check:** unsent work is kept in IndexedDB until the server confirms it, retried safely, and any clash with newer server data is held for an explicit decision. No path from the offline queue completes an assessment or issues a quotation. 🟡 Verified with automated tests against the real server functions; **not yet verified on a real phone or in a real browser offline**, including the service worker and the Android build.
+
+**Known gaps and follow-ups**
+- Quotations, sizing and assessment completion are online-only.
+- Sync runs only while the app is open; there is no background sync.
+- Offline sign-in is not possible: the device must have been signed in and synced once, and the cached copy is open to anyone holding the unlocked device until sign-out.
+- A conflict cannot be merged line by line; the person picks one whole version.
+- Offline customers are created without email or notes, and sites without GPS.
+- The service worker has not been exercised across browser updates, and iOS Safari may evict stored data after long inactivity.
+- The Android application id (`com.lumina.solar`), launcher icons and signing key still need to be decided before publishing.
+- Development dependencies report npm audit findings (test tooling); `npm audit --omit=dev` reports two (one moderate, one high) in the production tree that have not been investigated.
 
 ## Phase 6 — Operations and financing — ⬜ not started
 Agent pipeline/commissions; manager dashboards; installation/warranty tracking; installment calculator and repayment schedule; payment integrations after financing policy is defined.

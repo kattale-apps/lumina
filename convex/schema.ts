@@ -484,6 +484,44 @@ export default defineSchema({
     createdAt: v.number()
   }).index("by_quotation", ["quotationId", "revision"]),
 
+  // One row per operation a device sent while it was offline. Makes retries safe:
+  // an operation id that was already processed returns its stored outcome.
+  offlineOperations: defineTable({
+    tenantId: v.id("tenants"),
+    opId: v.string(),
+    userId: v.id("userProfiles"),
+    type: v.string(),
+    status: v.union(v.literal("applied"), v.literal("conflict"), v.literal("rejected")),
+    // Device-generated id of the record this operation created, if any.
+    entityClientId: v.optional(v.string()),
+    entityId: v.optional(v.string()),
+    message: v.optional(v.string()),
+    revision: v.optional(v.number()),
+    conflictId: v.optional(v.id("syncConflicts")),
+    createdAt: v.number()
+  })
+    .index("by_tenant_op", ["tenantId", "opId"])
+    .index("by_tenant_client", ["tenantId", "entityClientId"]),
+
+  // An offline edit that could not be applied because the assessment moved on.
+  // The device's version is kept here until a person chooses what to do with it.
+  syncConflicts: defineTable({
+    tenantId: v.id("tenants"),
+    opId: v.string(),
+    assessmentId: v.id("assessments"),
+    ownerUserId: v.id("userProfiles"),
+    baseRevision: v.number(),
+    serverRevision: v.number(),
+    reason: v.string(),
+    clientInputs: v.any(),
+    status: v.union(v.literal("open"), v.literal("kept_server"), v.literal("applied_mine")),
+    createdAt: v.number(),
+    resolvedAt: v.optional(v.number()),
+    resolvedBy: v.optional(v.string())
+  })
+    .index("by_tenant_status", ["tenantId", "status"])
+    .index("by_assessment", ["assessmentId"]),
+
   numberSequences: defineTable({
     tenantId: v.id("tenants"),
     key: v.string(),

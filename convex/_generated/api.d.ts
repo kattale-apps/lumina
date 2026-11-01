@@ -40,6 +40,7 @@ import type * as settings from "../settings.js";
 import type * as staff from "../staff.js";
 import type * as sizing from "../sizing.js";
 import type * as stock from "../stock.js";
+import type * as sync from "../sync.js";
 import type * as users from "../users.js";
 
 import type {
@@ -81,6 +82,7 @@ declare const fullApi: ApiFromModules<{
   staff: typeof staff;
   sizing: typeof sizing;
   stock: typeof stock;
+  sync: typeof sync;
   users: typeof users;
 }>;
 

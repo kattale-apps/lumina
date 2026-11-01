@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { ConvexClientProvider } from "./ConvexClientProvider";
+import { RegisterServiceWorker } from "./RegisterServiceWorker";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -8,7 +9,10 @@ export const metadata: Metadata = {
     template: "%s | Lumina"
   },
   description:
-    "Solar customer assessment, system configuration, inventory and quotation management."
+    "Solar customer assessment, system configuration, inventory and quotation management.",
+  manifest: "/manifest.webmanifest",
+  icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-192.png" },
+  appleWebApp: { capable: true, title: "Lumina", statusBarStyle: "black-translucent" }
 };
 
 export const viewport: Viewport = {
@@ -23,6 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <RegisterServiceWorker />
         <ConvexClientProvider>{children}</ConvexClientProvider>
       </body>
     </html>
