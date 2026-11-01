@@ -91,6 +91,57 @@ export default defineSchema({
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_key", ["tenantId", "key"]),
 
+  products: defineTable({
+    tenantId: v.id("tenants"),
+    categoryId: v.id("productCategories"),
+    name: v.string(),
+    brand: v.string(),
+    model: v.string(),
+    // Stock-keeping unit, unique within the company.
+    sku: v.string(),
+    warrantyMonths: v.optional(v.number()),
+    description: v.optional(v.string()),
+    specValues: v.record(v.string(), v.union(v.number(), v.string(), v.boolean())),
+    // Version of the category specification these values were entered against.
+    specSchemaVersion: v.number(),
+    status: v.union(v.literal("active"), v.literal("archived")),
+    createdAt: v.number(),
+    createdBy: v.string(),
+    updatedAt: v.number()
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_sku", ["tenantId", "sku"])
+    .index("by_category", ["categoryId"]),
+
+  // Append-only, effective-dated base costs. Admin-visible only.
+  costRecords: defineTable({
+    tenantId: v.id("tenants"),
+    productId: v.id("products"),
+    currency: v.string(),
+    amountMinor: v.number(),
+    effectiveFrom: v.number(),
+    createdAt: v.number(),
+    createdBy: v.string()
+  }).index("by_product_effective", ["productId", "effectiveFrom"]),
+
+  // Cost-plus-margin rules. The most specific rule wins: product, category, then default.
+  marginRules: defineTable({
+    tenantId: v.id("tenants"),
+    scope: v.union(v.literal("default"), v.literal("category"), v.literal("product")),
+    categoryId: v.optional(v.id("productCategories")),
+    productId: v.optional(v.id("products")),
+    // Target margin added on top of cost, in basis points (1% = 100).
+    marginBps: v.number(),
+    // Lowest margin any discount may reach. Enforced server-side when quoting.
+    floorMarginBps: v.number(),
+    updatedAt: v.number(),
+    updatedBy: v.string()
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_scope", ["tenantId", "scope"])
+    .index("by_category", ["categoryId"])
+    .index("by_product", ["productId"]),
+
   warehouses: defineTable({
     tenantId: v.id("tenants"),
     name: v.string(),

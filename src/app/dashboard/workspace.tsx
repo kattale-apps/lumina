@@ -62,6 +62,12 @@ export function WorkspaceHeader({ role }: { role?: string }) {
     { href: "/dashboard", label: "Home", show: true },
     { href: "/dashboard/warehouses", label: "Warehouses", show: true },
     { href: "/dashboard/catalogue", label: "Catalogue", show: true },
+    { href: "/dashboard/products", label: "Products", show: true },
+    {
+      href: "/dashboard/pricing",
+      label: "Pricing",
+      show: role === "super_admin" || role === "inventory_admin"
+    },
     { href: "/dashboard/staff", label: "Staff", show: role === "super_admin" },
     { href: "/dashboard/settings", label: "Settings", show: role === "super_admin" }
   ];

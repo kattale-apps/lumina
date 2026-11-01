@@ -530,3 +530,73 @@ a.module-link:focus-visible { outline: 3px solid #26a269; outline-offset: 2px; }
 .pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .pill-info { background: #e5f0ec; color: #0f5a3a; }
 .field-form { margin-top: 0; max-width: none; background: var(--canvas); }
+
+/* Products and pricing */
+.panel-form select:disabled, .panel-form input:disabled { background: #eef3f0; color: var(--muted); }
+
+.spec-fieldset {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.spec-fieldset legend { padding: 0 6px; font-size: 14px; font-weight: 700; }
+.spec-input { display: grid; gap: 4px; }
+.spec-flag { color: var(--green); font-weight: 400; font-size: 12px; }
+
+.product-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.price-block { display: grid; gap: 2px; text-align: right; }
+.price { font-size: 18px; font-weight: 800; }
+
+.link-summary { cursor: pointer; color: var(--green); font-size: 14px; font-weight: 700; padding: 6px 0; }
+.link-summary:focus-visible { outline: 3px solid #26a269; outline-offset: 2px; }
+
+.spec-list { display: grid; gap: 6px; margin: 8px 0 0; }
+.spec-list > div { display: flex; justify-content: space-between; gap: 16px; font-size: 14px; }
+.spec-list dt { color: var(--muted); }
+.spec-list dd { margin: 0; font-weight: 700; text-align: right; overflow-wrap: anywhere; }
+
+.pricing-box {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px dashed #c9d6cf;
+  border-radius: 12px;
+  background: var(--canvas);
+}
+
+.inline-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.inline-form input, .inline-form select {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid #c9d6cf;
+  border-radius: 10px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+.inline-form input { width: 160px; }
+
+.filter-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 14px; font-weight: 700; }
+.filter-row select {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #c9d6cf;
+  border-radius: 10px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
