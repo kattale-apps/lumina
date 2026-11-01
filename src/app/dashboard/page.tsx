@@ -1,19 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-
-const ROLE_LABELS: Record<string, string> = {
-  super_admin: "Super administrator",
-  inventory_admin: "Inventory & pricing administrator",
-  sales_manager: "Sales manager",
-  technician: "Technician",
-  sales_agent: "Sales agent"
-};
+import {
+  ROLE_LABELS,
+  SignOutButton,
+  StatusCard,
+  WorkspaceHeader
+} from "./workspace";
 
 const UPCOMING_MODULES = [
   { title: "Customers & assessments", phase: "Phase 2" },
@@ -21,63 +18,6 @@ const UPCOMING_MODULES = [
   { title: "Products & inventory", phase: "Phase 1" },
   { title: "Quotations & approvals", phase: "Phase 4" }
 ];
-
-function SignOutButton() {
-  const { signOut } = useAuthActions();
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-
-  return (
-    <button
-      type="button"
-      className="button button-secondary"
-      disabled={busy}
-      onClick={async () => {
-        setBusy(true);
-        try {
-          await signOut();
-          router.replace("/sign-in");
-        } finally {
-          setBusy(false);
-        }
-      }}
-    >
-      {busy ? "Signing out…" : "Sign out"}
-    </button>
-  );
-}
-
-function WorkspaceHeader() {
-  return (
-    <header className="topbar">
-      <Link className="brand" href="/" aria-label="Lumina home">
-        <span className="brand-mark">L</span>
-        <span>LUMINA</span>
-      </Link>
-      <SignOutButton />
-    </header>
-  );
-}
-
-function StatusCard({
-  eyebrow,
-  title,
-  children
-}: {
-  eyebrow: string;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <main className="auth-shell">
-      <section className="auth-card" aria-live="polite">
-        <p className="eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
-        {children}
-      </section>
-    </main>
-  );
-}
 
 function Workspace() {
   const router = useRouter();
@@ -135,7 +75,7 @@ function Workspace() {
 
   return (
     <div className="shell">
-      <WorkspaceHeader />
+      <WorkspaceHeader role={viewer.companies[0]?.role} />
       <main className="workspace">
         <p className="eyebrow">WORKSPACE</p>
         <h1>Welcome, {viewer.profile.displayName}</h1>
@@ -152,6 +92,35 @@ function Workspace() {
             ))}
           </ul>
         </section>
+
+        <section aria-labelledby="manage-heading" className="workspace-section">
+          <h2 id="manage-heading">Company setup</h2>
+          <ul className="module-grid">
+            <li>
+              <Link className="module-card module-link" href="/dashboard/warehouses">
+                <h3>Warehouses</h3>
+                <span className="module-state">Stock locations</span>
+              </Link>
+            </li>
+            {viewer.companies[0]?.role === "super_admin" ? (
+              <>
+                <li>
+                  <Link className="module-card module-link" href="/dashboard/staff">
+                    <h3>Staff &amp; roles</h3>
+                    <span className="module-state">Grant and manage access</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link className="module-card module-link" href="/dashboard/settings">
+                    <h3>Company settings</h3>
+                    <span className="module-state">Name and currencies</span>
+                  </Link>
+                </li>
+              </>
+            ) : null}
+          </ul>
+        </section>
+
 
         <section aria-labelledby="modules-heading" className="workspace-section">
           <h2 id="modules-heading">Modules</h2>

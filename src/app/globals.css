@@ -353,3 +353,109 @@ a { color: inherit; text-decoration: none; }
   .approval-note { padding: 19px; }
   .footer { flex-direction: column; }
 }
+
+/* Workspace navigation and company admin screens */
+.workspace-nav {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.workspace-nav a {
+  padding: 10px 14px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.workspace-nav a:hover { background: var(--surface); color: var(--ink); }
+.workspace-nav a:focus-visible { outline: 3px solid #26a269; outline-offset: 2px; }
+
+.muted { color: var(--muted); }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.panel-form {
+  display: grid;
+  gap: 8px;
+  max-width: 520px;
+  margin-top: 24px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.panel-form h2 { margin: 0 0 4px; font-size: 18px; }
+.panel-form label { margin-top: 8px; font-size: 14px; font-weight: 700; }
+
+.panel-form input, .panel-form select, .record-actions select {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid #c9d6cf;
+  border-radius: 10px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+}
+
+.panel-form input:focus-visible, .panel-form select:focus-visible, .record-actions select:focus-visible {
+  outline: 3px solid #26a269;
+  outline-offset: 2px;
+}
+
+.panel-form .button { margin-top: 12px; justify-self: start; }
+.hint { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.form-success {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #e5f5ec;
+  color: #0f5a3a;
+  font-size: 14px;
+}
+
+.record-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+
+.record-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.record-card > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.record-title { font-size: 16px; font-weight: 800; overflow-wrap: anywhere; }
+.record-code { margin-left: 6px; color: var(--muted); font-size: 12px; letter-spacing: .08em; }
+.record-meta { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.record-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.record-actions select { min-height: 40px; font-size: 14px; }
+
+.pill {
+  justify-self: start;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.pill-warn { background: #fff1d6; color: #7a4a00; }
+
+a.module-link { display: block; }
+a.module-link:hover { border-color: var(--green); }
+a.module-link:focus-visible { outline: 3px solid #26a269; outline-offset: 2px; }

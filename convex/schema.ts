@@ -50,6 +50,20 @@ export default defineSchema({
     .index("by_user_tenant", ["userId", "tenantId"])
     .index("by_tenant_role", ["tenantId", "role"]),
 
+  warehouses: defineTable({
+    tenantId: v.id("tenants"),
+    name: v.string(),
+    // Short stable identifier unique within the company, e.g. "KLA-MAIN".
+    code: v.string(),
+    location: v.optional(v.string()),
+    status: v.union(v.literal("active"), v.literal("inactive")),
+    createdAt: v.number(),
+    createdBy: v.string(),
+    updatedAt: v.number()
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_code", ["tenantId", "code"]),
+
   auditEvents: defineTable({
     tenantId: v.id("tenants"),
     actorUserId: v.optional(v.id("userProfiles")),
