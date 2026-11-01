@@ -10,6 +10,30 @@ export const appRole = v.union(
   v.literal("sales_agent")
 );
 
+export const specFieldType = v.union(
+  v.literal("number"),
+  v.literal("text"),
+  v.literal("boolean"),
+  v.literal("choice")
+);
+
+/**
+ * One typed specification a product in a category can carry. `key` and
+ * `type` never change once created, so stored product values stay valid.
+ */
+export const specField = v.object({
+  key: v.string(),
+  label: v.string(),
+  type: specFieldType,
+  // Explicit unit for number fields, e.g. "V", "A", "Wp", "kWh".
+  unit: v.optional(v.string()),
+  options: v.optional(v.array(v.string())),
+  required: v.boolean(),
+  // Compatibility and sizing checks need this value; missing means "cannot validate".
+  critical: v.boolean(),
+  retired: v.boolean()
+});
+
 export default defineSchema({
   ...authTables,
 
@@ -49,6 +73,23 @@ export default defineSchema({
     .index("by_tenant", ["tenantId"])
     .index("by_user_tenant", ["userId", "tenantId"])
     .index("by_tenant_role", ["tenantId", "role"]),
+
+  productCategories: defineTable({
+    tenantId: v.id("tenants"),
+    // Stable identifier, e.g. "pv_panel". Unique within the company.
+    key: v.string(),
+    name: v.string(),
+    description: v.optional(v.string()),
+    status: v.union(v.literal("active"), v.literal("archived")),
+    specFields: v.array(specField),
+    // Bumped on every specification change so snapshots can cite the definition used.
+    schemaVersion: v.number(),
+    createdAt: v.number(),
+    createdBy: v.string(),
+    updatedAt: v.number()
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_key", ["tenantId", "key"]),
 
   warehouses: defineTable({
     tenantId: v.id("tenants"),

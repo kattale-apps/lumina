@@ -97,6 +97,12 @@ function Workspace() {
           <h2 id="manage-heading">Company setup</h2>
           <ul className="module-grid">
             <li>
+              <Link className="module-card module-link" href="/dashboard/catalogue">
+                <h3>Product catalogue</h3>
+                <span className="module-state">Categories and specifications</span>
+              </Link>
+            </li>
+            <li>
               <Link className="module-card module-link" href="/dashboard/warehouses">
                 <h3>Warehouses</h3>
                 <span className="module-state">Stock locations</span>

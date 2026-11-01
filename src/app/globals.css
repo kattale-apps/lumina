@@ -459,3 +459,74 @@ a { color: inherit; text-decoration: none; }
 a.module-link { display: block; }
 a.module-link:hover { border-color: var(--green); }
 a.module-link:focus-visible { outline: 3px solid #26a269; outline-offset: 2px; }
+
+/* Catalogue */
+.panel-form textarea {
+  padding: 12px 14px;
+  border: 1px solid #c9d6cf;
+  border-radius: 10px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+
+.panel-form textarea:focus-visible { outline: 3px solid #26a269; outline-offset: 2px; }
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-weight: 400 !important;
+}
+
+.check-row input { width: 22px; height: 22px; min-height: 0; accent-color: var(--green); }
+
+.category-list { display: grid; gap: 10px; }
+
+.category-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.category-card summary {
+  display: grid;
+  gap: 3px;
+  padding: 16px 18px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.category-card summary::-webkit-details-marker { display: none; }
+.category-card summary:focus-visible { outline: 3px solid #26a269; outline-offset: -3px; border-radius: 14px; }
+.category-card[open] summary { border-bottom: 1px solid var(--line); }
+.category-body { display: grid; gap: 14px; padding: 16px 18px 20px; }
+.category-body .panel-form { margin-top: 0; max-width: none; }
+
+.field-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+
+.field-row {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.field-retired { opacity: .65; }
+
+.field-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.field-head > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill-info { background: #e5f0ec; color: #0f5a3a; }
+.field-form { margin-top: 0; max-width: none; background: var(--canvas); }

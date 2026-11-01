@@ -61,6 +61,7 @@ export function WorkspaceHeader({ role }: { role?: string }) {
   const links = [
     { href: "/dashboard", label: "Home", show: true },
     { href: "/dashboard/warehouses", label: "Warehouses", show: true },
+    { href: "/dashboard/catalogue", label: "Catalogue", show: true },
     { href: "/dashboard/staff", label: "Staff", show: role === "super_admin" },
     { href: "/dashboard/settings", label: "Settings", show: role === "super_admin" }
   ];
