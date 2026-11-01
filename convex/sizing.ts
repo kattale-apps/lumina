@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { loadAssessment } from "./assessments";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
+import { CRM_WRITERS } from "./lib/crm";
 import {
   buildCandidates,
   computeRequirements,
@@ -145,6 +146,7 @@ export const getSizing = query({
       assessmentStatus: assessment.status,
       currentRevision: assessment.currentRevision,
       canResolve: (TECHNICIAN_ROLES as readonly string[]).includes(membership.role),
+      canQuote: (CRM_WRITERS as readonly string[]).includes(membership.role),
       runs: runs.map((r) => ({
         id: r._id,
         createdAt: r.createdAt,

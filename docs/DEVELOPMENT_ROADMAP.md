@@ -1,6 +1,6 @@
 # Lumina Development Roadmap
 
-**Status as of 2026-11-01:** Phase 0 is mostly complete (tooling items outstanding). Phase 1 is feature-complete and live on production. Phases 2 (live) and 3 are feature-complete. Phases 4–6 are not started.
+**Status as of 2026-11-01:** Phase 0 is mostly complete (tooling items outstanding). Phase 1 is feature-complete and live on production. Phases 2 and 3 are live; Phase 4 is feature-complete. Phases 5–6 are not started.
 
 Legend: ✅ done and deployed · 🟡 partly done · ⬜ not started
 
@@ -107,12 +107,39 @@ Unit-aware load/energy model; battery, PV and inverter sizing; product-specific 
 - Multiple inverters in parallel and multiple MPPT string splits are not modelled.
 - Default assumption values are starting points and need technician review.
 
-## Phase 4 — Quotation and approval — ⬜ not started
+## Phase 4 — Quotation and approval — ✅ feature-complete (not yet used on the live site)
 Pricing and price snapshots; illustrative PDF/watermark; technician queue/checklist; amend/return/reject/approve; commercial exception approval; official issuance, immutable versions and audit; stock reservation lifecycle.
 
 **Exit:** No path issues an official quotation without required approvals.
 
-*Groundwork in place:* cost-plus-margin pricing with floor margins, and stock reservations with expiry.
+| Item | Status | Where |
+|---|---|---|
+| Quotation created from a sizing configuration, priced from current cost and margin rule | ✅ | `convex/quotations.ts` |
+| Immutable revisions with price, currency and product-specification snapshots; totals in exact minor units | ✅ | `quotationRevisions` |
+| Agent discounts up to the floor price; floor and cost never sent to the browser | ✅ | tested |
+| Service lines (installation, transport), tax rate and validity days | ✅ | quotation page |
+| Illustrative PDF with "UNVERIFIED — FOR ILLUSTRATION ONLY" on every page | ✅ | `convex/lib/quotePdf.ts`, tested |
+| Server-validated state machine; any revision voids earlier approvals | ✅ | `convex/lib/quote.ts` |
+| Technician queue, 10-point checklist, approve / return / reject with reason | ✅ | `/dashboard/quotations` |
+| Technician approval blocked while sizing is stale or has unresolved review checks | ✅ | tested |
+| Commercial approval by a manager for below-floor prices and special terms | ✅ | tested |
+| Nobody reviews or approves their own quotation | ✅ | tested |
+| Official issue re-checks approvals for that exact revision, prices, currency and stock | ✅ | `issueQuotation` |
+| Official number, stock reserved until validity ends, official PDF stored once | ✅ | tested |
+| Expiry (hourly job) and withdrawal release stock | ✅ | `convex/crons.ts` |
+| Audit event for every step | ✅ | `auditEvents` |
+
+**Exit criteria check:** official issue verifies the stored technical review and (where required) commercial approval for the current revision, not just the status field, and the state machine allows no other route. ✅ Not yet verified by someone using the live site end to end.
+
+**Known gaps and follow-ups**
+- In a company where one person is the only administrator and also the quotation owner, that person cannot approve their own work; a second reviewer is needed.
+- Service lines have no floor price (no cost is held for them), so they are never flagged.
+- Discount authority is "down to the floor price"; per-role or per-amount limits are not configurable.
+- Tax is one rate per quotation; there are no tax categories or exchange-rate conversion, and a quotation must be in one currency.
+- A reservation is made on official issue only; a "customer accepted" step and fulfilment screen do not exist yet.
+- The official PDF is generated moments after issue, not inside the issue transaction, so the link can appear a few seconds late.
+- Quotations cannot be marked superseded when a replacement is issued.
+- The PDF is plain: no logo, terms template or customer address.
 
 ## Phase 5 — Offline and Android — ⬜ not started
 IndexedDB cache/outbox; idempotent sync/conflict resolution; stale stock/price indicators and server revalidation; PWA hardening; Capacitor Android packaging and release process.

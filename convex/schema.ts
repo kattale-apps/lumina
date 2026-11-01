@@ -76,6 +76,39 @@ export const assessmentInputs = v.object({
   lines: v.array(assessmentLine)
 });
 
+export const quotationStatus = v.union(
+  v.literal("draft"),
+  v.literal("illustrative"),
+  v.literal("submitted_for_technical_review"),
+  v.literal("under_technical_review"),
+  v.literal("revision_required"),
+  v.literal("rejected"),
+  v.literal("pending_commercial_approval"),
+  v.literal("ready_for_official_issue"),
+  v.literal("officially_issued"),
+  v.literal("expired"),
+  v.literal("withdrawn")
+);
+
+/**
+ * One quoted line, with the price and product specification snapshot taken when
+ * the revision was written. `floorUnitMinor` is a protected figure: it is never
+ * sent to the browser.
+ */
+export const quotationLine = v.object({
+  kind: v.union(v.literal("product"), v.literal("service")),
+  productId: v.optional(v.id("products")),
+  sku: v.optional(v.string()),
+  description: v.string(),
+  quantity: v.number(),
+  unitListMinor: v.number(),
+  unitPriceMinor: v.number(),
+  floorUnitMinor: v.optional(v.number()),
+  specSchemaVersion: v.optional(v.number()),
+  specValues: v.optional(v.record(v.string(), v.union(v.number(), v.string(), v.boolean()))),
+  warrantyMonths: v.optional(v.number())
+});
+
 export default defineSchema({
   ...authTables,
 
@@ -379,6 +412,83 @@ export default defineSchema({
     createdBy: v.string(),
     actorUserId: v.id("userProfiles")
   }).index("by_run", ["runId"]),
+
+  quotations: defineTable({
+    tenantId: v.id("tenants"),
+    customerId: v.id("customers"),
+    siteId: v.id("customerSites"),
+    assessmentId: v.id("assessments"),
+    sizingRunId: v.id("sizingRuns"),
+    candidateIndex: v.number(),
+    ownerUserId: v.id("userProfiles"),
+    status: quotationStatus,
+    currentRevision: v.number(),
+    // Set once, at official issue.
+    officialNumber: v.optional(v.string()),
+    issuedRevision: v.optional(v.number()),
+    issuedAt: v.optional(v.number()),
+    validUntil: v.optional(v.number()),
+    reservationIds: v.optional(v.array(v.id("stockReservations"))),
+    createdAt: v.number(),
+    createdBy: v.string(),
+    updatedAt: v.number()
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_owner", ["tenantId", "ownerUserId"])
+    .index("by_tenant_status", ["tenantId", "status"])
+    .index("by_tenant_number", ["tenantId", "officialNumber"]),
+
+  // Immutable. A change to products, quantities, prices or terms is a new revision.
+  quotationRevisions: defineTable({
+    tenantId: v.id("tenants"),
+    quotationId: v.id("quotations"),
+    revision: v.number(),
+    currency: v.string(),
+    lines: v.array(quotationLine),
+    taxBps: v.number(),
+    validityDays: v.number(),
+    // Free-text terms are unusual terms, which need a manager's approval.
+    customTerms: v.optional(v.string()),
+    subtotalMinor: v.number(),
+    taxMinor: v.number(),
+    totalMinor: v.number(),
+    // Any line priced below its floor price, or custom terms.
+    requiresCommercialApproval: v.boolean(),
+    reason: v.optional(v.string()),
+    // The sizing run revision this price list was built against.
+    assessmentRevision: v.number(),
+    createdAt: v.number(),
+    createdBy: v.string(),
+    illustrativePdf: v.optional(v.id("_storage")),
+    officialPdf: v.optional(v.id("_storage"))
+  }).index("by_quotation", ["quotationId", "revision"]),
+
+  technicalReviews: defineTable({
+    tenantId: v.id("tenants"),
+    quotationId: v.id("quotations"),
+    revision: v.number(),
+    outcome: v.union(v.literal("approved"), v.literal("revision_required"), v.literal("rejected")),
+    checklist: v.array(v.object({ key: v.string(), confirmed: v.boolean() })),
+    reason: v.optional(v.string()),
+    reviewerUserId: v.id("userProfiles"),
+    createdAt: v.number()
+  }).index("by_quotation", ["quotationId", "revision"]),
+
+  commercialApprovals: defineTable({
+    tenantId: v.id("tenants"),
+    quotationId: v.id("quotations"),
+    revision: v.number(),
+    outcome: v.union(v.literal("approved"), v.literal("rejected")),
+    reason: v.string(),
+    approverUserId: v.id("userProfiles"),
+    createdAt: v.number()
+  }).index("by_quotation", ["quotationId", "revision"]),
+
+  numberSequences: defineTable({
+    tenantId: v.id("tenants"),
+    key: v.string(),
+    next: v.number()
+  }).index("by_tenant_key", ["tenantId", "key"]),
 
   warehouses: defineTable({
     tenantId: v.id("tenants"),

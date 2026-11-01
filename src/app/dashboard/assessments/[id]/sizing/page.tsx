@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../../../convex/_generated/api";
@@ -104,8 +104,10 @@ function RunForm({ assessmentId, onRun }: { assessmentId: Id<"assessments">; onR
   );
 }
 
-function Candidate({ run, index, canResolve }: { run: Run; index: number; canResolve: boolean }) {
+function Candidate({ run, index, canResolve, canQuote }: { run: Run; index: number; canResolve: boolean; canQuote: boolean }) {
   const resolve = useMutation(api.sizing.resolveCheck);
+  const createQuotation = useMutation(api.quotations.createQuotation);
+  const router = useRouter();
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const c = run.outcome.candidates[index];
@@ -131,6 +133,23 @@ function Candidate({ run, index, canResolve }: { run: Run; index: number; canRes
         {bat ? <li>Batteries: <strong>{c.counts.batteries} × {bat.name}</strong> ({bat.sku}) — {c.counts.batteriesInSeries} in series × {c.counts.batteryStrings} string(s), {formatEnergy(c.counts.batteryNominalWh)} nominal</li> : null}
       </ul>
       {error ? <p className="auth-message" role="alert">{error}</p> : null}
+      {canQuote && !run.stale ? (
+        <button
+          type="button"
+          className="button"
+          onClick={async () => {
+            setError("");
+            try {
+              const { quotationId } = await createQuotation({ sizingRunId: run.id, candidateIndex: index });
+              router.push(`/dashboard/quotations/${quotationId}`);
+            } catch (e) {
+              setError(errorMessage(e));
+            }
+          }}
+        >
+          Create quotation from this configuration
+        </button>
+      ) : null}
       <ul className="spec-list">
         {c.checks.map((k: { id: string; label: string; state: keyof typeof STATE_LABEL; detail: string }) => {
           const res = resolved(k.id);
@@ -190,7 +209,7 @@ function RunView({ view }: { view: View }) {
       {run.outcome.messages.map((m: string) => <p className="auth-message" key={m}>{m}</p>)}
       <ul className="record-list">
         {run.outcome.candidates.map((_: unknown, i: number) => (
-          <Candidate key={i} run={run} index={i} canResolve={view.canResolve} />
+          <Candidate key={i} run={run} index={i} canResolve={view.canResolve} canQuote={view.canQuote} />
         ))}
       </ul>
 
