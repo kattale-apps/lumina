@@ -1,6 +1,6 @@
 # Lumina Development Roadmap
 
-**Status as of 2026-11-01:** Phase 0 is mostly complete (tooling items outstanding). Phase 1 is feature-complete and live on production. Phases 2–6 are not started.
+**Status as of 2026-11-01:** Phase 0 is mostly complete (tooling items outstanding). Phase 1 is feature-complete and live on production. Phase 2 is feature-complete. Phases 3–6 are not started.
 
 Legend: ✅ done and deployed · 🟡 partly done · ⬜ not started
 
@@ -52,10 +52,31 @@ Authentication, memberships and roles; company settings, currencies and warehous
 - Standard category specifications are starting definitions and need technician review.
 - Production uses `JWT_PRIVATE_KEY`, `JWKS` and `SITE_URL` set by hand on the Convex deployment.
 
-## Phase 2 — Customer assessment — ⬜ not started
+## Phase 2 — Customer assessment — ✅ feature-complete (not yet used on the live site)
 Customer/site CRM; appliance library/custom appliances; guided assessment; load profiles, schedules and assumptions; draft saving/history.
 
 **Exit:** Agent creates reproducible assessment from interview inputs.
+
+| Item | Status | Where |
+|---|---|---|
+| Customers with type, contact details and notes | ✅ | `/dashboard/customers` |
+| Installation sites: grid availability, existing system, GPS only with consent | ✅ | customer page |
+| Appliance library (starting estimates) and custom appliances | ✅ | `/dashboard/appliances`, assessment lines |
+| Guided assessment: power and its source, power factor, starting power, duty factor with justification, AC/DC, critical flag, hourly schedule | ✅ | `/dashboard/assessments/[id]` |
+| Load profile: daily energy, AC/DC and critical split, hourly demand, coincident peak, peak with surge | ✅ | `convex/lib/load.ts` (engine `load-1`) |
+| Draft saving, append-only revisions, revision viewer, complete/reopen | ✅ | `assessmentRevisions` table |
+| Agents see only their own customers and assessments; technicians read only; inventory admins no access | ✅ | tested |
+
+**Exit criteria check:** each save stores the inputs, results and engine version as an immutable revision, so an assessment can be reproduced and compared. Stale saves are rejected. ✅ Not yet verified by someone using the live site end to end.
+
+**Known gaps and follow-ups**
+- Offline drafts and the sync queue are not built.
+- No customer search, follow-ups or contact history yet.
+- The schedule is typed as whole-hour windows such as `6-8, 18-23`; there is no visual schedule picker.
+- Reassigning a customer to another agent is not possible.
+- Technician review of an assessment waits for Phase 3/4.
+- The standard appliance values are starting estimates and need technician review.
+- An invalid or inaccessible customer/assessment link shows an error instead of a friendly page.
 
 ## Phase 3 — Solar sizing and compatibility — ⬜ not started
 Unit-aware load/energy model; battery, PV and inverter sizing; product-specific compatibility; warnings and technician resolutions; candidate configurations with safe constraints; independent tests and documented formulas.

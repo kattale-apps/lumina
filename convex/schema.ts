@@ -34,6 +34,48 @@ export const specField = v.object({
   retired: v.boolean()
 });
 
+export const customerType = v.union(
+  v.literal("residential"),
+  v.literal("commercial"),
+  v.literal("institutional"),
+  v.literal("agricultural"),
+  v.literal("industrial")
+);
+
+/** One appliance line in an assessment. Power is in watts, schedule in whole hours of the day. */
+export const assessmentLine = v.object({
+  name: v.string(),
+  applianceId: v.optional(v.id("appliances")),
+  quantity: v.number(),
+  powerW: v.number(),
+  powerSource: v.union(v.literal("nameplate"), v.literal("measured"), v.literal("estimate")),
+  powerFactor: v.optional(v.number()),
+  surgeW: v.optional(v.number()),
+  // Only where rated input is not continuous consumption; needs a justification.
+  dutyFactor: v.optional(v.number()),
+  dutyJustification: v.optional(v.string()),
+  currentType: v.union(v.literal("ac"), v.literal("dc")),
+  critical: v.boolean(),
+  // Half-open hour windows [start, end) within one day, 0 to 24.
+  windows: v.array(v.object({ start: v.number(), end: v.number() }))
+});
+
+export const assessmentInputs = v.object({
+  systemType: v.union(
+    v.literal("off_grid"),
+    v.literal("hybrid"),
+    v.literal("grid_tied"),
+    v.literal("backup_only")
+  ),
+  backupHours: v.optional(v.number()),
+  autonomyDays: v.optional(v.number()),
+  criticalCircuits: v.optional(v.string()),
+  // A commercial constraint only; it never substitutes for technical sizing.
+  budget: v.optional(v.object({ currency: v.string(), amountMinor: v.number() })),
+  notes: v.optional(v.string()),
+  lines: v.array(assessmentLine)
+});
+
 export default defineSchema({
   ...authTables,
 
@@ -211,6 +253,92 @@ export default defineSchema({
   })
     .index("by_product", ["productId"])
     .index("by_storage", ["storageId"]),
+
+  customers: defineTable({
+    tenantId: v.id("tenants"),
+    name: v.string(),
+    phone: v.string(),
+    email: v.optional(v.string()),
+    type: customerType,
+    notes: v.optional(v.string()),
+    status: v.union(v.literal("active"), v.literal("archived")),
+    // The agent who owns the relationship; agents see only their own customers.
+    ownerUserId: v.id("userProfiles"),
+    createdAt: v.number(),
+    createdBy: v.string(),
+    updatedAt: v.number()
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_owner", ["tenantId", "ownerUserId"]),
+
+  customerSites: defineTable({
+    tenantId: v.id("tenants"),
+    customerId: v.id("customers"),
+    name: v.string(),
+    address: v.string(),
+    region: v.string(),
+    // Stored only when the customer has consented to location capture.
+    gps: v.optional(v.object({ lat: v.number(), lng: v.number() })),
+    gpsConsent: v.boolean(),
+    gridAvailability: v.union(
+      v.literal("none"),
+      v.literal("unreliable"),
+      v.literal("reliable")
+    ),
+    existingSystem: v.optional(v.string()),
+    status: v.union(v.literal("active"), v.literal("archived")),
+    createdAt: v.number(),
+    createdBy: v.string(),
+    updatedAt: v.number()
+  })
+    .index("by_customer", ["customerId"])
+    .index("by_tenant", ["tenantId"]),
+
+  // Company appliance library. Values are starting estimates, never measurements.
+  appliances: defineTable({
+    tenantId: v.id("tenants"),
+    name: v.string(),
+    category: v.string(),
+    powerW: v.number(),
+    surgeW: v.optional(v.number()),
+    powerFactor: v.optional(v.number()),
+    typicalHoursPerDay: v.number(),
+    currentType: v.union(v.literal("ac"), v.literal("dc")),
+    status: v.union(v.literal("active"), v.literal("archived")),
+    createdAt: v.number(),
+    createdBy: v.string(),
+    updatedAt: v.number()
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_name", ["tenantId", "name"]),
+
+  assessments: defineTable({
+    tenantId: v.id("tenants"),
+    customerId: v.id("customers"),
+    siteId: v.id("customerSites"),
+    ownerUserId: v.id("userProfiles"),
+    status: v.union(v.literal("draft"), v.literal("completed")),
+    // Number of the latest saved revision. Revisions are append-only.
+    currentRevision: v.number(),
+    createdAt: v.number(),
+    createdBy: v.string(),
+    updatedAt: v.number()
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_owner", ["tenantId", "ownerUserId"])
+    .index("by_customer", ["customerId"]),
+
+  // Immutable snapshot of the inputs at each save, with the engine version and results used.
+  assessmentRevisions: defineTable({
+    tenantId: v.id("tenants"),
+    assessmentId: v.id("assessments"),
+    revision: v.number(),
+    inputs: assessmentInputs,
+    results: v.any(),
+    engineVersion: v.string(),
+    createdAt: v.number(),
+    createdBy: v.string()
+  }).index("by_assessment", ["assessmentId", "revision"]),
 
   warehouses: defineTable({
     tenantId: v.id("tenants"),

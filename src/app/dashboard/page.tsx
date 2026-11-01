@@ -13,7 +13,6 @@ import {
 } from "./workspace";
 
 const UPCOMING_MODULES = [
-  { title: "Customers & assessments", phase: "Phase 2" },
   { title: "System designer", phase: "Phase 3" },
   { title: "Products & inventory", phase: "Phase 1" },
   { title: "Quotations & approvals", phase: "Phase 4" }
@@ -92,6 +91,32 @@ function Workspace() {
             ))}
           </ul>
         </section>
+
+        {viewer.companies[0]?.role !== "inventory_admin" ? (
+          <section aria-labelledby="sales-heading" className="workspace-section">
+            <h2 id="sales-heading">Customers &amp; assessments</h2>
+            <ul className="module-grid">
+              <li>
+                <Link className="module-card module-link" href="/dashboard/customers">
+                  <h3>Customers</h3>
+                  <span className="module-state">Contacts and installation sites</span>
+                </Link>
+              </li>
+              <li>
+                <Link className="module-card module-link" href="/dashboard/assessments">
+                  <h3>Assessments</h3>
+                  <span className="module-state">Appliance loads, schedules and history</span>
+                </Link>
+              </li>
+              <li>
+                <Link className="module-card module-link" href="/dashboard/appliances">
+                  <h3>Appliance library</h3>
+                  <span className="module-state">Typical loads to start from</span>
+                </Link>
+              </li>
+            </ul>
+          </section>
+        ) : null}
 
         <section aria-labelledby="manage-heading" className="workspace-section">
           <h2 id="manage-heading">Company setup</h2>

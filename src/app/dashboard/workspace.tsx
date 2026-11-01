@@ -58,8 +58,13 @@ export function SignOutButton() {
 }
 
 export function WorkspaceHeader({ role }: { role?: string }) {
+  // Inventory administrators have no access to customer data.
+  const crm = role !== undefined && role !== "inventory_admin";
   const links = [
     { href: "/dashboard", label: "Home", show: true },
+    { href: "/dashboard/customers", label: "Customers", show: crm },
+    { href: "/dashboard/assessments", label: "Assessments", show: crm },
+    { href: "/dashboard/appliances", label: "Appliances", show: crm },
     { href: "/dashboard/warehouses", label: "Warehouses", show: true },
     { href: "/dashboard/catalogue", label: "Catalogue", show: true },
     { href: "/dashboard/products", label: "Products", show: true },
