@@ -1,6 +1,6 @@
 # Lumina Development Roadmap
 
-**Status as of 2026-11-01:** Phase 0 is mostly complete (tooling items outstanding). Phase 1 is feature-complete and live on production. Phase 2 is feature-complete. Phases 3–6 are not started.
+**Status as of 2026-11-01:** Phase 0 is mostly complete (tooling items outstanding). Phase 1 is feature-complete and live on production. Phases 2 (live) and 3 are feature-complete. Phases 4–6 are not started.
 
 Legend: ✅ done and deployed · 🟡 partly done · ⬜ not started
 
@@ -78,12 +78,34 @@ Customer/site CRM; appliance library/custom appliances; guided assessment; load 
 - The standard appliance values are starting estimates and need technician review.
 - An invalid or inaccessible customer/assessment link shows an error instead of a friendly page.
 
-## Phase 3 — Solar sizing and compatibility — ⬜ not started
+## Phase 3 — Solar sizing and compatibility — ✅ feature-complete (not yet used on the live site)
 Unit-aware load/energy model; battery, PV and inverter sizing; product-specific compatibility; warnings and technician resolutions; candidate configurations with safe constraints; independent tests and documented formulas.
 
 **Exit:** Results are reproducible and fail safely when critical specifications are missing.
 
-*Groundwork in place:* category specs carry units and a compatibility-critical flag, and products report missing critical specs as "cannot validate".
+| Item | Status | Where |
+|---|---|---|
+| Sizing engine `size-1` (pure, deterministic) | ✅ | `convex/lib/sizing.ts` |
+| Battery energy: off-grid by days of autonomy, hybrid/backup by worst window of the critical-load profile | ✅ | engine |
+| PV array from daytime load plus night load through storage, peak sun hours and performance ratio | ✅ | engine |
+| Inverter requirement from AC-only coincident peak, apparent power and start-up surge | ✅ | engine |
+| Product compatibility: topology, power, surge, phase, battery bus voltage, series/parallel counts, discharge/charge current, BMS, string voltage window with cold/hot correction, string current, PV input power | ✅ | engine |
+| Missing critical spec gives "requires_review"; a product that cannot be sized is rejected with the reason | ✅ | tested |
+| Every run stores revision, assumptions, engine version, requirements, results and product spec snapshots | ✅ | `sizingRuns` |
+| Technician resolutions with notes (once per check, technician/owner only) | ✅ | `sizingResolutions` |
+| Sizing screen with assumptions form, run history, candidate checks and rejection reasons | ✅ | `/dashboard/assessments/[id]/sizing` |
+
+**Exit criteria check:** the same inputs, assumptions and catalogue always produce the same result (tested with hand-calculated values), and stale runs are flagged when the assessment changes. ✅ Not yet verified by someone using the live site end to end.
+
+**Known gaps and follow-ups**
+- Cables, protection, earthing, mounting and standalone charge controllers are not in configurations; the screen says so.
+- DC-only systems are blocked for technician design.
+- The Vmp temperature coefficient is not catalogued, so the Voc coefficient stands in for it.
+- Start-up surge duration of the loads is not captured, so any load with a surge needs a technician's confirmation.
+- Candidates are ranked by item count; price, stock and warranty come with quotations (Phase 4).
+- Peak sun hours are typed in by hand; there is no solar-resource data source yet.
+- Multiple inverters in parallel and multiple MPPT string splits are not modelled.
+- Default assumption values are starting points and need technician review.
 
 ## Phase 4 — Quotation and approval — ⬜ not started
 Pricing and price snapshots; illustrative PDF/watermark; technician queue/checklist; amend/return/reject/approve; commercial exception approval; official issuance, immutable versions and audit; stock reservation lifecycle.

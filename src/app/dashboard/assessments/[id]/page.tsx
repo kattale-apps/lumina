@@ -394,6 +394,9 @@ function AssessmentView({ assessmentId, tenantId, currency }: { assessmentId: Id
         <p className="hint">You are viewing an earlier revision. Select the latest revision to edit.</p>
       ) : null}
       {error ? <p className="auth-message" role="alert">{error}</p> : null}
+      {assessment.status === "completed" ? (
+        <p><Link className="button" href={`/dashboard/assessments/${assessment.id}/sizing`}>Size a system</Link></p>
+      ) : null}
 
       {editable ? (
         <Editor key={`${assessment.id}-${assessment.currentRevision}`} loaded={loaded} tenantId={tenantId} currency={currency} />

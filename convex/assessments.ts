@@ -12,7 +12,7 @@ const MAX_LINES = 100;
 type Inputs = Infer<typeof assessmentInputs>;
 
 /** Loads an assessment and checks the caller may see it (and change it, when `write`). */
-async function loadAssessment(
+export async function loadAssessment(
   ctx: QueryCtx | MutationCtx,
   assessmentId: Doc<"assessments">["_id"],
   write: boolean

@@ -57,3 +57,12 @@ Missing critical specifications produce `unknown` or `requires_review`, never an
 
 ## Audit record
 Store assessment revision, engine version, inputs/units, assumptions/source references, outputs, product specification revisions, compatibility results, warnings/blockers, unresolved inputs, timestamp and actor. Display that sizing is indicative until technician review.
+
+## Implemented in engine `size-1`
+`convex/lib/sizing.ts` implements the relationships above with these explicit choices (all assumptions are saved with each run):
+- **Off-grid battery:** delivered energy = daily energy × days of autonomy (conservative). **Hybrid / backup-only:** the largest energy drawn over the backup window (rounded up to whole hours, wrapping midnight) from the critical-load profile; every load is used, with a warning, if none is marked critical.
+- **PV:** `Wp = (daytime Wh + night Wh / round-trip efficiency) / (peak sun hours × performance ratio)`. Grid-tied uses daily energy × offset share. Backup-only does not size PV.
+- **Battery bank:** series count = inverter battery bus voltage / battery nominal voltage (must be whole); nominal Wh = delivered Wh / (depth of discharge × discharge efficiency), using the battery's recommended depth of discharge when published.
+- **Strings:** cold Voc and Vmp use the Voc temperature coefficient at the minimum cell temperature; hot Vmp at the maximum. Strings must satisfy the inverter's maximum PV voltage, MPPT window and the panel's maximum system voltage; string current is checked per MPPT input.
+- **Inverter:** continuous W and VA must cover the AC-only coincident peak × headroom; surge power must cover the peak plus start-up excess, and surge duration always needs technician confirmation.
+- Checks that cannot be evaluated are `review`, checks that are violated are `fail`, and a combination with any `fail` is not offered.

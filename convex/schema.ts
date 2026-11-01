@@ -340,6 +340,46 @@ export default defineSchema({
     createdBy: v.string()
   }).index("by_assessment", ["assessmentId", "revision"]),
 
+  // Append-only record of one sizing run: everything needed to reproduce and audit it.
+  sizingRuns: defineTable({
+    tenantId: v.id("tenants"),
+    assessmentId: v.id("assessments"),
+    assessmentRevision: v.number(),
+    assumptions: v.object({
+      peakSunHours: v.number(),
+      solarResourceSource: v.string(),
+      performanceRatio: v.number(),
+      defaultDod: v.number(),
+      dischargeEfficiency: v.number(),
+      roundTripEfficiency: v.number(),
+      inverterEfficiency: v.number(),
+      inverterHeadroom: v.number(),
+      minCellTempC: v.number(),
+      maxCellTempC: v.number(),
+      gridTiedOffset: v.number()
+    }),
+    engineVersion: v.string(),
+    requirements: v.any(),
+    outcome: v.any(),
+    // Specification values of every product considered, as they were at run time.
+    productSnapshots: v.any(),
+    createdAt: v.number(),
+    createdBy: v.string(),
+    actorUserId: v.id("userProfiles")
+  }).index("by_assessment", ["assessmentId", "createdAt"]),
+
+  // A technician's recorded decision on a check that needed review.
+  sizingResolutions: defineTable({
+    tenantId: v.id("tenants"),
+    runId: v.id("sizingRuns"),
+    candidateIndex: v.number(),
+    checkId: v.string(),
+    note: v.string(),
+    createdAt: v.number(),
+    createdBy: v.string(),
+    actorUserId: v.id("userProfiles")
+  }).index("by_run", ["runId"]),
+
   warehouses: defineTable({
     tenantId: v.id("tenants"),
     name: v.string(),
