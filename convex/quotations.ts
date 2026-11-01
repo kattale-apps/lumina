@@ -655,6 +655,12 @@ export const expireDue = internalMutation({
         .collect();
       for (const quotation of issued) {
         if (quotation.validUntil !== undefined && quotation.validUntil <= now) {
+          // An accepted quotation stays valid: its goods are held for installation.
+          const deal = await ctx.db
+            .query("dealOutcomes")
+            .withIndex("by_quotation", (q) => q.eq("quotationId", quotation._id))
+            .unique();
+          if (deal?.outcome === "won") continue;
           await releaseReservations(ctx, quotation);
           await ctx.db.patch(quotation._id, { status: "expired", updatedAt: now });
           await ctx.db.insert("auditEvents", {

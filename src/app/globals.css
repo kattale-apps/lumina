@@ -629,3 +629,15 @@ a.module-link:focus-visible { outline: 3px solid #26a269; outline-offset: 2px; }
 .upload-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 label.button[aria-disabled="true"] { opacity: .6; cursor: wait; }
 label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
+
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.table-scroll table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table-scroll th, .table-scroll td { padding: 8px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.table-scroll th:first-child, .table-scroll td:first-child { text-align: left; }
+.table-scroll th { color: var(--muted); font-weight: 700; background: var(--canvas); }
+.table-scroll tr:last-child td { border-bottom: 0; }
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.stat { display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.stat-value { font-size: 22px; font-weight: 800; overflow-wrap: anywhere; }
+.stat-label { color: var(--muted); font-size: 13px; }

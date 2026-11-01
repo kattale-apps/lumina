@@ -8,6 +8,7 @@ import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { CompanyPage, ConfiguredOnly, errorMessage } from "../../workspace";
 import { fromMinor, money, STATUS_HELP, STATUS_LABELS, toMinor } from "../../quotes";
+import { InstallmentCalculator, SalesOutcome } from "./SalesOutcome";
 
 type View = NonNullable<ReturnType<typeof useQuery<typeof api.quotations.getQuotation>>>;
 
@@ -262,7 +263,7 @@ function Actions({ view }: { view: View }) {
   );
 }
 
-function Detail({ quotationId }: { quotationId: Id<"quotations"> }) {
+function Detail({ quotationId, role }: { quotationId: Id<"quotations">; role: string }) {
   const [revision, setRevision] = useState<number | undefined>();
   const view = useQuery(api.quotations.getQuotation, { quotationId, revision });
   if (!view) return <p className="muted">Loading quotation…</p>;
@@ -331,6 +332,13 @@ function Detail({ quotationId }: { quotationId: Id<"quotations"> }) {
         ) : null}
       </section>
 
+      {quotation.status === "officially_issued" ? (
+        <>
+          <SalesOutcome quotationId={quotationId} role={role} />
+          <InstallmentCalculator totalMinor={shown.totalMinor} currency={shown.currency} />
+        </>
+      ) : null}
+
       {shown.isCurrent ? <Actions view={view} /> : null}
       {view.can.decideTechnical && shown.isCurrent ? <TechnicalDecision view={view} /> : null}
       {view.can.decideCommercial && shown.isCurrent ? <CommercialDecision view={view} /> : null}
@@ -363,7 +371,7 @@ export default function QuotationPage() {
   return (
     <ConfiguredOnly>
       <CompanyPage title="Quotation" allowedRoles={["super_admin", "sales_manager", "sales_agent", "technician"]}>
-        {() => <Detail quotationId={params.id as Id<"quotations">} />}
+        {(company) => <Detail quotationId={params.id as Id<"quotations">} role={company.role} />}
       </CompanyPage>
     </ConfiguredOnly>
   );

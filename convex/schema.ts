@@ -528,6 +528,105 @@ export default defineSchema({
     next: v.number()
   }).index("by_tenant_key", ["tenantId", "key"]),
 
+  // Phase 6: what happened to an issued quotation. One outcome per quotation.
+  dealOutcomes: defineTable({
+    tenantId: v.id("tenants"),
+    quotationId: v.id("quotations"),
+    customerId: v.id("customers"),
+    ownerUserId: v.id("userProfiles"),
+    outcome: v.union(v.literal("won"), v.literal("lost")),
+    reason: v.optional(v.string()),
+    revision: v.number(),
+    currency: v.string(),
+    subtotalMinor: v.number(),
+    totalMinor: v.number(),
+    decidedAt: v.number(),
+    decidedBy: v.string()
+  })
+    .index("by_quotation", ["quotationId"])
+    .index("by_tenant_time", ["tenantId", "decidedAt"])
+    .index("by_tenant_owner", ["tenantId", "ownerUserId"]),
+
+  operationsSettings: defineTable({
+    tenantId: v.id("tenants"),
+    // Commission as basis points of the pre-tax value of a won deal. 0 = none.
+    commissionBps: v.number(),
+    updatedAt: v.number(),
+    updatedBy: v.string()
+  }).index("by_tenant", ["tenantId"]),
+
+  commissions: defineTable({
+    tenantId: v.id("tenants"),
+    dealId: v.id("dealOutcomes"),
+    quotationId: v.id("quotations"),
+    agentUserId: v.id("userProfiles"),
+    currency: v.string(),
+    baseMinor: v.number(),
+    // The rate is copied here so later policy changes never rewrite history.
+    rateBps: v.number(),
+    amountMinor: v.number(),
+    status: v.union(
+      v.literal("accrued"),
+      v.literal("approved"),
+      v.literal("paid"),
+      v.literal("cancelled")
+    ),
+    createdAt: v.number(),
+    approvedAt: v.optional(v.number()),
+    approvedBy: v.optional(v.string()),
+    paidAt: v.optional(v.number()),
+    paidBy: v.optional(v.string()),
+    paymentReference: v.optional(v.string()),
+    cancelReason: v.optional(v.string())
+  })
+    .index("by_tenant_status", ["tenantId", "status"])
+    .index("by_tenant_agent", ["tenantId", "agentUserId"])
+    .index("by_deal", ["dealId"]),
+
+  installations: defineTable({
+    tenantId: v.id("tenants"),
+    quotationId: v.id("quotations"),
+    customerId: v.id("customers"),
+    siteId: v.id("customerSites"),
+    ownerUserId: v.id("userProfiles"),
+    technicianUserId: v.optional(v.id("userProfiles")),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("scheduled"),
+      v.literal("in_progress"),
+      v.literal("completed"),
+      v.literal("cancelled")
+    ),
+    scheduledFor: v.optional(v.number()),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    notes: v.optional(v.string()),
+    cancelReason: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number()
+  })
+    .index("by_tenant_status", ["tenantId", "status"])
+    .index("by_quotation", ["quotationId"])
+    .index("by_tenant_technician", ["tenantId", "technicianUserId"]),
+
+  // Written when an installation is completed, from the quoted warranty months.
+  warranties: defineTable({
+    tenantId: v.id("tenants"),
+    installationId: v.id("installations"),
+    quotationId: v.id("quotations"),
+    customerId: v.id("customers"),
+    productId: v.optional(v.id("products")),
+    sku: v.optional(v.string()),
+    description: v.string(),
+    quantity: v.number(),
+    months: v.number(),
+    startsAt: v.number(),
+    endsAt: v.number()
+  })
+    .index("by_tenant_end", ["tenantId", "endsAt"])
+    .index("by_customer", ["customerId"])
+    .index("by_installation", ["installationId"]),
+
   warehouses: defineTable({
     tenantId: v.id("tenants"),
     name: v.string(),

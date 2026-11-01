@@ -1,6 +1,6 @@
 # Lumina Development Roadmap
 
-**Status as of 2026-11-01:** Phase 0 is mostly complete (tooling items outstanding). Phase 1 is feature-complete and live on production. Phases 2, 3 and 4 are live, and Phase 5 is built but untested on devices. Phase 6 is not started.
+**Status as of 2026-11-01:** Phase 0 is mostly complete (tooling items outstanding). Phase 1 is feature-complete and live on production. Phases 2, 3 and 4 are live, and Phase 5 is live but untested on devices. Phase 6 is built (not yet deployed), except payments, which wait on a financing policy.
 
 Legend: ✅ done and deployed · 🟡 partly done · ⬜ not started
 
@@ -174,8 +174,26 @@ Details, security notes and limits are in `docs/OFFLINE_AND_ANDROID.md`.
 - The Android application id (`com.lumina.solar`), launcher icons and signing key still need to be decided before publishing.
 - Development dependencies report npm audit findings (test tooling); `npm audit --omit=dev` reports two (one moderate, one high) in the production tree that have not been investigated.
 
-## Phase 6 — Operations and financing — ⬜ not started
+## Phase 6 — Operations and financing — 🟡 built, payments deliberately not
 Agent pipeline/commissions; manager dashboards; installation/warranty tracking; installment calculator and repayment schedule; payment integrations after financing policy is defined.
+
+Details and limits: `docs/OPERATIONS_AND_FINANCING.md`.
+
+| Item | Status | Where |
+|---|---|---|
+| Accept / decline an issued quotation (once, with reasons) | ✅ | quotation page, `convex/operations.ts` |
+| Commission policy (one rate, pre-tax value) with rate snapshot per commission | ✅ | Overview, Commissions |
+| Commission approve → pay (reference) / cancel; no self-approval | ✅ | Commissions |
+| Installation jobs: schedule technician, start, complete, cancel | ✅ | Installations |
+| Completion issues held stock and starts warranties | ✅ | `completeInstallation` |
+| Warranty register with ending-soon / expired flags | ✅ | Installations |
+| Manager overview (win rate, per-agent, pipeline, installs, commissions), per currency | ✅ | Overview |
+| Instalment illustration (flat / reducing, deposit, schedule) | ✅ | quotation page |
+| Payment integrations, collection, credit/financing products | ⬜ | needs a financing policy and provider choice |
+
+Tested with 23 automated tests (171 in total). Not yet used in a browser or deployed.
+
+**Known gaps:** commission tiers/splits/clawbacks; cancelling an installation leaves the commission for a manager to cancel by hand; no installation checklists, photos or customer sign-off; no warranty claims or reminders; lists are not paginated; the instalment table is arithmetic only and not stored.
 
 ## Definition of done
 Role/tenant security tested; domain logic tested; mobile layouts/accessibility checked; errors and offline states explicit; audit requirements met; docs updated; no secrets or real customer data committed.
