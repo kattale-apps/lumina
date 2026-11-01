@@ -63,6 +63,7 @@ export function WorkspaceHeader({ role }: { role?: string }) {
     { href: "/dashboard/warehouses", label: "Warehouses", show: true },
     { href: "/dashboard/catalogue", label: "Catalogue", show: true },
     { href: "/dashboard/products", label: "Products", show: true },
+    { href: "/dashboard/stock", label: "Stock", show: true },
     {
       href: "/dashboard/pricing",
       label: "Pricing",

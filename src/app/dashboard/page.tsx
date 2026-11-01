@@ -109,6 +109,12 @@ function Workspace() {
               </Link>
             </li>
             <li>
+              <Link className="module-card module-link" href="/dashboard/stock">
+                <h3>Stock</h3>
+                <span className="module-state">Levels, movements and reservations</span>
+              </Link>
+            </li>
+            <li>
               <Link className="module-card module-link" href="/dashboard/warehouses">
                 <h3>Warehouses</h3>
                 <span className="module-state">Stock locations</span>

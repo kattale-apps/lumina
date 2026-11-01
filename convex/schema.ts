@@ -142,6 +142,74 @@ export default defineSchema({
     .index("by_category", ["categoryId"])
     .index("by_product", ["productId"]),
 
+  // Current quantity per product per warehouse. Only changed together with a movement.
+  stockBalances: defineTable({
+    tenantId: v.id("tenants"),
+    productId: v.id("products"),
+    warehouseId: v.id("warehouses"),
+    onHand: v.number(),
+    updatedAt: v.number()
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_product_warehouse", ["productId", "warehouseId"]),
+
+  // Append-only stock ledger. Quantities are signed whole units.
+  stockMovements: defineTable({
+    tenantId: v.id("tenants"),
+    productId: v.id("products"),
+    warehouseId: v.id("warehouses"),
+    type: v.union(
+      v.literal("receipt"),
+      v.literal("issue"),
+      v.literal("adjustment"),
+      v.literal("transfer_out"),
+      v.literal("transfer_in")
+    ),
+    quantity: v.number(),
+    balanceAfter: v.number(),
+    reference: v.optional(v.string()),
+    reason: v.optional(v.string()),
+    // Pairs the two legs of a transfer.
+    transferId: v.optional(v.string()),
+    // Client-generated key so a retried submission cannot post twice.
+    idempotencyKey: v.optional(v.string()),
+    createdAt: v.number(),
+    createdBy: v.string(),
+    actorUserId: v.id("userProfiles")
+  })
+    .index("by_tenant_time", ["tenantId", "createdAt"])
+    .index("by_product_time", ["productId", "createdAt"])
+    .index("by_tenant_key", ["tenantId", "idempotencyKey"]),
+
+  // Explicit, expiring holds. Quotations never deduct stock; they reserve it.
+  stockReservations: defineTable({
+    tenantId: v.id("tenants"),
+    productId: v.id("products"),
+    warehouseId: v.id("warehouses"),
+    quantity: v.number(),
+    expiresAt: v.number(),
+    status: v.union(v.literal("active"), v.literal("released"), v.literal("fulfilled")),
+    reference: v.optional(v.string()),
+    createdAt: v.number(),
+    createdBy: v.string(),
+    resolvedAt: v.optional(v.number())
+  })
+    .index("by_tenant_status", ["tenantId", "status"])
+    .index("by_product_warehouse", ["productId", "warehouseId", "status"]),
+
+  // Product images and datasheets, held in Convex file storage.
+  productFiles: defineTable({
+    tenantId: v.id("tenants"),
+    productId: v.id("products"),
+    storageId: v.id("_storage"),
+    kind: v.union(v.literal("image"), v.literal("datasheet")),
+    fileName: v.string(),
+    contentType: v.string(),
+    size: v.number(),
+    createdAt: v.number(),
+    createdBy: v.string()
+  }).index("by_product", ["productId"]),
+
   warehouses: defineTable({
     tenantId: v.id("tenants"),
     name: v.string(),
