@@ -4,7 +4,6 @@ import type { Doc } from "./_generated/dataModel";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
 import { normaliseEmail } from "./lib/validation";
-import { appRole } from "./schema";
 
 const ADMIN_ONLY = ["super_admin"] as const;
 
