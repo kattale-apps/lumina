@@ -25,6 +25,7 @@ let nextKey = 1;
 
 function Editor({ view, tenantId }: { view: View; tenantId: Id<"tenants"> }) {
   const supplierOffers = useQuery(api.suppliers.listSupplierOffers, { tenantId });
+  const [supplierOfferToAdd, setSupplierOfferToAdd] = useState("");
   const revise = useMutation(api.quotations.reviseQuotation);
   const { shown, quotation } = view;
   const [lines, setLines] = useState<Draft[]>(() =>
@@ -109,11 +110,16 @@ function Editor({ view, tenantId }: { view: View; tenantId: Id<"tenants"> }) {
       >
         Add a service line (installation, transport…)
       </button>
-      <button type="button" className="button button-secondary button-small" disabled={!supplierOffers?.some(o => o.currency === shown.currency)} onClick={() => {
-        const offer = supplierOffers?.find(o => o.currency === shown.currency);
+      <label htmlFor="supplier-offer-add">Supplier product</label>
+      <select id="supplier-offer-add" value={supplierOfferToAdd} onChange={e => setSupplierOfferToAdd(e.target.value)}>
+        <option value="">Choose supplier product…</option>
+        {(supplierOffers ?? []).filter(o => o.currency === shown.currency).map(o => <option key={o.id} value={o.id}>{o.name} · {o.supplierName} · {o.availableQuantity} available</option>)}
+      </select>
+      <button type="button" className="button button-secondary button-small" disabled={!supplierOfferToAdd} onClick={() => {
+        const offer = supplierOffers?.find(o => o.id === supplierOfferToAdd);
         if (!offer) return;
         setLines(all => [...all, { key: nextKey++, productId: null, supplierOfferId: offer.id as Id<"supplierOffers">, description: offer.name, sku: offer.sku, quantity: "1", price: fromMinor(offer.sellingPriceMinor, shown.currency) }]);
-      }}>Add supplier product</button>
+      }}>Add selected supplier product</button>
       {supplierOffers && supplierOffers.filter(o => o.currency === shown.currency).length === 0 ? <p className="hint">No supplier offers in this quotation currency.</p> : null}
       <label htmlFor="qe-tax">Tax (%)</label>
       <input id="qe-tax" inputMode="decimal" value={tax} onChange={(e) => setTax(e.target.value)} />
