@@ -437,7 +437,7 @@ function Field() {
 export default function FieldPage() {
   if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
     return (
-      <StatusCard eyebrow="LUMINA WORKSPACE" title="Authentication is not configured yet">
+      <StatusCard eyebrow="SOLAR SWITCH WORKSPACE" title="Authentication is not configured yet">
         <p>Add the Convex deployment URL to the application environment before signing in.</p>
       </StatusCard>
     );

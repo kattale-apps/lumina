@@ -97,9 +97,9 @@ export function WorkspaceHeader({ role }: { role?: string }) {
   return (
     <>
       <header className="topbar">
-        <Link className="brand" href="/" aria-label="Lumina home">
-          <span className="brand-mark">L</span>
-          <span>LUMINA</span>
+        <Link className="brand" href="/" aria-label="Solar Switch home">
+          <span className="brand-mark">S</span>
+          <span>SOLAR SWITCH</span>
         </Link>
         <SignOutButton />
       </header>
@@ -173,7 +173,7 @@ export function CompanyPage({
 
   if (!settled || !company) {
     return (
-      <StatusCard eyebrow="LUMINA WORKSPACE" title="Loading…">
+      <StatusCard eyebrow="SOLAR SWITCH WORKSPACE" title="Loading…">
         <p>Checking your account and company access.</p>
       </StatusCard>
     );
@@ -206,7 +206,7 @@ export function CompanyPage({
 export function ConfiguredOnly({ children }: { children: ReactNode }) {
   if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
     return (
-      <StatusCard eyebrow="LUMINA WORKSPACE" title="Authentication is not configured yet">
+      <StatusCard eyebrow="SOLAR SWITCH WORKSPACE" title="Authentication is not configured yet">
         <p>Add the Convex deployment URL to the application environment before signing in.</p>
       </StatusCard>
     );

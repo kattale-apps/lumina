@@ -92,7 +92,7 @@ export function InstallmentCalculator({ totalMinor, currency }: { totalMinor: nu
     <section className="panel-form" aria-labelledby="inst">
       <h2 id="inst">Instalment illustration</h2>
       <p className="hint">
-        For discussion only. It is not a credit offer: the company has no lending terms configured in Lumina yet,
+        For discussion only. It is not a credit offer: the company has no lending terms configured in Solar Switch yet,
         and nothing here is stored or collected.
       </p>
       <label htmlFor="i-dep">Deposit ({currency})</label>

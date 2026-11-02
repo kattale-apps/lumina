@@ -1,6 +1,6 @@
 {
-  "name": "Lumina Solar Sales & System Design",
-  "short_name": "Lumina",
+  "name": "Solar Switch",
+  "short_name": "Solar Switch",
   "description": "Customer assessments, system sizing and quotations for solar sales teams.",
   "start_url": "/dashboard/field",
   "scope": "/",

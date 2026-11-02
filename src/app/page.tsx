@@ -32,9 +32,9 @@ export default function HomePage() {
   return (
     <main className="shell">
       <header className="topbar">
-        <Link className="brand" href="/" aria-label="Lumina home">
-          <span className="brand-mark">L</span>
-          <span>LUMINA</span>
+        <Link className="brand" href="/" aria-label="Solar Switch home">
+          <span className="brand-mark">S</span>
+          <span>SOLAR SWITCH</span>
         </Link>
         <Link className="button button-small" href="/sign-in">
           Sign in
@@ -45,7 +45,7 @@ export default function HomePage() {
         <p className="eyebrow">SOLAR SALES · SYSTEM DESIGN · QUOTATIONS</p>
         <h1>Build the right solar system for every customer.</h1>
         <p className="hero-copy">
-          Lumina guides sales teams from customer energy assessment to a
+          Solar Switch guides sales teams from customer energy assessment to a
           technically verified solar quotation, using the company&apos;s
           catalogue, pricing rules and live inventory.
         </p>
@@ -59,7 +59,7 @@ export default function HomePage() {
         <div className="section-heading">
           <div>
             <p className="eyebrow">PLATFORM MODULES</p>
-            <h2 id="modules-heading">The Lumina workflow</h2>
+            <h2 id="modules-heading">The Solar Switch workflow</h2>
           </div>
           <span className="phase-label">LIVE</span>
         </div>
@@ -88,7 +88,7 @@ export default function HomePage() {
       </section>
 
       <footer className="footer">
-        <span>Lumina · Solar Sales & System Intelligence</span>
+        <span>Solar Switch · Solar Sales & System Intelligence</span>
         <span>Uganda · Multi-currency ready</span>
       </footer>
     </main>

@@ -8,7 +8,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
  */
 const config: CapacitorConfig = {
   appId: "com.lumina.solar",
-  appName: "Lumina",
+  appName: "Solar Switch",
   webDir: "capacitor-www",
   server: {
     url: process.env.CAPACITOR_SERVER_URL ?? "https://lumina-xi-ochre-15.vercel.app/dashboard/field",

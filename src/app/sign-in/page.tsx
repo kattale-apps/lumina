@@ -75,11 +75,11 @@ function SignInForm() {
           setMessage("");
         }}
       >
-        {mode === "signIn" ? "New to Lumina? Create an account" : "Already registered? Sign in"}
+        {mode === "signIn" ? "New to Solar Switch? Create an account" : "Already registered? Sign in"}
       </button>
       {mode === "signUp" ? (
         <p className="auth-note">
-          Creating an account does not grant access to a company workspace. A Lumina
+          Creating an account does not grant access to a company workspace. A Solar Switch
           administrator must activate your company membership and role.
         </p>
       ) : null}
@@ -92,7 +92,7 @@ export default function SignInPage() {
     return (
       <main className="auth-shell">
         <section className="auth-card">
-          <p className="eyebrow">LUMINA WORKSPACE</p>
+          <p className="eyebrow">SOLAR SWITCH WORKSPACE</p>
           <h1>Authentication is not configured yet</h1>
           <p>Add the Convex deployment URL to the application environment before signing in.</p>
         </section>
@@ -103,7 +103,7 @@ export default function SignInPage() {
   return (
     <main className="auth-shell">
       <section className="auth-card">
-        <p className="eyebrow">LUMINA WORKSPACE</p>
+        <p className="eyebrow">SOLAR SWITCH WORKSPACE</p>
         <h1>Welcome back</h1>
         <p>Sign in to continue to solar assessments, system designs and quotations.</p>
         <SignInForm />

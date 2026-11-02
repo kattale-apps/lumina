@@ -29,7 +29,7 @@ function Workspace() {
 
   if (isLoading || !isAuthenticated || viewer === undefined) {
     return (
-      <StatusCard eyebrow="LUMINA WORKSPACE" title="Loading your workspace…">
+      <StatusCard eyebrow="SOLAR SWITCH WORKSPACE" title="Loading your workspace…">
         <p>Checking your account and company access.</p>
       </StatusCard>
     );
@@ -37,7 +37,7 @@ function Workspace() {
 
   if (viewer.state === "signed_out") {
     return (
-      <StatusCard eyebrow="LUMINA WORKSPACE" title="Your session has ended">
+      <StatusCard eyebrow="SOLAR SWITCH WORKSPACE" title="Your session has ended">
         <p>Please sign in again to continue.</p>
         <Link className="button" href="/sign-in">Go to sign in</Link>
       </StatusCard>
@@ -48,7 +48,7 @@ function Workspace() {
     return (
       <StatusCard eyebrow="ACCOUNT UNAVAILABLE" title="This account cannot be used">
         <p>
-          Your Lumina account is disabled or incomplete. Contact your Lumina
+          Your Solar Switch account is disabled or incomplete. Contact your Solar Switch
           administrator for help.
         </p>
         <SignOutButton />
@@ -64,7 +64,7 @@ function Workspace() {
           but you have not been added to a company yet.
         </p>
         <p>
-          Ask your Lumina administrator to activate your membership and role. This
+          Ask your Solar Switch administrator to activate your membership and role. This
           page updates automatically once access is granted.
         </p>
         <SignOutButton />
@@ -184,7 +184,7 @@ function Workspace() {
 export default function DashboardPage() {
   if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
     return (
-      <StatusCard eyebrow="LUMINA WORKSPACE" title="Authentication is not configured yet">
+      <StatusCard eyebrow="SOLAR SWITCH WORKSPACE" title="Authentication is not configured yet">
         <p>Add the Convex deployment URL to the application environment before signing in.</p>
       </StatusCard>
     );

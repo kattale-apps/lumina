@@ -5,14 +5,14 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "Lumina | Solar Sales & System Design",
-    template: "%s | Lumina"
+    default: "Solar Switch | Solar Sales & System Design",
+    template: "%s | Solar Switch"
   },
   description:
     "Solar customer assessment, system configuration, inventory and quotation management.",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-192.png" },
-  appleWebApp: { capable: true, title: "Lumina", statusBarStyle: "black-translucent" }
+  appleWebApp: { capable: true, title: "Solar Switch", statusBarStyle: "black-translucent" }
 };
 
 export const viewport: Viewport = {
