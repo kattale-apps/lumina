@@ -3,7 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
 import { validateCurrency, requireText } from "./lib/validation";
-import { toMinorUnits, formatMinorUnits } from "./lib/money";
+import { toMinorUnits } from "./lib/money";
 
 const MANAGERS = ["super_admin", "inventory_admin"] as const;
 const STAFF_ROLE = v.union(
