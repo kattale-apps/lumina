@@ -3,9 +3,97 @@ import { mutation, query, type MutationCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
-import { normaliseEmail } from "./lib/validation";
+import { normaliseEmail, requireText } from "./lib/validation";
 
 const ADMIN_ONLY = ["super_admin"] as const;
+
+const STAFF_ROLE = v.union(
+  v.literal("inventory_admin"), v.literal("sales_manager"),
+  v.literal("technician"), v.literal("sales_agent")
+);
+
+export const listInvitations = query({
+  args:{tenantId:v.id("tenants")},
+  handler:async(ctx,args)=>{
+    await requireTenantMembership(ctx,args.tenantId,ADMIN_ONLY);
+    const rows=await ctx.db.query("staffInvitations").withIndex("by_tenant",q=>q.eq("tenantId",args.tenantId)).collect();
+    return rows.sort((a,b)=>b.createdAt-a.createdAt).map(i=>({
+      id:i._id,fullName:i.fullName,email:i.email,phone:i.phone,jobTitle:i.jobTitle,
+      role:i.role,status:i.status,expiresAt:i.expiresAt
+    }));
+  }
+});
+
+export const inviteStaff = mutation({
+  args:{
+    tenantId:v.id("tenants"),fullName:v.string(),email:v.string(),phone:v.string(),
+    jobTitle:v.string(),role:STAFF_ROLE
+  },
+  handler:async(ctx,args)=>{
+    const {profile:actor}=await requireTenantMembership(ctx,args.tenantId,ADMIN_ONLY);
+    const email=normaliseEmail(args.email);
+    if(!email) throw new ConvexError("A valid work email is required.");
+    const existing=await ctx.db.query("staffInvitations")
+      .withIndex("by_email_status",q=>q.eq("email",email).eq("status","pending")).collect();
+    if(existing.some(i=>i.tenantId===args.tenantId)) throw new ConvexError("A pending invitation already exists for this email.");
+    const now=Date.now();
+    const invitationId=await ctx.db.insert("staffInvitations",{
+      tenantId:args.tenantId,fullName:requireText(args.fullName,"Full name",120),email,
+      phone:requireText(args.phone,"Phone",40),jobTitle:requireText(args.jobTitle,"Job title",80),
+      role:args.role,status:"pending",invitedBy:actor._id,createdAt:now,
+      expiresAt:now+7*24*60*60*1000
+    });
+    await recordAudit(ctx,actor,{tenantId:args.tenantId,action:"staff.invited",entityType:"staffInvitations",entityId:invitationId,summary:`Invitation sent to ${email} as ${args.role}.`});
+    return {invitationId};
+  }
+});
+
+export const acceptInvitation = mutation({
+  args:{},
+  handler:async(ctx)=>{
+    const {profile,identity}=await requireUserProfile(ctx);
+    const email=normaliseEmail(profile.email ?? "");
+    if(!email) throw new ConvexError("Your account must have a verified work email.");
+    const pending=await ctx.db.query("staffInvitations")
+      .withIndex("by_email_status",q=>q.eq("email",email).eq("status","pending")).collect();
+    const now=Date.now();
+    let accepted=0;
+    for(const invitation of pending){
+      if(invitation.expiresAt<=now){
+        await ctx.db.patch(invitation._id,{status:"expired"});
+        continue;
+      }
+      const existing=await ctx.db.query("memberships").withIndex("by_user_tenant",q=>
+        q.eq("userId",profile._id).eq("tenantId",invitation.tenantId)).unique();
+      if(existing){
+        if(existing.status!=="active") await ctx.db.patch(existing._id,{role:invitation.role,status:"active"});
+      }else{
+        await ctx.db.insert("memberships",{
+          tenantId:invitation.tenantId,userId:profile._id,role:invitation.role,
+          status:"active",createdAt:now,createdBy:identity.subject
+        });
+      }
+      await ctx.db.patch(invitation._id,{status:"accepted",acceptedAt:now});
+      await recordAudit(ctx,profile,{tenantId:invitation.tenantId,action:"staff.invitation_accepted",entityType:"staffInvitations",entityId:invitation._id,summary:`${email} accepted staff invitation as ${invitation.role}.`});
+      accepted++;
+    }
+    return {accepted};
+  }
+});
+
+export const revokeInvitation = mutation({
+  args:{invitationId:v.id("staffInvitations")},
+  handler:async(ctx,args)=>{
+    const invitation=await ctx.db.get(args.invitationId);
+    if(!invitation) throw new ConvexError("Invitation not found.");
+    const {profile}=await requireTenantMembership(ctx,invitation.tenantId,ADMIN_ONLY);
+    if(invitation.status!=="pending") throw new ConvexError("Only pending invitations can be revoked.");
+    await ctx.db.patch(invitation._id,{status:"revoked"});
+    await recordAudit(ctx,profile,{tenantId:invitation.tenantId,action:"staff.invitation_revoked",entityType:"staffInvitations",entityId:invitation._id,summary:`Invitation for ${invitation.email} revoked.`});
+    return {ok:true};
+  }
+});
+
 
 // Staff management must never create or promote another super administrator.
 const STAFF_ASSIGNABLE_ROLE = v.union(
