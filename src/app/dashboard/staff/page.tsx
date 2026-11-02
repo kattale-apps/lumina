@@ -31,7 +31,8 @@ function RoleSelect({
       disabled={disabled}
       onChange={(e) => onChange(e.target.value as Role)}
     >
-      {ROLE_OPTIONS.map((role) => (
+      {value === "super_admin" ? <option value="super_admin" disabled>{ROLE_LABELS.super_admin}</option> : null}
+      {ROLE_OPTIONS.filter((role) => role !== "super_admin").map((role) => (
         <option key={role} value={role}>
           {ROLE_LABELS[role]}
         </option>
