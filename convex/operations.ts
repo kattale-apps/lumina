@@ -89,6 +89,10 @@ async function releaseHolds(ctx: MutationCtx, quotation: Doc<"quotations">) {
   for (const hold of await holdsOf(ctx, quotation)) {
     if (hold.status === "active") await ctx.db.patch(hold._id, { status: "released", resolvedAt: now });
   }
+  for (const id of quotation.supplierReservationIds ?? []) {
+    const hold = await ctx.db.get(id);
+    if (hold?.status === "active") await ctx.db.patch(id, { status: "released", resolvedAt: now });
+  }
 }
 
 // ------------------------------------------------------------------ settings
@@ -182,9 +186,11 @@ export const recordOutcome = mutation({
       await releaseHolds(ctx, quotation);
     } else {
       for (const hold of await holdsOf(ctx, quotation)) {
-        if (hold.status === "active") {
-          await ctx.db.patch(hold._id, { expiresAt: Math.max(hold.expiresAt, now + WON_HOLD_DAYS * DAY_MS) });
-        }
+        if (hold.status === "active") await ctx.db.patch(hold._id, { expiresAt: Math.max(hold.expiresAt, now + WON_HOLD_DAYS * DAY_MS) });
+      }
+      for (const id of quotation.supplierReservationIds ?? []) {
+        const hold = await ctx.db.get(id);
+        if (hold?.status === "active") await ctx.db.patch(id, { expiresAt: Math.max(hold.expiresAt, now + WON_HOLD_DAYS * DAY_MS) });
       }
       const rateBps = await commissionRate(ctx, quotation.tenantId);
       if (rateBps > 0) {
@@ -493,6 +499,22 @@ export const completeInstallation = mutation({
         protectReserved: false
       });
       await ctx.db.patch(hold._id, { status: "fulfilled", resolvedAt: now });
+    }
+
+    for (const id of quotation.supplierReservationIds ?? []) {
+      const hold = await ctx.db.get(id);
+      if (!hold || hold.status !== "active") continue;
+      const offer = await ctx.db.get(hold.offerId);
+      if (!offer || offer.availableQuantity < hold.quantity) throw new ConvexError("Reserved supplier stock is no longer available to fulfil this installation.");
+      const balance = offer.availableQuantity - hold.quantity;
+      await ctx.db.patch(offer._id,{availableQuantity:balance,updatedAt:now});
+      await ctx.db.insert("supplierStockMovements",{
+        tenantId:installation.tenantId,supplierId:hold.supplierId,offerId:offer._id,
+        type:"issue",quantity:-hold.quantity,balanceAfter:balance,reference:quotation.officialNumber,
+        reason:"Installed for customer",idempotencyKey:"install:"+String(installation._id)+":"+String(offer._id),
+        actorUserId:profile._id,createdAt:now
+      });
+      await ctx.db.patch(hold._id,{status:"fulfilled",resolvedAt:now});
     }
 
     let warranties = 0;
