@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
 import { validateCurrency, requireText } from "./lib/validation";
+import { toMinorUnits, formatMinorUnits } from "./lib/money";
 
 const MANAGERS = ["super_admin", "inventory_admin"] as const;
 const STAFF_ROLE = v.union(
@@ -96,7 +97,7 @@ export const createSupplierOffer = mutation({
     const sku=requireText(args.supplierSku,"Supplier SKU",40).toUpperCase();
     const existing=await ctx.db.query("supplierOffers").withIndex("by_supplier_sku",q=>q.eq("supplierId",supplier._id).eq("supplierSku",sku)).unique();
     if(existing) throw new ConvexError("That supplier SKU already exists.");
-    const unitCostMinor=Math.round(args.unitCost*100);
+    const unitCostMinor=toMinorUnits(args.unitCost,currency);
     const offerId=await ctx.db.insert("supplierOffers",{
       tenantId:args.tenantId,supplierId:supplier._id,category:requireText(args.category,"Category",80),
       name:requireText(args.name,"Product name",120),brand:requireText(args.brand,"Brand",80),
