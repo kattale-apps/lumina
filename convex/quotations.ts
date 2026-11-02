@@ -112,6 +112,7 @@ async function priceProduct(ctx: QueryCtx, product: Doc<"products">) {
 
 type LineInput =
   | { kind: "product"; productId: Id<"products">; quantity: number; unitPriceMinor?: number }
+  | { kind: "supplier_product"; supplierOfferId: Id<"supplierOffers">; quantity: number; unitPriceMinor?: number }
   | { kind: "service"; description: string; quantity: number; unitPriceMinor: number };
 
 async function buildLines(ctx: QueryCtx, tenantId: Id<"tenants">, inputs: LineInput[]) {
@@ -126,6 +127,20 @@ async function buildLines(ctx: QueryCtx, tenantId: Id<"tenants">, inputs: LineIn
         unitListMinor: input.unitPriceMinor,
         unitPriceMinor: input.unitPriceMinor
       });
+      continue;
+    }
+    if (input.kind === "supplier_product") {
+      const offer = await ctx.db.get(input.supplierOfferId);
+      if (!offer || offer.tenantId !== tenantId || offer.status !== "active") throw new ConvexError("Supplier product is not available.");
+      const supplier = await ctx.db.get(offer.supplierId);
+      if (!supplier || supplier.status !== "active") throw new ConvexError("The supplying company is inactive.");
+      if (currency && currency !== offer.currency) throw new ConvexError("All products in one quotation must be priced in the same currency.");
+      currency = offer.currency;
+      const listMinor = Math.round(offer.unitCostMinor * (1 + offer.marginBps / 10000));
+      const floorMinor = Math.round(offer.unitCostMinor * (1 + offer.floorMarginBps / 10000));
+      const unitPriceMinor = input.unitPriceMinor ?? listMinor;
+      if (unitPriceMinor > listMinor) throw new ConvexError(offer.supplierSku + ": price cannot exceed the list price.");
+      lines.push({kind:"product",supplierOfferId:offer._id,supplierId:supplier._id,supplierNameSnapshot:supplier.name,supplierSku:offer.supplierSku,supplierCostMinor:offer.unitCostMinor,supplierCurrency:offer.currency,sku:offer.supplierSku,description:offer.name,quantity:input.quantity,unitListMinor:listMinor,unitPriceMinor,floorUnitMinor:floorMinor,specValues:offer.specifications ?? {}});
       continue;
     }
     const product = await ctx.db.get(input.productId);
@@ -228,6 +243,12 @@ const lineInputArg = v.union(
   v.object({
     kind: v.literal("product"),
     productId: v.id("products"),
+    quantity: v.number(),
+    unitPriceMinor: v.optional(v.number())
+  }),
+  v.object({
+    kind: v.literal("supplier_product"),
+    supplierOfferId: v.id("supplierOffers"),
     quantity: v.number(),
     unitPriceMinor: v.optional(v.number())
   }),
@@ -561,12 +582,31 @@ export const issueQuotation = mutation({
     // Prices and stock are checked now, not as they were when the quote was drafted.
     const now = Date.now();
     const holds: { product: Doc<"products">; warehouse: Id<"warehouses">; quantity: number }[] = [];
+    const supplierHolds: { offerId: Id<"supplierOffers">; supplierId: Id<"supplierCompanies">; quantity: number }[] = [];
     const warehouses = (
       await ctx.db.query("warehouses").withIndex("by_tenant", (q) => q.eq("tenantId", quotation.tenantId)).collect()
     ).filter((w) => w.status === "active");
 
     for (const line of revision.lines) {
-      if (line.kind !== "product" || !line.productId) continue;
+      if (line.kind !== "product") continue;
+      if (line.supplierOfferId) {
+        const offer = await ctx.db.get(line.supplierOfferId);
+        const supplier = offer ? await ctx.db.get(offer.supplierId) : null;
+        if (!offer || offer.tenantId !== quotation.tenantId || offer.status !== "active" || !supplier || supplier.status !== "active") throw new ConvexError("Supplier product is no longer available.");
+        const currentList = Math.round(offer.unitCostMinor * (1 + offer.marginBps / 10000));
+        const currentFloor = Math.round(offer.unitCostMinor * (1 + offer.floorMarginBps / 10000));
+        if (offer.currency !== revision.currency) throw new ConvexError("Supplier product currency has changed. Revise the quotation.");
+        if (line.unitPriceMinor > currentList) throw new ConvexError("Supplier product price exceeds the current list price.");
+        if (line.unitPriceMinor < currentFloor && !commerciallyApproved) throw new ConvexError("Supplier product price is below its floor price.");
+        const reservations = await ctx.db.query("supplierStockReservations").withIndex("by_offer_status",q=>q.eq("offerId",offer._id).eq("status","active")).collect();
+        const held = reservations.filter(r=>r.expiresAt>now).reduce((sum,r)=>sum+r.quantity,0);
+        const planned = supplierHolds.filter(h=>h.offerId===offer._id).reduce((sum,h)=>sum+h.quantity,0);
+        const free = offer.availableQuantity-held-planned;
+        if (free < line.quantity) throw new ConvexError("Not enough supplier stock of " + offer.supplierSku + ".");
+        supplierHolds.push({offerId:offer._id,supplierId:offer.supplierId,quantity:line.quantity});
+        continue;
+      }
+      if (!line.productId) throw new ConvexError("Quotation product source is missing.");
       const product = await ctx.db.get(line.productId);
       if (!product || product.status !== "active") {
         throw new ConvexError(`${line.sku} is no longer available. Revise the quotation.`);
@@ -600,6 +640,7 @@ export const issueQuotation = mutation({
 
     const validUntil = now + revision.validityDays * DAY_MS;
     const reservationIds: Id<"stockReservations">[] = [];
+    const supplierReservationIds: Id<"supplierStockReservations">[] = [];
     const officialNumber = await nextNumber(ctx, quotation.tenantId);
     for (const h of holds) {
       reservationIds.push(
@@ -617,6 +658,13 @@ export const issueQuotation = mutation({
       );
     }
 
+    for (const h of supplierHolds) {
+      supplierReservationIds.push(await ctx.db.insert("supplierStockReservations",{
+        tenantId:quotation.tenantId,supplierId:h.supplierId,offerId:h.offerId,quotationId:quotation._id,
+        quantity:h.quantity,expiresAt:validUntil,status:"active",createdAt:now
+      }));
+    }
+
     await ctx.db.patch(quotation._id, {
       status: "officially_issued",
       officialNumber,
@@ -624,6 +672,7 @@ export const issueQuotation = mutation({
       issuedAt: now,
       validUntil,
       reservationIds,
+      supplierReservationIds,
       updatedAt: now
     });
     await recordAudit(ctx, profile, {
