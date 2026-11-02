@@ -56,7 +56,6 @@ function SupplierWorkspace({tenantId}:{tenantId:Id<"tenants">}){
     catch(err){setNotice(errorMessage(err));}
   }
   if(!suppliers||!offers)return <p className="muted">Loading supplier inventory…</p>;
-  const canManage=true;
   return <>
     <p className="muted">Supplier products remain attributed to their source company. Selling prices are calculated from supplier cost plus the configured margin. Supplier stock is tracked separately from Lumina-owned stock.</p>
     {notice?<p className="form-success" role="status">{notice}</p>:null}
@@ -97,7 +96,7 @@ function SupplierWorkspace({tenantId}:{tenantId:Id<"tenants">}){
       <h2>Consolidated supplier catalogue ({offers.length})</h2>
       {offers.length===0?<p className="muted">No supplier offers yet.</p>:<ul className="record-list">{offers.map(o=><li className="product-card" key={o.id}>
         <div className="field-head"><div><span className="record-title">{o.name}</span><span className="record-meta">{o.brand} {o.model} · {o.sku}</span><span className="record-meta">Supplied by {o.supplierName} · {o.category}</span></div>
-        <div className="price-block"><span className="price">{o.currency} {o.sellingPriceMinor.toLocaleString()}</span><span className="record-meta">{o.availableQuantity} available</span></div></div>
+        <div className="price-block"><span className="price">{o.currency} {o.sellingPrice}</span><span className="record-meta">{o.availableQuantity} available</span></div></div>
         <span className="record-meta">MOQ {o.minimumOrderQuantity} · lead time {o.leadTimeDays} days</span>
         <div className="record-actions"><button className="button button-secondary button-small" type="button" onClick={()=>void stockMove(o.id,"receipt")}>Receive stock</button><button className="button button-secondary button-small" type="button" onClick={()=>void stockMove(o.id,"issue")}>Issue stock</button></div>
       </li>)}</ul>}
