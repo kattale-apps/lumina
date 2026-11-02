@@ -135,7 +135,10 @@ export const adjustSupplierStock = mutation({
     const key=requireText(args.idempotencyKey,"Operation key",100);
     const duplicate=await ctx.db.query("supplierStockMovements")
       .withIndex("by_tenant_key",q=>q.eq("tenantId",args.tenantId).eq("idempotencyKey",key)).unique();
-    if(duplicate) return {balance:duplicate.balanceAfter,replayed:true};
+    if(duplicate){
+      if(duplicate.offerId!==offer._id) throw new ConvexError("This operation key was already used for another supplier product.");
+      return {balance:duplicate.balanceAfter,replayed:true};
+    }
     if(!Number.isInteger(args.quantity)||args.quantity===0) throw new ConvexError("Stock movement must be a non-zero whole number.");
     const delta=args.type==="receipt"?Math.abs(args.quantity):args.type==="issue"?-Math.abs(args.quantity):args.quantity;
     const balance=offer.availableQuantity+delta;
