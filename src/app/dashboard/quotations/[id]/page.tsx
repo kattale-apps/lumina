@@ -15,6 +15,7 @@ type View = NonNullable<ReturnType<typeof useQuery<typeof api.quotations.getQuot
 type Draft = {
   key: number;
   productId: Id<"products"> | null;
+  supplierOfferId: Id<"supplierOffers"> | null;
   description: string;
   sku: string | null;
   quantity: string;
@@ -22,13 +23,15 @@ type Draft = {
 };
 let nextKey = 1;
 
-function Editor({ view }: { view: View }) {
+function Editor({ view, tenantId }: { view: View; tenantId: Id<"tenants"> }) {
+  const supplierOffers = useQuery(api.suppliers.listSupplierOffers, { tenantId });
   const revise = useMutation(api.quotations.reviseQuotation);
   const { shown, quotation } = view;
   const [lines, setLines] = useState<Draft[]>(() =>
     shown.lines.map((l) => ({
       key: nextKey++,
       productId: l.productId as Id<"products"> | null,
+      supplierOfferId: l.supplierOfferId as Id<"supplierOffers"> | null,
       description: l.description,
       sku: l.sku,
       quantity: String(l.quantity),
@@ -55,18 +58,10 @@ function Editor({ view }: { view: View }) {
         reason,
         lines: lines.map((l) =>
           l.productId
-            ? {
-                kind: "product" as const,
-                productId: l.productId,
-                quantity: Number(l.quantity),
-                unitPriceMinor: toMinor(l.price, shown.currency)
-              }
-            : {
-                kind: "service" as const,
-                description: l.description,
-                quantity: Number(l.quantity),
-                unitPriceMinor: toMinor(l.price, shown.currency)
-              }
+            ? { kind: "product" as const, productId: l.productId, quantity: Number(l.quantity), unitPriceMinor: toMinor(l.price, shown.currency) }
+            : l.supplierOfferId
+              ? { kind: "supplier_product" as const, supplierOfferId: l.supplierOfferId, quantity: Number(l.quantity), unitPriceMinor: toMinor(l.price, shown.currency) }
+              : { kind: "service" as const, description: l.description, quantity: Number(l.quantity), unitPriceMinor: toMinor(l.price, shown.currency) }
         )
       });
       setNotice({ ok: true, text: `Saved as revision ${revision}. Any earlier approval no longer applies.` });
@@ -89,12 +84,13 @@ function Editor({ view }: { view: View }) {
       {lines.map((l) => (
         <fieldset className="panel-form" key={l.key}>
           <legend>{l.sku ? `${l.description} (${l.sku})` : "Service"}</legend>
-          {!l.productId ? (
+          {!l.productId && !l.supplierOfferId ? (
             <>
               <label htmlFor={`d-${l.key}`}>Description</label>
               <input id={`d-${l.key}`} maxLength={120} value={l.description} onChange={(e) => set(l.key, { description: e.target.value })} />
             </>
           ) : null}
+          {l.supplierOfferId ? <p className="hint">Supplier source: {l.description} ({l.sku})</p> : null}
           <label htmlFor={`q-${l.key}`}>Quantity</label>
           <input id={`q-${l.key}`} inputMode="numeric" value={l.quantity} onChange={(e) => set(l.key, { quantity: e.target.value })} />
           <label htmlFor={`p-${l.key}`}>Unit price ({shown.currency})</label>
@@ -108,11 +104,17 @@ function Editor({ view }: { view: View }) {
         type="button"
         className="button button-secondary button-small"
         onClick={() =>
-          setLines((all) => [...all, { key: nextKey++, productId: null, description: "", sku: null, quantity: "1", price: "0" }])
+          setLines((all) => [...all, { key: nextKey++, productId: null, supplierOfferId: null, description: "", sku: null, quantity: "1", price: "0" }])
         }
       >
         Add a service line (installation, transport…)
       </button>
+      <button type="button" className="button button-secondary button-small" disabled={!supplierOffers?.some(o => o.currency === shown.currency)} onClick={() => {
+        const offer = supplierOffers?.find(o => o.currency === shown.currency);
+        if (!offer) return;
+        setLines(all => [...all, { key: nextKey++, productId: null, supplierOfferId: offer.id as Id<"supplierOffers">, description: offer.name, sku: offer.sku, quantity: "1", price: fromMinor(offer.sellingPriceMinor, shown.currency) }]);
+      }}>Add supplier product</button>
+      {supplierOffers && supplierOffers.filter(o => o.currency === shown.currency).length === 0 ? <p className="hint">No supplier offers in this quotation currency.</p> : null}
       <label htmlFor="qe-tax">Tax (%)</label>
       <input id="qe-tax" inputMode="decimal" value={tax} onChange={(e) => setTax(e.target.value)} />
       <label htmlFor="qe-days">Valid for (days)</label>
@@ -263,7 +265,7 @@ function Actions({ view }: { view: View }) {
   );
 }
 
-function Detail({ quotationId, role }: { quotationId: Id<"quotations">; role: string }) {
+function Detail({ quotationId, role, tenantId }: { quotationId: Id<"quotations">; role: string; tenantId: Id<"tenants"> }) {
   const [revision, setRevision] = useState<number | undefined>();
   const view = useQuery(api.quotations.getQuotation, { quotationId, revision });
   if (!view) return <p className="muted">Loading quotation…</p>;
@@ -342,7 +344,7 @@ function Detail({ quotationId, role }: { quotationId: Id<"quotations">; role: st
       {shown.isCurrent ? <Actions view={view} /> : null}
       {view.can.decideTechnical && shown.isCurrent ? <TechnicalDecision view={view} /> : null}
       {view.can.decideCommercial && shown.isCurrent ? <CommercialDecision view={view} /> : null}
-      {view.can.edit && shown.isCurrent ? <Editor key={`${quotation.id}-${quotation.currentRevision}`} view={view} /> : null}
+      {view.can.edit && shown.isCurrent ? <Editor key={`${quotation.id}-${quotation.currentRevision}`} view={view} tenantId={tenantId} /> : null}
 
       {view.technicalReviews.length + view.commercialApprovals.length > 0 ? (
         <section className="workspace-section">
@@ -371,7 +373,7 @@ export default function QuotationPage() {
   return (
     <ConfiguredOnly>
       <CompanyPage title="Quotation" allowedRoles={["super_admin", "sales_manager", "sales_agent", "technician"]}>
-        {(company) => <Detail quotationId={params.id as Id<"quotations">} role={company.role} />}
+        {(company) => <Detail quotationId={params.id as Id<"quotations">} role={company.role} tenantId={company.tenantId} />}
       </CompanyPage>
     </ConfiguredOnly>
   );
