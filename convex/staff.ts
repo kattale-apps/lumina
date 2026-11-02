@@ -48,39 +48,6 @@ export const inviteStaff = mutation({
   }
 });
 
-export const acceptInvitation = mutation({
-  args:{},
-  handler:async(ctx)=>{
-    const {profile,identity}=await requireUserProfile(ctx);
-    const email=normaliseEmail(profile.email ?? "");
-    if(!email) throw new ConvexError("Your account must have a verified work email.");
-    const pending=await ctx.db.query("staffInvitations")
-      .withIndex("by_email_status",q=>q.eq("email",email).eq("status","pending")).collect();
-    const now=Date.now();
-    let accepted=0;
-    for(const invitation of pending){
-      if(invitation.expiresAt<=now){
-        await ctx.db.patch(invitation._id,{status:"expired"});
-        continue;
-      }
-      const existing=await ctx.db.query("memberships").withIndex("by_user_tenant",q=>
-        q.eq("userId",profile._id).eq("tenantId",invitation.tenantId)).unique();
-      if(existing){
-        if(existing.status!=="active") await ctx.db.patch(existing._id,{role:invitation.role,status:"active"});
-      }else{
-        await ctx.db.insert("memberships",{
-          tenantId:invitation.tenantId,userId:profile._id,role:invitation.role,
-          status:"active",createdAt:now,createdBy:identity.subject
-        });
-      }
-      await ctx.db.patch(invitation._id,{status:"accepted",acceptedAt:now});
-      await recordAudit(ctx,profile,{tenantId:invitation.tenantId,action:"staff.invitation_accepted",entityType:"staffInvitations",entityId:invitation._id,summary:`${email} accepted staff invitation as ${invitation.role}.`});
-      accepted++;
-    }
-    return {accepted};
-  }
-});
-
 export const revokeInvitation = mutation({
   args:{invitationId:v.id("staffInvitations")},
   handler:async(ctx,args)=>{
@@ -194,6 +161,13 @@ export const grantAccess = mutation({
     if (existing) {
       const before = { role: existing.role, status: existing.status };
       await ctx.db.patch(existing._id, { role: args.role, status: "active" });
+      const pendingInvitations = await ctx.db.query("staffInvitations")
+        .withIndex("by_email_status", q => q.eq("email", email).eq("status", "pending")).collect();
+      for (const invitation of pendingInvitations) {
+        if (invitation.tenantId === args.tenantId && invitation.expiresAt > Date.now()) {
+          await ctx.db.patch(invitation._id, { status: "accepted", acceptedAt: Date.now() });
+        }
+      }
       await recordAudit(ctx, actor, {
         tenantId: args.tenantId,
         action: "membership.reactivated",
