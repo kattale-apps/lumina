@@ -134,6 +134,9 @@ export const adjustSupplierStock = mutation({
     if(!Number.isInteger(args.quantity)||args.quantity===0) throw new ConvexError("Stock movement must be a non-zero whole number.");
     const delta=args.type==="receipt"?Math.abs(args.quantity):args.type==="issue"?-Math.abs(args.quantity):args.quantity;
     const balance=offer.availableQuantity+delta;
+    const activeHolds=await ctx.db.query("supplierStockReservations").withIndex("by_offer_status",q=>q.eq("offerId",offer._id).eq("status","active")).collect();
+    const reserved=activeHolds.filter(h=>h.expiresAt>Date.now()).reduce((sum,h)=>sum+h.quantity,0);
+    if(balance<reserved) throw new ConvexError("This movement would consume stock already reserved for quotations.");
     if(balance<0) throw new ConvexError("This movement would make supplier stock negative.");
     await ctx.db.patch(offer._id,{availableQuantity:balance,updatedAt:Date.now()});
     await ctx.db.insert("supplierStockMovements",{
