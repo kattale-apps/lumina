@@ -310,6 +310,7 @@ function Detail({ quotationId, role, tenantId }: { quotationId: Id<"quotations">
             <li key={i}>
               {l.quantity} × {l.description}
               {l.sku ? ` (${l.sku})` : ""} — {money(l.unitPriceMinor, shown.currency)} each ={" "}
+              {l.supplierNameSnapshot ? <span className="record-meta">Supplier: {l.supplierNameSnapshot} · </span> : null}
               <strong>{money(l.quantity * l.unitPriceMinor, shown.currency)}</strong>
               {l.unitPriceMinor < l.unitListMinor ? ` (list ${money(l.unitListMinor, shown.currency)})` : ""}
               {l.belowFloor ? <span className="pill pill-warn"> below floor price</span> : null}
