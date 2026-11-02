@@ -935,6 +935,9 @@ export const getQuotation = query({
         lines: shown.lines.map((l) => ({
           kind: l.kind,
           productId: l.productId ?? null,
+          supplierOfferId: l.supplierOfferId ?? null,
+          supplierNameSnapshot: l.supplierNameSnapshot ?? null,
+          supplierSku: l.supplierSku ?? null,
           sku: l.sku ?? null,
           description: l.description,
           quantity: l.quantity,
