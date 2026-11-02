@@ -547,6 +547,69 @@ export default defineSchema({
     .index("by_tenant_time", ["tenantId", "decidedAt"])
     .index("by_tenant_owner", ["tenantId", "ownerUserId"]),
 
+// Switches on the public power check for one company and holds its tariff.
+  publicEstimatorSettings: defineTable({
+    tenantId: v.id("tenants"),
+    enabled: v.boolean(),
+    // Cost of one kWh of grid electricity, in minor units of the company currency.
+    tariffMinorPerKwh: v.number(),
+    contactPhone: v.optional(v.string()),
+    contactEmail: v.optional(v.string()),
+    updatedAt: v.number(),
+    updatedBy: v.string()
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_enabled", ["enabled"]),
+
+  // A quote request from someone who is not staff. It holds no prices.
+  quoteRequests: defineTable({
+    tenantId: v.id("tenants"),
+    name: v.string(),
+    phone: v.string(),
+    email: v.optional(v.string()),
+    location: v.string(),
+    gridAvailability: v.union(v.literal("none"), v.literal("unreliable"), v.literal("reliable")),
+    inputMode: v.union(v.literal("bill"), v.literal("appliances")),
+    dailyKwh: v.number(),
+    costPerMonthMinor: v.optional(v.number()),
+    systemType: v.union(
+      v.literal("off_grid"),
+      v.literal("hybrid"),
+      v.literal("grid_tied"),
+      v.literal("backup_only")
+    ),
+    backupHours: v.optional(v.number()),
+    autonomyDays: v.optional(v.number()),
+    optionKey: v.string(),
+    optionTitle: v.string(),
+    components: v.array(
+      v.object({
+        role: v.string(),
+        name: v.string(),
+        brand: v.optional(v.string()),
+        model: v.optional(v.string()),
+        quantity: v.number(),
+        detail: v.optional(v.string())
+      })
+    ),
+    // The load lines the estimate used, so a conversion starts from the same numbers.
+    lines: v.array(assessmentLine),
+    status: v.union(
+      v.literal("new"),
+      v.literal("assigned"),
+      v.literal("converted"),
+      v.literal("closed")
+    ),
+    assignedToUserId: v.optional(v.id("userProfiles")),
+    customerId: v.optional(v.id("customers")),
+    assessmentId: v.optional(v.id("assessments")),
+    createdAt: v.number(),
+    updatedAt: v.number()
+  })
+    .index("by_tenant_time", ["tenantId", "createdAt"])
+    .index("by_tenant_phone_time", ["tenantId", "phone", "createdAt"])
+    .index("by_tenant_assignee", ["tenantId", "assignedToUserId"]),
+
   operationsSettings: defineTable({
     tenantId: v.id("tenants"),
     // Commission as basis points of the pre-tax value of a won deal. 0 = none.

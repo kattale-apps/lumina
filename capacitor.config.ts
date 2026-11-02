@@ -11,7 +11,7 @@ const config: CapacitorConfig = {
   appName: "Solar Switch",
   webDir: "capacitor-www",
   server: {
-    url: process.env.CAPACITOR_SERVER_URL ?? "https://lumina-xi-ochre-15.vercel.app/dashboard/field",
+    url: process.env.CAPACITOR_SERVER_URL ?? "https://lumina-xi-ochre-15.vercel.app/",
     cleartext: false,
     // Only the app's own address may load inside the shell.
     allowNavigation: []

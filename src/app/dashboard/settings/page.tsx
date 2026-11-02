@@ -89,11 +89,74 @@ function SettingsForm({ tenantId }: { tenantId: Id<"tenants"> }) {
   );
 }
 
+function EstimatorForm({ tenantId }: { tenantId: Id<"tenants"> }) {
+  const settings = useQuery(api.estimator.getEstimatorSettings, { tenantId });
+  const update = useMutation(api.estimator.updateEstimatorSettings);
+  const [enabled, setEnabled] = useState(false);
+  const [tariff, setTariff] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!settings) return;
+    setEnabled(settings.enabled);
+    setTariff(settings.tariffMinorPerKwh ? String(settings.tariffMinorPerKwh / 10 ** settings.exponent) : "");
+    setPhone(settings.contactPhone);
+    setEmail(settings.contactEmail);
+  }, [settings]);
+
+  if (!settings) return null;
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setNotice(null);
+    try {
+      await update({ tenantId, enabled, tariffPerKwh: Number(tariff || 0), contactPhone: phone, contactEmail: email });
+      setNotice({ ok: true, text: "Power check settings saved." });
+    } catch (error) {
+      setNotice({ ok: false, text: errorMessage(error) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="panel-form" onSubmit={submit}>
+      <h2>Public power check</h2>
+      <p className="hint">
+        Lets anyone work out what power they use and see unverified solar options without prices at /estimate.
+        They can then request a quote.
+      </p>
+      <label htmlFor="pc-enabled">
+        <input id="pc-enabled" type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />{" "}
+        Switch the public power check on
+      </label>
+      <label htmlFor="pc-tariff">Electricity price per kWh ({settings.currency})</label>
+      <input id="pc-tariff" type="number" min="0" step="any" inputMode="decimal" value={tariff} onChange={(e) => setTariff(e.target.value)} />
+      <p className="hint">Used to estimate running cost when a customer does not enter their own price. Take it from the current ERA tariff for your customers and update it when it changes.</p>
+      <label htmlFor="pc-phone">Contact phone shown to customers (optional)</label>
+      <input id="pc-phone" type="tel" maxLength={30} value={phone} onChange={(e) => setPhone(e.target.value)} />
+      <label htmlFor="pc-email">Contact email (optional)</label>
+      <input id="pc-email" type="email" maxLength={120} value={email} onChange={(e) => setEmail(e.target.value)} />
+      {notice ? <p className={notice.ok ? "form-success" : "auth-message"} role="status">{notice.text}</p> : null}
+      <button className="button" type="submit" disabled={busy}>{busy ? "Saving…" : "Save power check settings"}</button>
+    </form>
+  );
+}
+
 export default function SettingsPage() {
   return (
     <ConfiguredOnly>
       <CompanyPage title="Company settings" allowedRoles={["super_admin"]}>
-        {(company) => <SettingsForm tenantId={company.tenantId} />}
+        {(company) => (
+          <>
+            <SettingsForm tenantId={company.tenantId} />
+            <EstimatorForm tenantId={company.tenantId} />
+          </>
+        )}
       </CompanyPage>
     </ConfiguredOnly>
   );

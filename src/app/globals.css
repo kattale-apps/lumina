@@ -95,6 +95,7 @@ a { color: inherit; text-decoration: none; }
 
 .hero-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   margin-top: 28px;
@@ -641,3 +642,69 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 .stat { display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .stat-value { font-size: 22px; font-weight: 800; overflow-wrap: anywhere; }
 .stat-label { color: var(--muted); font-size: 13px; }
+
+/* Public power check */
+.estimate-form { max-width: 720px; }
+.choice-row { display: grid; gap: 10px; }
+.choice {
+  display: grid;
+  gap: 2px;
+  min-height: 56px;
+  padding: 12px 14px;
+  border: 2px solid #c9d6cf;
+  border-radius: 12px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.choice span { color: var(--muted); font-size: 13px; }
+.choice-on { border-color: var(--green); background: #eef7f2; }
+.appliance-picker { display: grid; gap: 8px; }
+.appliance-grid { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 0; }
+.chip {
+  min-height: 40px;
+  padding: 6px 12px;
+  border: 1px solid #c9d6cf;
+  border-radius: 999px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.chip-on { border-color: var(--green); background: #e5f0ec; font-weight: 700; }
+.estimate-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.estimate-table th, .estimate-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); }
+.estimate-table input { width: 84px; min-height: 40px; padding: 0 8px; font-size: 16px; }
+.estimate-results { display: grid; gap: 16px; margin-top: 36px; }
+.estimate-results h2 { margin: 12px 0 0; }
+.estimate-banner {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid #e3c36b;
+  border-radius: 10px;
+  background: #fff7e0;
+  color: #6b4a00;
+  font-size: 13px;
+  font-weight: 700;
+}
+.option-list { display: grid; gap: 14px; }
+.option-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.option-on { border-color: var(--green); }
+.option-card h3 { margin: 0; font-size: 18px; }
+.option-card p { margin: 0; line-height: 1.5; }
+.option-card .button { justify-self: start; }
+.option-figures { font-size: 14px; }
+.component-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.component-list li { display: grid; gap: 1px; padding: 8px 10px; border-radius: 8px; background: var(--canvas); }
+.component-list li span { color: var(--muted); font-size: 13px; }
+.honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }

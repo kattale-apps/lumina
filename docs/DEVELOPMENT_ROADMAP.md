@@ -195,6 +195,30 @@ Tested with 23 automated tests (171 in total). Not yet used in a browser or depl
 
 **Known gaps:** commission tiers/splits/clawbacks; cancelling an installation leaves the commission for a manager to cancel by hand; no installation checklists, photos or customer sign-off; no warranty claims or reminders; lists are not paginated; the instalment table is arithmetic only and not stored.
 
+## Phase 7 — Public power check and quote requests — 🟡 built, not yet tested with real catalogue or devices
+A person who is not staff can work out what power they use, see unverified solar options without prices, and request a quote. No sign-in.
+
+| Item | Status | Where |
+|---|---|---|
+| Power use from a UEDCL bill/token (units, days, amount paid) or from an appliance list | ✅ | `/estimate`, `convex/lib/estimate.ts` |
+| Daily kWh, cost per day and month; customer's own rate beats the company tariff | ✅ | tested |
+| 2–3 options from the existing sizing engine, chosen by the customer's grid answer | ✅ | `convex/estimator.ts` |
+| Options list components and energy figures only; no price field exists on the response; tested | ✅ | tested |
+| "UNVERIFIED — FOR ILLUSTRATION ONLY" banner on every option | ✅ | `/estimate` |
+| Quote request saved without prices; the server recomputes the option, so nothing sent by the browser is trusted | ✅ | tested |
+| Abuse limits: honeypot field, 3 requests per phone per day, 300 per hour overall, input size limits | ✅ | tested |
+| Company switch, tariff per kWh and contact details (owner only; one company runs the public check) | ✅ | Settings |
+| Staff list of requests; managers assign, agents see their own; Convert makes a customer, site and completed assessment | ✅ | `/dashboard/leads`, `convex/leads.ts`, tested |
+| Prices appear only later, in the normal quotation flow, with technician approval | ✅ | unchanged |
+
+**Known gaps and follow-ups**
+- Options exist only when the catalogue has active inverters, batteries and panels with complete specs; otherwise the page offers a call-back.
+- The UEDCL/ERA tariff is a setting the owner keeps current. It is not looked up or banded by usage.
+- A bill gives total energy only, so the busiest-moment estimate is an assumption (60% of use in a six-hour evening block).
+- No SMS or email alert to staff when a request arrives; managers see it in the list.
+- Public limits are per phone number and overall because Convex gives no IP address. A determined abuser could still fill the list; requests can be closed.
+- Peak sun hours use a conservative default of 4, not the customer's site.
+
 ## Definition of done
 Role/tenant security tested; domain logic tested; mobile layouts/accessibility checked; errors and offline states explicit; audit requirements met; docs updated; no secrets or real customer data committed.
 

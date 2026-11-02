@@ -50,6 +50,9 @@ export default function HomePage() {
           catalogue, pricing rules and live inventory.
         </p>
         <div className="hero-actions">
+          <Link className="button" href="/estimate">
+            Check my power needs
+          </Link>
           <span className="status-dot" />
           <span>Workspace live — sign in to get started</span>
         </div>
