@@ -8,6 +8,14 @@ import { appRole } from "./schema";
 
 const ADMIN_ONLY = ["super_admin"] as const;
 
+// Staff management must never create or promote another super administrator.
+const STAFF_ASSIGNABLE_ROLE = v.union(
+  v.literal("inventory_admin"),
+  v.literal("sales_manager"),
+  v.literal("technician"),
+  v.literal("sales_agent")
+);
+
 /**
  * Loads a membership and checks the caller is a super administrator of its
  * company. Callers may not edit their own membership; because the caller is
@@ -19,6 +27,9 @@ async function loadManageableMembership(ctx: MutationCtx, membershipId: Doc<"mem
   if (!target) throw new ConvexError("Staff member not found.");
 
   const { profile } = await requireTenantMembership(ctx, target.tenantId, ADMIN_ONLY);
+  if (target.role === "super_admin") {
+    throw new ConvexError("The existing super administrator account is protected.");
+  }
   if (target.userId === profile._id) {
     throw new ConvexError("You cannot change your own access. Ask another super administrator.");
   }
@@ -55,7 +66,7 @@ export const listStaff = query({
 
 /** Gives an already-registered user access to the company, or reactivates them. */
 export const grantAccess = mutation({
-  args: { tenantId: v.id("tenants"), email: v.string(), role: appRole },
+  args: { tenantId: v.id("tenants"), email: v.string(), role: STAFF_ASSIGNABLE_ROLE },
   handler: async (ctx, args) => {
     const { profile: actor } = await requireTenantMembership(ctx, args.tenantId, ADMIN_ONLY);
 
@@ -125,7 +136,7 @@ export const grantAccess = mutation({
 });
 
 export const changeRole = mutation({
-  args: { membershipId: v.id("memberships"), role: appRole },
+  args: { membershipId: v.id("memberships"), role: STAFF_ASSIGNABLE_ROLE },
   handler: async (ctx, args) => {
     const { actor, target, targetLabel } = await loadManageableMembership(ctx, args.membershipId);
     if (target.role === args.role) return { changed: false };
