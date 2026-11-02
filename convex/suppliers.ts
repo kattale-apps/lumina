@@ -60,11 +60,13 @@ export const listSupplierOffers = query({
       if (!suppliers.has(o.supplierId)) suppliers.set(o.supplierId,await ctx.db.get(o.supplierId));
       const supplier=suppliers.get(o.supplierId);
       const listMinor=Math.round(o.unitCostMinor*(1+o.marginBps/10000));
+      const holds=await ctx.db.query("supplierStockReservations").withIndex("by_offer_status",q=>q.eq("offerId",o._id).eq("status","active")).collect();
+      const reserved=holds.filter(h=>h.expiresAt>Date.now()).reduce((sum,h)=>sum+h.quantity,0);
       return {
         id:o._id,supplierId:o.supplierId,supplierName:supplier?.name ?? "Supplier",
         category:o.category,name:o.name,brand:o.brand,model:o.model,sku:o.supplierSku,
         description:o.description ?? "",specifications:o.specifications ?? {},
-        currency:o.currency,sellingPriceMinor:listMinor,availableQuantity:o.availableQuantity,
+        currency:o.currency,sellingPriceMinor:listMinor,availableQuantity:Math.max(0,o.availableQuantity-reserved),
         minimumOrderQuantity:o.minimumOrderQuantity,leadTimeDays:o.leadTimeDays,
         costMinor:admin?o.unitCostMinor:null,marginBps:admin?o.marginBps:null,
         floorMarginBps:admin?o.floorMarginBps:null,
