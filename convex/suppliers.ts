@@ -3,7 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
 import { validateCurrency, requireText } from "./lib/validation";
-import { toMinorUnits } from "./lib/money";
+import { applyMarginBps, formatMinorUnits, toMinorUnits, validateMarginBps } from "./lib/money";
 
 const MANAGERS = ["super_admin", "inventory_admin"] as const;
 const STAFF_ROLE = v.union(
@@ -59,14 +59,14 @@ export const listSupplierOffers = query({
     return Promise.all(rows.filter(o=>o.tenantId===args.tenantId && o.status==="active").map(async o=>{
       if (!suppliers.has(o.supplierId)) suppliers.set(o.supplierId,await ctx.db.get(o.supplierId));
       const supplier=suppliers.get(o.supplierId);
-      const listMinor=Math.round(o.unitCostMinor*(1+o.marginBps/10000));
+      const listMinor=applyMarginBps(o.unitCostMinor,o.marginBps);
       const holds=await ctx.db.query("supplierStockReservations").withIndex("by_offer_status",q=>q.eq("offerId",o._id).eq("status","active")).collect();
       const reserved=holds.filter(h=>h.expiresAt>Date.now()).reduce((sum,h)=>sum+h.quantity,0);
       return {
         id:o._id,supplierId:o.supplierId,supplierName:supplier?.name ?? "Supplier",
         category:o.category,name:o.name,brand:o.brand,model:o.model,sku:o.supplierSku,
         description:o.description ?? "",specifications:o.specifications ?? {},
-        currency:o.currency,sellingPriceMinor:listMinor,availableQuantity:Math.max(0,o.availableQuantity-reserved),
+        currency:o.currency,sellingPriceMinor:listMinor,sellingPrice:formatMinorUnits(listMinor,o.currency),availableQuantity:Math.max(0,o.availableQuantity-reserved),
         minimumOrderQuantity:o.minimumOrderQuantity,leadTimeDays:o.leadTimeDays,
         costMinor:admin?o.unitCostMinor:null,marginBps:admin?o.marginBps:null,
         floorMarginBps:admin?o.floorMarginBps:null,
@@ -92,7 +92,7 @@ export const createSupplierOffer = mutation({
     const currency=validateCurrency(args.currency);
     if(!tenant.supportedCurrencies.includes(currency)) throw new ConvexError(`${currency} is not enabled for this company.`);
     if(!Number.isFinite(args.unitCost)||args.unitCost<=0) throw new ConvexError("Unit cost must be greater than zero.");
-    if(args.marginPercent<0||args.floorMarginPercent<0||args.floorMarginPercent>args.marginPercent||args.marginPercent>1000) throw new ConvexError("Check the margin and floor margin values.");
+    if(!Number.isFinite(args.marginPercent)||!Number.isFinite(args.floorMarginPercent)||args.marginPercent<0||args.floorMarginPercent<0||args.floorMarginPercent>args.marginPercent||args.marginPercent>1000) throw new ConvexError("Check the margin and floor margin values.");
     for(const [label,value] of [["available quantity",args.availableQuantity],["minimum order quantity",args.minimumOrderQuantity],["lead time",args.leadTimeDays]] as const){
       if(!Number.isInteger(value)||value<0) throw new ConvexError(`Invalid ${label}.`);
     }
@@ -100,12 +100,15 @@ export const createSupplierOffer = mutation({
     const existing=await ctx.db.query("supplierOffers").withIndex("by_supplier_sku",q=>q.eq("supplierId",supplier._id).eq("supplierSku",sku)).unique();
     if(existing) throw new ConvexError("That supplier SKU already exists.");
     const unitCostMinor=toMinorUnits(args.unitCost,currency);
+    if(unitCostMinor<=0) throw new ConvexError("Unit cost must be greater than zero.");
+    const marginBps=validateMarginBps(Math.round(args.marginPercent*100),"Margin");
+    const floorMarginBps=validateMarginBps(Math.round(args.floorMarginPercent*100),"Floor margin");
     const offerId=await ctx.db.insert("supplierOffers",{
       tenantId:args.tenantId,supplierId:supplier._id,category:requireText(args.category,"Category",80),
       name:requireText(args.name,"Product name",120),brand:requireText(args.brand,"Brand",80),
       model:requireText(args.model,"Model",80),supplierSku:sku,description:args.description?.trim()||undefined,
       specifications:args.specifications,currency,unitCostMinor,
-      marginBps:Math.round(args.marginPercent*100),floorMarginBps:Math.round(args.floorMarginPercent*100),
+      marginBps,floorMarginBps,
       availableQuantity:args.availableQuantity,minimumOrderQuantity:args.minimumOrderQuantity,
       leadTimeDays:args.leadTimeDays,status:"active",createdAt:Date.now(),updatedAt:Date.now(),createdBy:profile.authSubject
     });
