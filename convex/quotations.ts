@@ -28,6 +28,7 @@ import {
 import { buildQuotePdf, type QuotePdfData } from "./lib/quotePdf";
 import { activeReserved, getBalance } from "./lib/stock";
 import { requireText } from "./lib/validation";
+import { applyMarginBps } from "./lib/money";
 import { quotationLine } from "./schema";
 import type { Infer } from "convex/values";
 
@@ -136,8 +137,8 @@ async function buildLines(ctx: QueryCtx, tenantId: Id<"tenants">, inputs: LineIn
       if (!supplier || supplier.status !== "active") throw new ConvexError("The supplying company is inactive.");
       if (currency && currency !== offer.currency) throw new ConvexError("All products in one quotation must be priced in the same currency.");
       currency = offer.currency;
-      const listMinor = Math.round(offer.unitCostMinor * (1 + offer.marginBps / 10000));
-      const floorMinor = Math.round(offer.unitCostMinor * (1 + offer.floorMarginBps / 10000));
+      const listMinor = applyMarginBps(offer.unitCostMinor, offer.marginBps);
+      const floorMinor = applyMarginBps(offer.unitCostMinor, offer.floorMarginBps);
       const unitPriceMinor = input.unitPriceMinor ?? listMinor;
       if (unitPriceMinor > listMinor) throw new ConvexError(offer.supplierSku + ": price cannot exceed the list price.");
       lines.push({kind:"product",supplierOfferId:offer._id,supplierId:supplier._id,supplierNameSnapshot:supplier.name,supplierSku:offer.supplierSku,supplierCostMinor:offer.unitCostMinor,supplierCurrency:offer.currency,sku:offer.supplierSku,description:offer.name,quantity:input.quantity,unitListMinor:listMinor,unitPriceMinor,floorUnitMinor:floorMinor,specValues:offer.specifications ?? {}});
