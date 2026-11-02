@@ -184,6 +184,9 @@ export const grantAccess = mutation({
       )
       .unique();
 
+    if (existing?.role === "super_admin") {
+      throw new ConvexError("The existing super administrator account cannot be reassigned.");
+    }
     if (existing?.status === "active") {
       throw new ConvexError(`${email} already has access. Change their role from the staff list.`);
     }
@@ -210,6 +213,13 @@ export const grantAccess = mutation({
       createdAt: Date.now(),
       createdBy: actor.authSubject
     });
+    const invitations = await ctx.db.query("staffInvitations")
+      .withIndex("by_email_status", q => q.eq("email", email).eq("status", "pending")).collect();
+    for (const invitation of invitations) {
+      if (invitation.tenantId === args.tenantId && invitation.role === args.role && invitation.expiresAt > Date.now()) {
+        await ctx.db.patch(invitation._id, { status: "accepted", acceptedAt: Date.now() });
+      }
+    }
     await recordAudit(ctx, actor, {
       tenantId: args.tenantId,
       action: "membership.granted",
