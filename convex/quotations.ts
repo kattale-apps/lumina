@@ -751,7 +751,7 @@ async function pdfData(ctx: Ctx, quotation: Doc<"quotations">, revision: Doc<"qu
     revision: revision.revision,
     currency: revision.currency,
     lines: revision.lines.map((l) => ({
-      description: l.description,
+      description: l.supplierNameSnapshot ? `${l.description} (supplied by ${l.supplierNameSnapshot})` : l.description,
       sku: l.sku,
       quantity: l.quantity,
       unitPriceMinor: l.unitPriceMinor
