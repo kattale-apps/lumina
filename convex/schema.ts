@@ -655,4 +655,85 @@ export default defineSchema({
     .index("by_tenant_time", ["tenantId", "occurredAt"])
     .index("by_entity", ["entityType", "entityId"])
     .index("by_actor_time", ["actorSubject", "occurredAt"])
+
+  // Independent supplier businesses contributing stock to Lumina's consolidated catalogue.
+  supplierCompanies: defineTable({
+    tenantId: v.id("tenants"),
+    name: v.string(),
+    registrationNumber: v.optional(v.string()),
+    contactName: v.string(),
+    email: v.string(),
+    phone: v.string(),
+    address: v.optional(v.string()),
+    status: v.union(v.literal("active"), v.literal("inactive")),
+    createdAt: v.number(),
+    createdBy: v.string(),
+    updatedAt: v.number()
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_name", ["tenantId", "name"]),
+
+  // A supplier's offer is distinct even where another supplier sells the same model.
+  supplierOffers: defineTable({
+    tenantId: v.id("tenants"),
+    supplierId: v.id("supplierCompanies"),
+    category: v.string(),
+    name: v.string(),
+    brand: v.string(),
+    model: v.string(),
+    supplierSku: v.string(),
+    description: v.optional(v.string()),
+    specifications: v.optional(v.record(v.string(), v.union(v.number(), v.string(), v.boolean()))),
+    currency: v.string(),
+    unitCostMinor: v.number(),
+    marginBps: v.number(),
+    floorMarginBps: v.number(),
+    availableQuantity: v.number(),
+    minimumOrderQuantity: v.number(),
+    leadTimeDays: v.number(),
+    status: v.union(v.literal("active"), v.literal("inactive")),
+    updatedAt: v.number(),
+    createdAt: v.number(),
+    createdBy: v.string()
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_supplier", ["supplierId"])
+    .index("by_tenant_status", ["tenantId", "status"])
+    .index("by_supplier_sku", ["supplierId", "supplierSku"]),
+
+  // Append-only supplier stock ledger; balance on the offer is updated atomically with each row.
+  supplierStockMovements: defineTable({
+    tenantId: v.id("tenants"),
+    supplierId: v.id("supplierCompanies"),
+    offerId: v.id("supplierOffers"),
+    type: v.union(v.literal("receipt"), v.literal("issue"), v.literal("adjustment")),
+    quantity: v.number(),
+    balanceAfter: v.number(),
+    reference: v.optional(v.string()),
+    reason: v.optional(v.string()),
+    idempotencyKey: v.string(),
+    actorUserId: v.id("userProfiles"),
+    createdAt: v.number()
+  })
+    .index("by_offer_time", ["offerId", "createdAt"])
+    .index("by_tenant_key", ["tenantId", "idempotencyKey"]),
+
+  // Invitations are email-bound. Registration/acceptance activates the invited role.
+  staffInvitations: defineTable({
+    tenantId: v.id("tenants"),
+    fullName: v.string(),
+    email: v.string(),
+    phone: v.string(),
+    jobTitle: v.string(),
+    role: v.union(v.literal("inventory_admin"), v.literal("sales_manager"), v.literal("technician"), v.literal("sales_agent")),
+    status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("revoked"), v.literal("expired")),
+    invitedBy: v.id("userProfiles"),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    acceptedAt: v.optional(v.number())
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_email_status", ["email", "status"]),
+
+
 });
