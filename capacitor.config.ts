@@ -11,7 +11,7 @@ const config: CapacitorConfig = {
   appName: "Lumina",
   webDir: "capacitor-www",
   server: {
-    url: process.env.CAPACITOR_SERVER_URL ?? "https://lumina-xi-ochre-15.vercel.app",
+    url: process.env.CAPACITOR_SERVER_URL ?? "https://lumina-xi-ochre-15.vercel.app/dashboard/field",
     cleartext: false,
     // Only the app's own address may load inside the shell.
     allowNavigation: []

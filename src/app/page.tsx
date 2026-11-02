@@ -20,6 +20,11 @@ const modules = [
     number: "04",
     title: "Quotations",
     description: "Create illustrative quotations and route designs to a technician for approval."
+  },
+  {
+    number: "05",
+    title: "Field work & deals",
+    description: "Work offline on site, then track deal outcomes, commissions and installations."
   }
 ];
 
@@ -46,7 +51,7 @@ export default function HomePage() {
         </p>
         <div className="hero-actions">
           <span className="status-dot" />
-          <span>Foundation workspace ready for configuration</span>
+          <span>Workspace live — sign in to get started</span>
         </div>
       </section>
 
@@ -56,7 +61,7 @@ export default function HomePage() {
             <p className="eyebrow">PLATFORM MODULES</p>
             <h2 id="modules-heading">The Lumina workflow</h2>
           </div>
-          <span className="phase-label">PHASE 0</span>
+          <span className="phase-label">LIVE</span>
         </div>
         <div className="module-grid">
           {modules.map((module) => (
@@ -64,7 +69,7 @@ export default function HomePage() {
               <span className="module-number">{module.number}</span>
               <h3>{module.title}</h3>
               <p>{module.description}</p>
-              <span className="module-state">Planned module</span>
+              <span className="module-state">Available</span>
             </article>
           ))}
         </div>
@@ -84,7 +89,7 @@ export default function HomePage() {
 
       <footer className="footer">
         <span>Lumina · Solar Sales & System Intelligence</span>
-        <span>Initial deployment · Uganda · Multi-currency ready</span>
+        <span>Uganda · Multi-currency ready</span>
       </footer>
     </main>
   );
