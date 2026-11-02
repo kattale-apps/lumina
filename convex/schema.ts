@@ -98,6 +98,12 @@ export const quotationStatus = v.union(
 export const quotationLine = v.object({
   kind: v.union(v.literal("product"), v.literal("service")),
   productId: v.optional(v.id("products")),
+  supplierOfferId: v.optional(v.id("supplierOffers")),
+  supplierId: v.optional(v.id("supplierCompanies")),
+  supplierNameSnapshot: v.optional(v.string()),
+  supplierSku: v.optional(v.string()),
+  supplierCostMinor: v.optional(v.number()),
+  supplierCurrency: v.optional(v.string()),
   sku: v.optional(v.string()),
   description: v.string(),
   quantity: v.number(),
@@ -429,6 +435,7 @@ export default defineSchema({
     issuedAt: v.optional(v.number()),
     validUntil: v.optional(v.number()),
     reservationIds: v.optional(v.array(v.id("stockReservations"))),
+    supplierReservationIds: v.optional(v.array(v.id("supplierStockReservations"))),
     createdAt: v.number(),
     createdBy: v.string(),
     updatedAt: v.number()
@@ -737,3 +744,19 @@ export default defineSchema({
 
 
 });
+
+  supplierStockReservations: defineTable({
+    tenantId:v.id("tenants"),
+    supplierId:v.id("supplierCompanies"),
+    offerId:v.id("supplierOffers"),
+    quotationId:v.id("quotations"),
+    quantity:v.number(),
+    expiresAt:v.number(),
+    status:v.union(v.literal("active"),v.literal("released"),v.literal("fulfilled")),
+    createdAt:v.number(),
+    resolvedAt:v.optional(v.number())
+  })
+    .index("by_offer_status",["offerId","status"])
+    .index("by_tenant_status",["tenantId","status"])
+    .index("by_quotation",["quotationId"]),
+
