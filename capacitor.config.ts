@@ -7,7 +7,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * upload: confirm it before publishing.
  */
 const config: CapacitorConfig = {
-  appId: "com.lumina.solar",
+  appId: "com.solarswitch.app",
   appName: "Solar Switch",
   webDir: "capacitor-www",
   server: {

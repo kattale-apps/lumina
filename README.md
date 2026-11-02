@@ -1,8 +1,8 @@
-# Lumina
+# Solar Switch
 
 **Solar Sales, System Design & Quotation Management**
 
-Lumina helps a solar company's sales agents assess customer energy needs, configure technically appropriate systems, check administrator-managed inventory and pricing, and generate quotations. Agents may issue clearly marked illustrative quotations immediately; official quotations require technician verification and any required commercial approval.
+Solar Switch helps a solar company's sales agents assess customer energy needs, configure technically appropriate systems, check administrator-managed inventory and pricing, and generate quotations. Agents may issue clearly marked illustrative quotations immediately; official quotations require technician verification and any required commercial approval.
 
 ## Confirmed decisions
 - Initial deployment: one solar company; tenant-aware design for future multi-company use.

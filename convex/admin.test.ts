@@ -6,7 +6,7 @@ import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.*s");
 
-/** Simulates a Convex Auth registration: auth user + Lumina profile. */
+/** Simulates a Convex Auth registration: auth user + Solar Switch profile. */
 async function registerUser(t: ReturnType<typeof convexTest>, email: string) {
   return await t.run(async (ctx) => {
     const userId = await ctx.db.insert("users", { email });

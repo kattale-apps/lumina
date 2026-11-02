@@ -1,4 +1,4 @@
-# Lumina Development Roadmap
+# Solar Switch Development Roadmap
 
 **Status as of 2026-11-01:** Phase 0 is mostly complete (tooling items outstanding). Phase 1 is feature-complete and live on production. Phases 2, 3 and 4 are live, and Phase 5 is live but untested on devices. Phase 6 is built (not yet deployed), except payments, which wait on a financing policy.
 
@@ -171,7 +171,7 @@ Details, security notes and limits are in `docs/OFFLINE_AND_ANDROID.md`.
 - A conflict cannot be merged line by line; the person picks one whole version.
 - Offline customers are created without email or notes, and sites without GPS.
 - The service worker has not been exercised across browser updates, and iOS Safari may evict stored data after long inactivity.
-- The Android application id (`com.lumina.solar`), launcher icons and signing key still need to be decided before publishing.
+- The Android application id (`com.solarswitch.app`), launcher icons and signing key still need to be decided before publishing.
 - Development dependencies report npm audit findings (test tooling); `npm audit --omit=dev` reports two (one moderate, one high) in the production tree that have not been investigated.
 
 ## Phase 6 — Operations and financing — 🟡 built, payments deliberately not

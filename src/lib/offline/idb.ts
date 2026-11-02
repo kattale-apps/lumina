@@ -1,6 +1,6 @@
 import type { Backend } from "./store";
 
-const DB = "lumina-offline";
+const DB = "solar-switch-offline";
 const STORE = "kv";
 
 function open(): Promise<IDBDatabase> {

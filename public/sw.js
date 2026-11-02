@@ -1,10 +1,10 @@
-/* Lumina service worker: keeps the app shell available without a connection.
+/* Solar Switch service worker: keeps the app shell available without a connection.
  *
  * It caches pages and static assets only. It never touches Convex (other
  * origin) and holds no customer data: that lives in IndexedDB, written by the
  * app itself. Bump VERSION to drop old caches on the next visit.
  */
-const VERSION = "lumina-v1";
+const VERSION = "solar-switch-v1";
 const STATIC = `${VERSION}-static`;
 const PAGES = `${VERSION}-pages`;
 const FALLBACK = "/offline.html";

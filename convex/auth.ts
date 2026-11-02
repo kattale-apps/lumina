@@ -33,7 +33,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       const displayName =
         typeof profile.name === "string" && profile.name.trim()
           ? profile.name.trim()
-          : email?.split("@")[0] ?? "Lumina user";
+          : email?.split("@")[0] ?? "Solar Switch user";
 
       if (existing) {
         await ctx.db.patch(existing._id, {

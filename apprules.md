@@ -1,4 +1,4 @@
-# Lumina Application Rules
+# Solar Switch Application Rules
 
 ## Mobile-first usability
 - Design for agents using phones outdoors with intermittent connectivity.

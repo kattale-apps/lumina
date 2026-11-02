@@ -202,7 +202,7 @@ describe("staff administration", () => {
     const { tenantId, asOwner } = await setup([{ email: "agent@acme.ug", role: "sales_agent" }]);
     await expect(
       asOwner.mutation(api.staff.grantAccess, { tenantId, email: "ghost@acme.ug", role: "sales_agent" })
-    ).rejects.toThrow(/No Lumina account/);
+    ).rejects.toThrow(/No Solar Switch account/);
     await expect(
       asOwner.mutation(api.staff.grantAccess, { tenantId, email: "agent@acme.ug", role: "technician" })
     ).rejects.toThrow(/already has access/);

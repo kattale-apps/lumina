@@ -22,7 +22,7 @@ An outcome is recorded once and cannot be changed. A quotation past its validity
 - Warranties show as in warranty / ending within 60 days / expired.
 
 ## Instalment illustration
-On an issued quotation: deposit, term (1–60 months), yearly rate and method (flat or reducing balance) produce a repayment table in whole minor units; the last instalment absorbs rounding so principal repaid equals the amount financed. It is **arithmetic for a conversation**: nothing is stored, no lending terms exist in Lumina, and it must not be presented as a credit offer.
+On an issued quotation: deposit, term (1–60 months), yearly rate and method (flat or reducing balance) produce a repayment table in whole minor units; the last instalment absorbs rounding so principal repaid equals the amount financed. It is **arithmetic for a conversation**: nothing is stored, no lending terms exist in Solar Switch, and it must not be presented as a credit offer.
 
 ## Manager overview
 Accepted/declined counts, win rate, accepted value, unanswered issued value, per-agent results, pipeline by status, installations by status, warranties ending soon and commission totals. Money is grouped **per currency** and never added across currencies. Win rate is accepted ÷ (accepted + declined) in the chosen period.

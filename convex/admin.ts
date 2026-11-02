@@ -9,7 +9,7 @@
  *     '{"companyName":"Acme Solar","slug":"acme-solar","adminEmail":"owner@acme.ug"}'
  *
  * Add `--prod` to run against production. The person must have registered at
- * /sign-in first so that their Lumina profile exists.
+ * /sign-in first so that their Solar Switch profile exists.
  */
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -50,7 +50,7 @@ async function findProfileByEmail(ctx: MutationCtx, rawEmail: string) {
 
   if (matches.length === 0) {
     throw new ConvexError(
-      `No Lumina account exists for ${email}. Ask them to register at /sign-in first.`
+      `No Solar Switch account exists for ${email}. Ask them to register at /sign-in first.`
     );
   }
   if (matches.length > 1) {

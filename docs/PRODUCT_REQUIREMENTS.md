@@ -1,7 +1,7 @@
-# Lumina Product Requirements
+# Solar Switch Product Requirements
 
 ## Product summary
-Lumina is a solar sales and system configuration platform. It guides agents through customer discovery, calculates energy requirements, proposes equipment from the company catalogue, checks stock and pricing, and generates quotations. Sales agents can immediately generate illustrative copies; official quotations require technician verification and, where configured, commercial approval.
+Solar Switch is a solar sales and system configuration platform. It guides agents through customer discovery, calculates energy requirements, proposes equipment from the company catalogue, checks stock and pricing, and generates quotations. Sales agents can immediately generate illustrative copies; official quotations require technician verification and, where configured, commercial approval.
 
 ## Goals
 - Standardise customer energy assessments.

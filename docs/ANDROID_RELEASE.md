@@ -4,11 +4,11 @@ The project in `android/` is a Capacitor shell that opens the production web app
 
 ## One-time setup
 1. Install Android Studio (it includes the SDK) and JDK 17+.
-2. Decide the **application id** in `capacitor.config.ts` (currently `com.lumina.solar`). It identifies the app in Google Play and cannot be changed after the first upload.
+2. Decide the **application id** in `capacitor.config.ts` (currently `com.solarswitch.app`). It identifies the app in Google Play and cannot be changed after the first upload.
 3. Create an upload key (keep it out of git; back it up):
-   `keytool -genkey -v -keystore lumina-upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias lumina`
+   `keytool -genkey -v -keystore solar-switch-upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias solarswitch`
 4. Create `android/keystore.properties` (ignored by git) with `storeFile`, `storePassword`, `keyAlias`, `keyPassword`, and read it from `android/app/build.gradle` in a `signingConfigs.release` block.
-5. Replace the default launcher icons under `android/app/src/main/res/mipmap-*` with the Lumina mark (`public/icons/maskable-512.png` is a good source for Android Studio's Image Asset tool).
+5. Replace the default launcher icons under `android/app/src/main/res/mipmap-*` with the Solar Switch mark (`public/icons/maskable-512.png` is a good source for Android Studio's Image Asset tool).
 
 ## Each release
 1. Merge to `main`; wait for the Vercel production deployment to be **Ready** (the app loads the live site).

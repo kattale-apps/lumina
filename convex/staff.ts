@@ -68,7 +68,7 @@ export const grantAccess = mutation({
       .take(2);
     if (matches.length === 0) {
       throw new ConvexError(
-        `No Lumina account exists for ${email}. Ask them to create an account at the sign-in page first.`
+        `No Solar Switch account exists for ${email}. Ask them to create an account at the sign-in page first.`
       );
     }
     if (matches.length > 1) {

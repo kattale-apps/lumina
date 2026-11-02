@@ -94,7 +94,7 @@ granted.
 deployment needed). `convex/_generated` must exist first (`npx convex dev`).
 
 ## Authentication model
-Lumina uses Convex Auth with the password provider through the client-side React
+Solar Switch uses Convex Auth with the password provider through the client-side React
 integration; it intentionally does not use the experimental Next.js server-side
 authentication path. Convex Auth is currently beta.
 
@@ -102,7 +102,7 @@ authentication path. Convex Auth is currently beta.
 own auth routes. Without it, every backend permission check treats the user as
 signed out.
 
-Newly registered identities are mapped to Lumina user profiles. Registration does
+Newly registered identities are mapped to Solar Switch user profiles. Registration does
 not grant access to a company or assign a role. A user must receive an active
 company membership through a controlled administrator-provisioning process before
 accessing company data.

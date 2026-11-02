@@ -1,4 +1,4 @@
-package com.lumina.solar;
+package com.solarswitch.app;
 
 import com.getcapacitor.BridgeActivity;
 

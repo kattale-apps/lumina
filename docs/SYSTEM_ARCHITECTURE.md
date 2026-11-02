@@ -1,4 +1,4 @@
-# Lumina System Architecture
+# Solar Switch System Architecture
 
 ## Approach
 Modular Next.js application with Convex backend/database and separately testable domain logic for solar calculations, compatibility, pricing and quotation transitions. Initial deployment is one company; records and authorization are tenant-aware for future multi-company support.

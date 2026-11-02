@@ -28,7 +28,7 @@ export async function requireIdentity(ctx: AuthContext) {
   return identity;
 }
 
-/** Looks up the Lumina profile for the signed-in user without throwing. */
+/** Looks up the Solar Switch profile for the signed-in user without throwing. */
 export async function findViewerProfile(ctx: AuthContext) {
   const authUserId = await getAuthUserId(ctx);
   if (!authUserId) return null;
@@ -51,7 +51,7 @@ export async function requireUserProfile(ctx: AuthContext) {
 
   const { profile } = viewer;
   if (!profile || profile.status !== "active") {
-    throw new AuthorizationError("Your Lumina user profile is not active.");
+    throw new AuthorizationError("Your Solar Switch user profile is not active.");
   }
 
   return { identity, profile };
