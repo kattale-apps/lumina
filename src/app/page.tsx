@@ -3,33 +3,31 @@ import Link from "next/link";
 export default function HomePage() {
   return (
     <div className="public-bg">
-      <main className="shell">
+      <main className="shell landing">
         <header className="topbar">
           <Link className="brand" href="/" aria-label="Solar Switch home">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img className="brand-logo" src="/icons/icon-192.png" alt="" width={38} height={38} />
             <span>SOLAR SWITCH</span>
           </Link>
-          <div className="hero-actions" style={{ margin: 0 }}>
-            <Link className="button button-small button-secondary" href="/sign-up">
-              Create account
-            </Link>
-            <Link className="button button-small" href="/sign-in">
-              Sign in
-            </Link>
-          </div>
+          <Link className="button button-small" href="/sign-in">
+            Sign in
+          </Link>
         </header>
 
-        <section className="hero">
+        <section className="landing-hero">
           <h1>We help everyone find the right solar system.</h1>
-          <p className="hero-copy">
+          <p className="landing-copy">
             Tell us what you use today and see the solar options that could fit your home or business.
             It takes about two minutes.
           </p>
-          <div className="hero-actions">
-            <Link className="button button-large" href="/estimate">
+          <div className="landing-actions">
+            <Link className="button button-large landing-cta" href="/estimate">
               Check my power needs
             </Link>
+            <p className="landing-secondary">
+              Want to see our products and order? <Link href="/sign-up">Create an account</Link>
+            </p>
           </div>
         </section>
       </main>

@@ -803,3 +803,49 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 .sms-projection { display: grid; gap: 10px; padding-top: 6px; border-top: 1px solid var(--line); }
 .sms-projection-title { display: grid; gap: 2px; margin: 0; font-weight: 800; }
 .sms-projection-title span { color: var(--muted); font-size: 13px; font-weight: 400; }
+
+/* Header: one line on phones, never clipped */
+.topbar { height: auto; min-height: 64px; gap: 12px; padding: 10px 0; }
+.brand { min-width: 0; white-space: nowrap; }
+.topbar .button { flex: none; }
+@media (max-width: 420px) {
+  .brand { gap: 8px; font-size: 14px; letter-spacing: .12em; }
+  .brand-logo { width: 32px; height: 32px; }
+}
+
+/* Landing: mobile first, content balanced in the screen */
+.landing { display: flex; min-height: 100vh; min-height: 100svh; flex-direction: column; }
+.landing-hero {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 20px;
+  max-width: 760px;
+  padding: 24px 0 calc(40px + env(safe-area-inset-bottom));
+}
+.landing-hero h1 {
+  margin: 0;
+  color: #000;
+  font-size: clamp(36px, 10.5vw, 76px);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -.045em;
+  text-wrap: pretty;
+}
+.landing-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(17px, 4.4vw, 20px);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+.landing-actions { display: grid; gap: 14px; margin-top: 8px; }
+.landing-cta { width: 100%; min-height: 60px; font-size: 18px; border-radius: 14px; }
+.landing-secondary { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.5; text-align: center; }
+.landing-secondary a { display: inline-block; color: var(--green); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+@media (min-width: 720px) {
+  .landing-actions { justify-items: start; }
+  .landing-cta { width: auto; padding: 0 36px; }
+  .landing-secondary { text-align: left; }
+}
