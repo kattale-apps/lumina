@@ -257,10 +257,12 @@ function Field() {
   });
   const [editing, setEditing] = useState<string | null>(null);
 
-  // Signed out and nothing on the device: send them to sign in once they can.
+  // Signed out and nothing on the device: send them on once they can.
+  // Inside the Android app that is the home page (most app users are customers;
+  // staff sign in from there). Older app builds opened here directly.
   const noCache = state !== null && !session;
   useEffect(() => {
-    if (online && !isLoading && !isAuthenticated && noCache) router.replace("/sign-in");
+    if (online && !isLoading && !isAuthenticated && noCache) router.replace(isNativeApp() ? "/" : "/sign-in");
   }, [online, isLoading, isAuthenticated, noCache, router]);
 
   if (unsupported) {
@@ -432,6 +434,12 @@ function Field() {
       </main>
     </div>
   );
+}
+
+/** True inside the Capacitor Android shell, which injects window.Capacitor. */
+function isNativeApp() {
+  const cap = (globalThis as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+  return Boolean(cap?.isNativePlatform?.());
 }
 
 export default function FieldPage() {
