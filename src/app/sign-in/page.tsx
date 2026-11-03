@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -44,7 +45,7 @@ function SignInForm() {
 
   return (
     <form className="auth-form" onSubmit={submit}>
-      <label htmlFor="email">Work email</label>
+      <label htmlFor="email">Email</label>
       <input
         id="email"
         type="email"
@@ -75,8 +76,13 @@ function SignInForm() {
           setMessage("");
         }}
       >
-        {mode === "signIn" ? "New to Solar Switch? Create an account" : "Already registered? Sign in"}
+        {mode === "signIn" ? "New staff member? Register a staff login" : "Already registered? Sign in"}
       </button>
+      {mode === "signIn" ? (
+        <p className="auth-note">
+          Customer? <Link href="/sign-up"><u>Create a customer account</u></Link> to see the catalogue and order.
+        </p>
+      ) : null}
       {mode === "signUp" ? (
         <p className="auth-note">
           Creating an account does not grant access to a company workspace. A Solar Switch
@@ -105,7 +111,7 @@ export default function SignInPage() {
       <section className="auth-card">
         <p className="eyebrow">SOLAR SWITCH WORKSPACE</p>
         <h1>Welcome back</h1>
-        <p>Sign in to continue to solar assessments, system designs and quotations.</p>
+        <p>Sign in as staff or as a customer.</p>
         <SignInForm />
       </section>
     </main>

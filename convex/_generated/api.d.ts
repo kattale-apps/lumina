@@ -41,6 +41,7 @@ import type * as margins from "../margins.js";
 import type * as operations from "../operations.js";
 import type * as products from "../products.js";
 import type * as quotations from "../quotations.js";
+import type * as shop from "../shop.js";
 import type * as settings from "../settings.js";
 import type * as sizing from "../sizing.js";
 import type * as staff from "../staff.js";
@@ -89,6 +90,7 @@ declare const fullApi: ApiFromModules<{
   products: typeof products;
   quotations: typeof quotations;
   settings: typeof settings;
+  shop: typeof shop;
   sizing: typeof sizing;
   staff: typeof staff;
   stock: typeof stock;

@@ -75,6 +75,7 @@ export function WorkspaceHeader({ role }: { role?: string }) {
     { href: "/dashboard", label: "Home", show: true },
     { href: "/dashboard/field", label: "Field work", show: crm },
     { href: "/dashboard/leads", label: "Quote requests", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" },
+    { href: "/dashboard/orders", label: "Orders", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" },
     { href: "/dashboard/customers", label: "Customers", show: crm },
     { href: "/dashboard/assessments", label: "Assessments", show: crm },
     { href: "/dashboard/quotations", label: "Quotations", show: crm },
@@ -99,7 +100,8 @@ export function WorkspaceHeader({ role }: { role?: string }) {
     <>
       <header className="topbar">
         <Link className="brand" href="/" aria-label="Solar Switch home">
-          <span className="brand-mark">S</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="brand-logo" src="/icons/icon-192.png" alt="" width={38} height={38} />
           <span>SOLAR SWITCH</span>
         </Link>
         <SignOutButton />

@@ -9,6 +9,14 @@ import { api } from "../../../convex/_generated/api";
 
 type Grid = "none" | "unreliable" | "reliable";
 type Mode = "bill" | "appliances";
+type Category = "residential" | "commercial_small" | "commercial_medium" | "industrial";
+
+const CATEGORY_CHOICES: { value: Category; label: string; hint: string }[] = [
+  { value: "residential", label: "Home (residential)", hint: "A house or apartment." },
+  { value: "commercial_small", label: "Small business", hint: "Shop, salon, small office." },
+  { value: "commercial_medium", label: "Medium business", hint: "Hotel, clinic, school, large office." },
+  { value: "industrial", label: "Industrial", hint: "Factory, workshop, processing plant." }
+];
 type Selected = Record<string, { quantity: string; hours: string }>;
 
 const GRID_CHOICES: { value: Grid; label: string; hint: string }[] = [
@@ -46,6 +54,7 @@ function Estimator() {
   const config = useQuery(api.estimator.publicConfig, {});
   const submit = useMutation(api.estimator.submitRequest);
 
+  const [category, setCategory] = useState<Category>("residential");
   const [grid, setGrid] = useState<Grid | null>(null);
   const [mode, setMode] = useState<Mode>("bill");
   const [units, setUnits] = useState("");
@@ -89,12 +98,14 @@ function Estimator() {
   }
 
   const exponent = config.exponent;
+  const unitRate = config.categoryRatesMinor?.[category] ?? config.tariffMinorPerKwh;
   const currency = config.currency;
 
   function buildInput() {
     if (mode === "bill") {
       return {
         mode: "bill" as const,
+        category,
         units: Number(units),
         days: Number(days),
         amount: amount.trim() ? Number(amount) : undefined
@@ -102,6 +113,7 @@ function Estimator() {
     }
     return {
       mode: "appliances" as const,
+      category,
       items: Object.entries(selected).map(([name, v]) => ({
         name,
         quantity: Number(v.quantity),
@@ -180,7 +192,17 @@ function Estimator() {
       </p>
 
       <form className="panel-form estimate-form" onSubmit={calculate}>
-        <h2>1. Your grid power</h2>
+        <h2>1. What do you need power for?</h2>
+        <div className="choice-row" role="radiogroup" aria-label="Customer type">
+          {CATEGORY_CHOICES.map((c) => (
+            <button type="button" key={c.value} role="radio" aria-checked={category === c.value} className={`choice ${category === c.value ? "choice-on" : ""}`} onClick={() => setCategory(c.value)}>
+              <strong>{c.label}</strong>
+              <span>{c.hint}</span>
+            </button>
+          ))}
+        </div>
+
+        <h2>2. Your grid power</h2>
         <div className="choice-row" role="radiogroup" aria-label="Grid power">
           {GRID_CHOICES.map((c) => (
             <button
@@ -197,7 +219,7 @@ function Estimator() {
           ))}
         </div>
 
-        <h2>2. How would you like to tell us?</h2>
+        <h2>3. How would you like to tell us?</h2>
         <div className="choice-row" role="radiogroup" aria-label="Input method">
           <button type="button" role="radio" aria-checked={mode === "bill"} className={`choice ${mode === "bill" ? "choice-on" : ""}`} onClick={() => setMode("bill")}>
             <strong>From my UEDCL bill or token</strong>
@@ -214,11 +236,16 @@ function Estimator() {
             <label htmlFor="es-units">Units (kWh) you bought or used</label>
             <input id="es-units" required inputMode="decimal" type="number" min="0.1" step="any" placeholder="e.g. 150" value={units} onChange={(e) => setUnits(e.target.value)} />
             <label htmlFor="es-days">Over how many days?</label>
+            <div className="quick-row" role="group" aria-label="Quick pick days">
+              {[["A week", "7"], ["2 weeks", "14"], ["A month", "30"]].map(([label, v]) => (
+                <button type="button" key={v} className={`chip ${days === v ? "chip-on" : ""}`} onClick={() => setDays(v)}>{label}</button>
+              ))}
+            </div>
             <input id="es-days" required inputMode="numeric" type="number" min="1" max="366" value={days} onChange={(e) => setDays(e.target.value)} />
-            <p className="hint">For a monthly bill use 30. For a token, count how many days it lasted.</p>
+            <p className="hint">Tap a quick pick or type your own number. For a token, count how many days it lasted.</p>
             <label htmlFor="es-amount">What you paid for them ({currency}) — optional</label>
             <input id="es-amount" inputMode="numeric" type="number" min="1" step="any" placeholder="e.g. 120000" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            <p className="hint">If you leave this blank we use {money(config.tariffMinorPerKwh, exponent, currency)} per unit.</p>
+            <p className="hint">If you leave this blank we use the standard rate for your customer type: {money(unitRate, exponent, currency)} per unit.</p>
           </>
         ) : (
           <>
@@ -276,8 +303,8 @@ function Estimator() {
               <p className="hint">Tap the appliances you use. Typical hours are filled in; change them to match your home.</p>
             )}
             <label htmlFor="es-rate">Your price per unit ({currency}/kWh) — optional</label>
-            <input id="es-rate" inputMode="numeric" type="number" min="1" step="any" placeholder={String(config.tariffMinorPerKwh / 10 ** exponent)} value={rate} onChange={(e) => setRate(e.target.value)} />
-            <p className="hint">Leave blank to use {money(config.tariffMinorPerKwh, exponent, currency)} per unit.</p>
+            <input id="es-rate" inputMode="numeric" type="number" min="1" step="any" placeholder={String(unitRate / 10 ** exponent)} value={rate} onChange={(e) => setRate(e.target.value)} />
+            <p className="hint">Leave blank to use the standard rate for your customer type: {money(unitRate, exponent, currency)} per unit.</p>
           </>
         )}
 
@@ -359,15 +386,18 @@ function Estimator() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="shell">
-      <header className="topbar">
-        <Link className="brand" href="/" aria-label="Solar Switch home">
-          <span className="brand-mark">S</span>
-          <span>SOLAR SWITCH</span>
-        </Link>
-        <Link className="button button-small button-secondary" href="/sign-in">Staff sign in</Link>
-      </header>
-      <main className="workspace">{children}</main>
+    <div className="public-bg">
+      <div className="shell">
+        <header className="topbar">
+          <Link className="brand" href="/" aria-label="Solar Switch home">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="brand-logo" src="/icons/icon-192.png" alt="" width={38} height={38} />
+            <span>SOLAR SWITCH</span>
+          </Link>
+          <Link className="button button-small button-secondary" href="/sign-in">Staff sign in</Link>
+        </header>
+        <main className="workspace">{children}</main>
+      </div>
     </div>
   );
 }

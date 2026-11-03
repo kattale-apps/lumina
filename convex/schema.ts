@@ -610,6 +610,45 @@ export default defineSchema({
     .index("by_tenant_phone_time", ["tenantId", "phone", "createdAt"])
     .index("by_tenant_assignee", ["tenantId", "assignedToUserId"]),
 
+
+  // A customer who signed up to browse the catalogue and place orders. Not staff.
+  customerAccounts: defineTable({
+    tenantId: v.id("tenants"),
+    userId: v.id("userProfiles"),
+    name: v.string(),
+    phone: v.string(),
+    createdAt: v.number()
+  })
+    .index("by_user", ["userId"])
+    .index("by_tenant", ["tenantId"]),
+
+  // An order placed by a customer. Prices are the list prices at the time; staff confirm the final order.
+  shopOrders: defineTable({
+    tenantId: v.id("tenants"),
+    customerAccountId: v.id("customerAccounts"),
+    customerName: v.string(),
+    customerPhone: v.string(),
+    deliveryLocation: v.string(),
+    note: v.optional(v.string()),
+    currency: v.string(),
+    items: v.array(
+      v.object({
+        productId: v.id("products"),
+        name: v.string(),
+        brand: v.string(),
+        model: v.string(),
+        sku: v.string(),
+        quantity: v.number(),
+        unitPriceMinor: v.number()
+      })
+    ),
+    totalMinor: v.number(),
+    status: v.union(v.literal("new"), v.literal("confirmed"), v.literal("cancelled")),
+    createdAt: v.number(),
+    updatedAt: v.number()
+  })
+    .index("by_tenant_time", ["tenantId", "createdAt"])
+    .index("by_customer_time", ["customerAccountId", "createdAt"]),
   operationsSettings: defineTable({
     tenantId: v.id("tenants"),
     // Commission as basis points of the pre-tax value of a won deal. 0 = none.

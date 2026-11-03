@@ -17,6 +17,7 @@ import {
   type ProductLabel,
   type PublicOption
 } from "./lib/estimate";
+import { categoryRateMinor, CUSTOMER_CATEGORIES } from "./lib/tariff";
 import { currencyExponent, toMinorUnits } from "./lib/money";
 import { buildCandidates, computeRequirements, type CatalogueItem } from "./lib/sizing";
 import { validateLine } from "./lib/load";
@@ -35,9 +36,14 @@ const SETTINGS_READERS = ["super_admin", "sales_manager"] as const;
 
 const gridArg = v.union(v.literal("none"), v.literal("unreliable"), v.literal("reliable"));
 
+const categoryArg = v.optional(
+  v.union(v.literal("residential"), v.literal("commercial_small"), v.literal("commercial_medium"), v.literal("industrial"))
+);
+
 const estimateInput = v.union(
   v.object({
     mode: v.literal("bill"),
+    category: categoryArg,
     units: v.number(),
     days: v.number(),
     // What the customer paid for those units, in whole currency units (e.g. UGX).
@@ -45,6 +51,7 @@ const estimateInput = v.union(
   }),
   v.object({
     mode: v.literal("appliances"),
+    category: categoryArg,
     items: v.array(v.object({ name: v.string(), quantity: v.number(), hoursPerDay: v.number() })),
     // Optional: the customer's own price per kWh instead of the company default.
     ratePerKwh: v.optional(v.number())
@@ -102,12 +109,14 @@ async function compute(
   const currency = tenant.defaultCurrency;
   const exponent = currencyExponent(currency);
 
+  // Customer's own price wins; otherwise the ERA rate for their customer type; otherwise the company default.
+  const defaultRate = categoryRateMinor(input.category, currency, exponent) ?? settings.tariffMinorPerKwh;
   let built;
   if (input.mode === "bill") {
     const units = positive(input.units, "Units", 100_000);
     const days = positive(input.days, "Number of days", 366);
     const amountMinor = input.amount === undefined ? undefined : toMinorUnits(positive(input.amount, "Amount", 1e10), currency);
-    built = summariseBill({ units, days, amountMinor }, settings.tariffMinorPerKwh);
+    built = summariseBill({ units, days, amountMinor }, defaultRate);
   } else {
     if (input.items.length === 0) throw new ConvexError("Choose at least one appliance.");
     if (input.items.length > MAX_ITEMS) throw new ConvexError(`Choose at most ${MAX_ITEMS} appliances.`);
@@ -127,7 +136,7 @@ async function compute(
     });
     const rate =
       input.ratePerKwh === undefined
-        ? settings.tariffMinorPerKwh
+        ? defaultRate
         : toMinorUnits(positive(input.ratePerKwh, "Price per kWh", 1e7), currency);
     built = summariseAppliances(items, rate);
   }
@@ -206,6 +215,12 @@ export const publicConfig = query({
       currency: company.tenant.defaultCurrency,
       exponent: currencyExponent(company.tenant.defaultCurrency),
       tariffMinorPerKwh: company.settings.tariffMinorPerKwh,
+      categoryRatesMinor: Object.fromEntries(
+        CUSTOMER_CATEGORIES.map((c) => [
+          c,
+          categoryRateMinor(c, company.tenant.defaultCurrency, currencyExponent(company.tenant.defaultCurrency))
+        ])
+      ) as Record<(typeof CUSTOMER_CATEGORIES)[number], number | null>,
       contactPhone: company.settings.contactPhone ?? null,
       contactEmail: company.settings.contactEmail ?? null,
       appliances: library.map((a) => ({

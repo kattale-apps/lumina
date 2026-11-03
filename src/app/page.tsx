@@ -1,99 +1,38 @@
 import Link from "next/link";
 
-const modules = [
-  {
-    number: "01",
-    title: "Customer assessment",
-    description: "Capture appliances, usage patterns, backup needs and site details."
-  },
-  {
-    number: "02",
-    title: "System designer",
-    description: "Turn customer energy needs into a technically reviewable solar design."
-  },
-  {
-    number: "03",
-    title: "Products & inventory",
-    description: "Work from administrator-managed products, specifications and stock."
-  },
-  {
-    number: "04",
-    title: "Quotations",
-    description: "Create illustrative quotations and route designs to a technician for approval."
-  },
-  {
-    number: "05",
-    title: "Field work & deals",
-    description: "Work offline on site, then track deal outcomes, commissions and installations."
-  }
-];
-
 export default function HomePage() {
   return (
-    <main className="shell">
-      <header className="topbar">
-        <Link className="brand" href="/" aria-label="Solar Switch home">
-          <span className="brand-mark">S</span>
-          <span>SOLAR SWITCH</span>
-        </Link>
-        <Link className="button button-small" href="/sign-in">
-          Sign in
-        </Link>
-      </header>
-
-      <section className="hero">
-        <p className="eyebrow">SOLAR SALES · SYSTEM DESIGN · QUOTATIONS</p>
-        <h1>Build the right solar system for every customer.</h1>
-        <p className="hero-copy">
-          Solar Switch guides sales teams from customer energy assessment to a
-          technically verified solar quotation, using the company&apos;s
-          catalogue, pricing rules and live inventory.
-        </p>
-        <div className="hero-actions">
-          <Link className="button" href="/estimate">
-            Check my power needs
+    <div className="public-bg">
+      <main className="shell">
+        <header className="topbar">
+          <Link className="brand" href="/" aria-label="Solar Switch home">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="brand-logo" src="/icons/icon-192.png" alt="" width={38} height={38} />
+            <span>SOLAR SWITCH</span>
           </Link>
-          <span className="status-dot" />
-          <span>Workspace live — sign in to get started</span>
-        </div>
-      </section>
-
-      <section className="module-section" aria-labelledby="modules-heading">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">PLATFORM MODULES</p>
-            <h2 id="modules-heading">The Solar Switch workflow</h2>
+          <div className="hero-actions" style={{ margin: 0 }}>
+            <Link className="button button-small button-secondary" href="/sign-up">
+              Create account
+            </Link>
+            <Link className="button button-small" href="/sign-in">
+              Sign in
+            </Link>
           </div>
-          <span className="phase-label">LIVE</span>
-        </div>
-        <div className="module-grid">
-          {modules.map((module) => (
-            <article className="module-card" key={module.number}>
-              <span className="module-number">{module.number}</span>
-              <h3>{module.title}</h3>
-              <p>{module.description}</p>
-              <span className="module-state">Available</span>
-            </article>
-          ))}
-        </div>
-      </section>
+        </header>
 
-      <section className="approval-note">
-        <div className="approval-icon" aria-hidden="true">✓</div>
-        <div>
-          <h2>Technical approval is built into the workflow</h2>
-          <p>
-            Sales agents can share an illustrative copy marked
-            &quot;UNVERIFIED — FOR ILLUSTRATION ONLY&quot;. Only an authorised
-            technician can approve a design for an official quotation.
+        <section className="hero">
+          <h1>We help everyone find the right solar system.</h1>
+          <p className="hero-copy">
+            Tell us what you use today and see the solar options that could fit your home or business.
+            It takes about two minutes.
           </p>
-        </div>
-      </section>
-
-      <footer className="footer">
-        <span>Solar Switch · Solar Sales & System Intelligence</span>
-        <span>Uganda · Multi-currency ready</span>
-      </footer>
-    </main>
+          <div className="hero-actions">
+            <Link className="button button-large" href="/estimate">
+              Check my power needs
+            </Link>
+          </div>
+        </section>
+      </main>
+    </div>
   );
 }

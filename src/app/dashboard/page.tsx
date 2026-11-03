@@ -23,9 +23,16 @@ function Workspace() {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const viewer = useQuery(api.users.viewerContext, isAuthenticated ? {} : "skip");
 
+  const customer = useQuery(api.shop.myAccount, isAuthenticated ? {} : "skip");
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace("/sign-in");
   }, [isLoading, isAuthenticated, router]);
+
+  // Customers have no company role; send them to the shop instead of the staff workspace.
+  useEffect(() => {
+    if (viewer?.state === "awaiting_access" && customer?.signedIn && customer.account) router.replace("/shop");
+  }, [viewer, customer, router]);
 
   if (isLoading || !isAuthenticated || viewer === undefined) {
     return (
@@ -66,6 +73,9 @@ function Workspace() {
         <p>
           Ask your Solar Switch administrator to activate your membership and role. This
           page updates automatically once access is granted.
+        </p>
+        <p>
+          Here to order products instead? <Link href="/shop"><u>Go to the customer catalogue</u></Link>.
         </p>
         <SignOutButton />
       </StatusCard>
