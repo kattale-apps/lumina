@@ -8,18 +8,21 @@ import { computeLoad, LOAD_ENGINE_VERSION } from "./lib/load";
 /** Managers and the owner see every request and hand them out; agents see what is assigned to them. */
 const LEAD_MANAGERS = ["super_admin", "sales_manager"] as const;
 const LEAD_ROLES = CRM_WRITERS;
+/** Technicians read every request so they can design systems; they do not assign or convert. */
+const LEAD_VIEWERS = [...CRM_WRITERS, "technician"] as const;
 
 export const listLeads = query({
   args: { tenantId: v.id("tenants") },
   handler: async (ctx, args) => {
-    const { membership, profile } = await requireTenantMembership(ctx, args.tenantId, LEAD_ROLES);
+    const { membership, profile } = await requireTenantMembership(ctx, args.tenantId, LEAD_VIEWERS);
     const manager = (LEAD_MANAGERS as readonly string[]).includes(membership.role);
+    const technician = membership.role === "technician";
     const rows = await ctx.db
       .query("quoteRequests")
       .withIndex("by_tenant_time", (q) => q.eq("tenantId", args.tenantId))
       .order("desc")
       .take(200);
-    const visible = manager ? rows : rows.filter((r) => r.assignedToUserId === profile._id);
+    const visible = manager || technician ? rows : rows.filter((r) => r.assignedToUserId === profile._id);
 
     const names = new Map<string, string>();
     for (const r of visible) {
@@ -30,6 +33,7 @@ export const listLeads = query({
     }
     return {
       canAssign: manager,
+      canAct: !technician,
       leads: visible.map((r) => ({
         id: r._id,
         createdAt: r.createdAt,
@@ -43,6 +47,7 @@ export const listLeads = query({
         dailyKwh: r.dailyKwh,
         costPerMonthMinor: r.costPerMonthMinor ?? null,
         optionTitle: r.optionTitle,
+        isRecommendation: r.optionKey === "recommendation",
         components: r.components,
         assignedTo: r.assignedToUserId ? names.get(r.assignedToUserId) ?? null : null,
         assignedToMe: r.assignedToUserId === profile._id,

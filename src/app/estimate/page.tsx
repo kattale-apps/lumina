@@ -10,8 +10,11 @@ import { guideByKey } from "../../../convex/lib/applianceGuide";
 import { ApplianceEditor, rowsToItems, type ApplianceRow } from "./ApplianceEditor";
 import type { ReportLine } from "./usageReport";
 import { SmsImport, useSmsSummary } from "./SmsImport";
+import { AppUpdateNeeded, savePdf } from "../../lib/savePdf";
 
 type Grid = "none" | "unreliable" | "reliable";
+/** Matches RECOMMENDATION_KEY on the server: ask a technician to design a system. */
+const RECOMMENDATION = "recommendation";
 type Mode = "bill" | "appliances";
 type Category = "residential" | "commercial_small" | "commercial_medium" | "industrial";
 
@@ -68,8 +71,9 @@ function Estimator() {
   // Bill mode: paste UEDCL messages (default) or type the numbers.
   const [billSource, setBillSource] = useState<"sms" | "manual">("sms");
   const [smsText, setSmsText] = useState("");
-  const [smsDays, setSmsDays] = useState("");
-  const sms = useSmsSummary(smsText, smsDays);
+  const [smsMeter, setSmsMeter] = useState<string | null>(null);
+  const [smsDaysByMeter, setSmsDaysByMeter] = useState<Record<string, string>>({});
+  const sms = useSmsSummary(smsText, smsMeter, smsDaysByMeter);
   // What the shown results were calculated from, so the PDF matches the screen.
   const [snapshot, setSnapshot] = useState<{ lines: ReportLine[]; category: Category } | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -134,7 +138,7 @@ function Estimator() {
       return;
     }
     if (mode === "bill" && billSource === "sms") {
-      if (sms.parsed.purchases.length === 0) {
+      if (sms.purchases.length === 0) {
         setError("Paste at least one UEDCL payment message, or choose to type the numbers.");
         return;
       }
@@ -195,17 +199,9 @@ function Estimator() {
         basis: result.summary.basis,
         lines: snapshot.lines
       });
-      const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `power-usage-estimate-${new Date().toISOString().slice(0, 10)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    } catch {
-      setError("We could not create the PDF. Please try again.");
+      await savePdf(bytes, `power-usage-estimate-${new Date().toISOString().slice(0, 10)}.pdf`, "Power usage estimate");
+    } catch (e) {
+      setError(e instanceof AppUpdateNeeded ? e.message : "We could not create the PDF. Please try again.");
     } finally {
       setPdfBusy(false);
     }
@@ -306,7 +302,14 @@ function Estimator() {
         ) : null}
 
         {mode === "bill" && billSource === "sms" ? (
-          <SmsImport text={smsText} setText={setSmsText} days={smsDays} setDays={setSmsDays} parsed={sms.parsed} summary={sms.summary} />
+          <SmsImport
+            text={smsText}
+            setText={setSmsText}
+            sms={sms}
+            setMeter={setSmsMeter}
+            daysByMeter={smsDaysByMeter}
+            setDaysForMeter={(account, d) => setSmsDaysByMeter((prev) => ({ ...prev, [account]: d }))}
+          />
         ) : mode === "bill" ? (
           <>
             <label htmlFor="es-units">Units (kWh) you bought or used</label>
@@ -338,30 +341,30 @@ function Estimator() {
 
       {result ? (
         <section id="results" className="estimate-results" aria-live="polite">
+          <div className="result-block result-use">
           <h2>What you use today</h2>
-          <div className="stat-grid">
-            <div className="stat"><span className="stat-value">{result.summary.dailyKwh}</span><span className="stat-label">kWh per day</span></div>
+          <div className="projection-grid">
+            <div className="tile tile-energy"><span className="tile-label">Energy</span><span className="tile-value">{result.summary.dailyKwh} kWh</span><span className="tile-sub">per day</span></div>
             {result.summary.costPerDayMinor !== null ? (
-              <div className="stat"><span className="stat-value">{money(result.summary.costPerDayMinor, result.exponent, result.currency)}</span><span className="stat-label">per day</span></div>
+              <div className="tile tile-day"><span className="tile-label">Cost</span><span className="tile-value">{money(result.summary.costPerDayMinor, result.exponent, result.currency)}</span><span className="tile-sub">per day</span></div>
             ) : null}
             {result.summary.costPerMonthMinor !== null ? (
-              <div className="stat"><span className="stat-value">{money(result.summary.costPerMonthMinor, result.exponent, result.currency)}</span><span className="stat-label">per month</span></div>
+              <div className="tile tile-month"><span className="tile-label">Cost</span><span className="tile-value">{money(result.summary.costPerMonthMinor, result.exponent, result.currency)}</span><span className="tile-sub">per month</span></div>
             ) : null}
-            <div className="stat"><span className="stat-value">{result.summary.peakW} W</span><span className="stat-label">busiest moment (estimated)</span></div>
+            <div className="tile tile-peak"><span className="tile-label">Busiest moment</span><span className="tile-value">{result.summary.peakW.toLocaleString("en-US")} W</span><span className="tile-sub">estimated</span></div>
           </div>
-          <div className="report-download">
+          </div>
+          <div className="result-block result-report report-download">
             <button type="button" className="button button-secondary" disabled={pdfBusy || !snapshot} onClick={downloadReport}>
               {pdfBusy ? "Preparing PDF…" : "Download my usage report (PDF)"}
             </button>
             <p className="hint">Watts and running cost per hour, day, week, month and year. It is an estimate, not a bill.</p>
           </div>
 
+          <div className="result-block result-options">
           <h2>Solar options for you</h2>
           <p className="estimate-banner">UNVERIFIED — FOR ILLUSTRATION ONLY. A technician checks every design before it is final. Prices are shared when you request a quote.</p>
 
-          {result.options.length === 0 ? (
-            <p className="muted">We cannot show options for these numbers yet. Request a call and our team will help.</p>
-          ) : null}
           <div className="option-list">
             {result.options.map((o) => (
               <article key={o.key} className={`option-card ${chosen === o.key ? "option-on" : ""}`}>
@@ -388,10 +391,30 @@ function Estimator() {
             ))}
           </div>
 
+          <div className={`recommend-card ${chosen === RECOMMENDATION ? "option-on" : ""}`}>
+            <h3>{result.options.length === 0 ? "Get a system designed for you" : "Not sure which fits?"}</h3>
+            <p>
+              Send us your numbers and a technician will recommend the right system for your needs and prepare a quotation.
+              It is free and there is no obligation.
+            </p>
+            <button
+              type="button"
+              className="button"
+              onClick={() => { setChosen(RECOMMENDATION); setError(null); setTimeout(() => document.getElementById("request")?.scrollIntoView({ behavior: "smooth" }), 50); }}
+            >
+              {chosen === RECOMMENDATION ? "Selected" : "Request a system recommendation and quotation"}
+            </button>
+          </div>
+          </div>
+
           {chosen ? (
             <form id="request" className="panel-form" onSubmit={request}>
-              <h2>Request your quote</h2>
-              <p className="hint">We will contact you with a quotation that includes prices. No payment is needed now.</p>
+              <h2>{chosen === RECOMMENDATION ? "Request a recommendation and quotation" : "Request your quote"}</h2>
+              <p className="hint">
+                {chosen === RECOMMENDATION
+                  ? "A technician will look at your numbers, recommend a system and send a quotation with prices. No payment is needed now."
+                  : "We will contact you with a quotation that includes prices. No payment is needed now."}
+              </p>
               <label htmlFor="rq-name">Your name</label>
               <input id="rq-name" required maxLength={100} autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               <label htmlFor="rq-phone">Phone</label>

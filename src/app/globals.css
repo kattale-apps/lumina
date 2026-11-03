@@ -849,3 +849,71 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
   .landing-cta { width: auto; padding: 0 36px; }
   .landing-secondary { text-align: left; }
 }
+
+/* Keep every power-check box inside the phone screen: grid children may shrink. */
+.estimate-form > *, .sms-import > *, .sms-found > *, .appliance-editor > *, .estimate-results > * { min-width: 0; }
+.estimate-form { padding: 20px 16px; }
+@media (min-width: 640px) { .estimate-form { padding: 26px; } }
+.sms-paste-row { flex-wrap: wrap; }
+.sms-found { padding: 14px 12px; }
+.sms-found-head { display: grid; gap: 2px; }
+.sms-found-totals { margin: 0; color: var(--muted); font-size: 14px; }
+
+/* Payments as cards, a page at a time */
+.payment-list ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.payment-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fbfdfc;
+}
+.payment-list li > div { display: grid; gap: 1px; min-width: 0; }
+.payment-list li span { color: var(--muted); font-size: 13px; }
+.payment-units { text-align: right; }
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 14px; color: var(--muted); }
+.pager .button { min-width: 88px; }
+
+/* One tab per meter */
+.meter-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.meter-tab {
+  display: grid; flex: none; gap: 2px; padding: 10px 14px; border: 2px solid #c9d6cf; border-radius: 12px;
+  background: white; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.meter-tab span { color: var(--muted); font-size: 13px; }
+.meter-tab-on { border-color: var(--green); background: #eef7f2; }
+
+/* Coloured tiles: 2 x 2 on phones */
+.projection-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 720px) { .projection-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.tile { display: grid; gap: 2px; min-width: 0; padding: 12px; border: 1px solid; border-radius: 12px; }
+.tile-label { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; opacity: .8; }
+.tile-value { font-size: clamp(17px, 5vw, 22px); font-weight: 800; overflow-wrap: anywhere; color: var(--ink); }
+.tile-sub { font-size: 13px; color: var(--muted); }
+.tile-energy, .tile-day   { background: #eef8f1; border-color: #cfe9d8; color: #1c6b43; }
+.tile-week                { background: #eef5fc; border-color: #cfe0f3; color: #1f5a92; }
+.tile-month               { background: #fff6e6; border-color: #f3dfb4; color: #8a5a00; }
+.tile-year, .tile-peak    { background: #f4f0fb; border-color: #e0d6f2; color: #5b3b93; }
+
+/* Results in light-tinted sections */
+.result-block { display: grid; gap: 12px; padding: 16px; border: 1px solid; border-radius: 16px; }
+.result-block h2 { margin: 0; }
+.result-use     { background: rgba(240, 249, 243, .92); border-color: #d5ebdd; }
+.result-report  { background: rgba(238, 245, 252, .92); border-color: #d3e3f4; }
+.result-options { background: rgba(255, 250, 240, .92); border-color: #f1e2c0; }
+.result-report .button { width: 100%; }
+@media (min-width: 640px) { .result-report .button { width: auto; } }
+.recommend-card {
+  display: grid; gap: 10px; padding: 16px; border: 2px dashed #e0b85a; border-radius: 14px; background: white;
+}
+.recommend-card h3 { margin: 0; }
+.recommend-card p { margin: 0; color: var(--muted); line-height: 1.5; }
+.recommend-card .button { width: 100%; white-space: normal; min-height: 52px; text-align: center; }
+.recommend-card.option-on { border-style: solid; border-color: var(--green); }
+
+/* Phone fixes from screenshots */
+.estimate-form .pager .button { width: auto; min-width: 0; min-height: 40px; padding: 0 14px; font-size: 14px; flex: none; }
+.pager span { white-space: nowrap; }
+.meter-tabs { flex-wrap: wrap; overflow: visible; }
+.meter-tab { flex: 1 1 150px; }
+.tile-value { font-size: clamp(16px, 4.6vw, 22px); white-space: nowrap; }
+.sms-days input { width: 100%; }
+.tile { container-type: inline-size; }
+.tile-value { font-size: clamp(14px, 12.5cqi, 22px); }

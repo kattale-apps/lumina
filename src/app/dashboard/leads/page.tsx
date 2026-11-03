@@ -47,9 +47,15 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
                   {l.location} · {GRID_LABELS[l.gridAvailability]} · {l.dailyKwh} kWh/day
                   {l.costPerMonthMinor !== null ? ` · ${currency} ${l.costPerMonthMinor.toLocaleString("en-US")}/month` : ""}
                 </span>
-                <span className="record-meta">Chose: {l.optionTitle}</span>
                 <span className="record-meta">
-                  {l.components.map((c) => `${c.quantity} × ${c.name}`).join(", ")}
+                  {l.isRecommendation ? (
+                    <span className="pill pill-warn">Needs a system recommendation and quotation</span>
+                  ) : (
+                    <>Chose: {l.optionTitle}</>
+                  )}
+                </span>
+                <span className="record-meta">
+                  {l.components.length ? l.components.map((c) => `${c.quantity} × ${c.name}`).join(", ") : "No catalogue option yet: design from the load details."}
                 </span>
                 <span className="record-meta">
                   <span className={l.status === "new" ? "pill pill-warn" : "pill pill-info"}>{l.status}</span>
@@ -76,7 +82,7 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
                     ))}
                   </select>
                 ) : null}
-                {l.status === "new" || l.status === "assigned" ? (
+                {data.canAct && (l.status === "new" || l.status === "assigned") ? (
                   <>
                     <button className="button button-small" type="button" onClick={() => run(() => convert({ leadId: l.id }))}>
                       Convert
@@ -98,7 +104,7 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
 export default function LeadsPage() {
   return (
     <ConfiguredOnly>
-      <CompanyPage title="Quote requests" allowedRoles={["super_admin", "sales_manager", "sales_agent"]}>
+      <CompanyPage title="Quote requests" allowedRoles={["super_admin", "sales_manager", "sales_agent", "technician"]}>
         {(company) => <LeadList tenantId={company.tenantId} currency={company.defaultCurrency} />}
       </CompanyPage>
     </ConfiguredOnly>

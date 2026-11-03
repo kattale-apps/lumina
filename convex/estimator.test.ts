@@ -183,6 +183,26 @@ describe("public power check", () => {
     expect(JSON.stringify(rows[0].components).toLowerCase()).not.toMatch(/price|margin|floor/);
   });
 
+  test("asks a technician to recommend a system when no option is shown", async () => {
+    const { t, tenantId, tech, agent } = await setup(false);
+    const result = await t.query(api.estimator.recommend, { input: bill, grid: "none" });
+    expect(result.options).toEqual([]);
+    await t.mutation(api.estimator.submitRequest, { input: bill, grid: "none", optionKey: "recommendation", ...person });
+    const [row] = await t.run((ctx) => ctx.db.query("quoteRequests").collect());
+    expect(row).toMatchObject({ optionKey: "recommendation", systemType: "off_grid", components: [], status: "new" });
+
+    // Technicians see it to design a system, but do not convert or assign it.
+    const forTech = await tech.query(api.leads.listLeads, { tenantId });
+    expect(forTech.leads[0]).toMatchObject({ isRecommendation: true });
+    expect(forTech).toMatchObject({ canAct: false, canAssign: false });
+    await expect(tech.mutation(api.leads.convertLead, { leadId: row._id })).rejects.toThrow();
+    // An unassigned agent still sees only their own requests.
+    expect((await agent.query(api.leads.listLeads, { tenantId })).leads).toHaveLength(0);
+    await expect(
+      t.mutation(api.estimator.submitRequest, { input: bill, grid: "none", optionKey: "made_up", ...person })
+    ).rejects.toThrow(/Choose one/);
+  });
+
   test("shows no options rather than failing when the catalogue is empty", async () => {
     const { t } = await setup(false);
     const result = await t.query(api.estimator.recommend, { input: bill, grid: "reliable" });

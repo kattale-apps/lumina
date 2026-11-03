@@ -27,6 +27,8 @@ import { requireText } from "./lib/validation";
 
 /** Public, unauthenticated limits. Convex gives no IP address, so limits are per phone and overall. */
 const MAX_ITEMS = 40;
+/** Option key for "recommend a system for me": no catalogue option was chosen. */
+export const RECOMMENDATION_KEY = "recommendation";
 const MAX_NAME = 60;
 const MAX_APPLIANCE_W = 50_000;
 const MAX_REQUESTS_PER_PHONE_PER_DAY = 3;
@@ -296,7 +298,9 @@ export const submitRequest = mutation({
     const phone = validatePhone(args.phone);
     const email = validateOptionalEmail(args.email);
     const location = requireText(args.location, "Location", 200);
-    if (!templateByKey(args.optionKey)) throw new ConvexError("Choose one of the options.");
+    // "recommendation": no option fits or none was chosen; a technician designs one.
+    const recommendation = args.optionKey === RECOMMENDATION_KEY;
+    if (!recommendation && !templateByKey(args.optionKey)) throw new ConvexError("Choose one of the options.");
 
     const now = Date.now();
     const recent = await ctx.db
@@ -318,9 +322,20 @@ export const submitRequest = mutation({
 
     // The server recomputes everything: nothing the browser sends about the option is trusted.
     const result = await compute(ctx, company, args.input, args.grid);
-    const option = result.options.find((o) => o.key === args.optionKey);
-    const sizing = result.optionInputs.get(args.optionKey);
-    if (!option || !sizing) throw new ConvexError("That option is not available. Please choose another.");
+    let option: { key: string; title: string; components: PublicOption["components"] };
+    let sizing: { systemType: string; backupHours?: number; autonomyDays?: number };
+    if (recommendation) {
+      // Start the technician from the best-fit system type for this grid situation.
+      const best = optionsFor(args.grid)[0];
+      option = { key: RECOMMENDATION_KEY, title: "System recommendation and quotation", components: [] };
+      sizing = { systemType: best.systemType, backupHours: best.backupHours, autonomyDays: best.autonomyDays };
+    } else {
+      const found = result.options.find((o) => o.key === args.optionKey);
+      const inputs = result.optionInputs.get(args.optionKey);
+      if (!found || !inputs) throw new ConvexError("That option is not available. Please choose another.");
+      option = found;
+      sizing = inputs;
+    }
 
     const id = await ctx.db.insert("quoteRequests", {
       tenantId: tenant._id,
