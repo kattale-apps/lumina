@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
 import { summariseAppliances, summariseBill, windowsForHours } from "./lib/estimate";
+import { APPLIANCE_GUIDE, searchGuide } from "./lib/applianceGuide";
 import { DEFAULT_ASSUMPTIONS } from "./lib/sizing";
 import schema from "./schema";
 
@@ -118,6 +119,32 @@ describe("estimate maths", () => {
   });
 });
 
+describe("appliance guide", () => {
+  test("search finds appliances by the words people type", () => {
+    expect(searchGuide("fridge")[0].key).toBe("fridge");
+    expect(searchGuide("tv")[0].key).toBe("tv");
+    expect(searchGuide("borehole")[0].key).toBe("borehole_pump");
+    expect(searchGuide("")).toEqual([]);
+  });
+
+  test("every guide entry has a valid default size and sane numbers", () => {
+    for (const g of APPLIANCE_GUIDE) {
+      expect(g.sizes[g.defaultSize]).toBeDefined();
+      for (const s of g.sizes) expect(s.powerW).toBeGreaterThan(0);
+      expect(g.defaultHours).toBeGreaterThan(0);
+      expect(g.defaultHours).toBeLessThanOrEqual(24);
+      if (g.duty !== undefined) expect(g.duty).toBeGreaterThan(0);
+    }
+  });
+
+  test("a fridge on 24 hours counts only its running share", () => {
+    const { summary } = summariseAppliances(
+      [{ name: "Fridge", quantity: 1, powerW: 150, hoursPerDay: 24, currentType: "ac", duty: 0.4 }], null
+    );
+    expect(summary.dailyKwh).toBe(1.44);
+  });
+});
+
 describe("public power check", () => {
   test("is closed until a company switches it on", async () => {
     const t = convexTest(schema, modules);
@@ -163,12 +190,32 @@ describe("public power check", () => {
     expect(result.unavailable.length).toBeGreaterThan(0);
   });
 
-  test("rejects unknown appliances and bad numbers, and trusts no client wattage", async () => {
+  test("uses the chosen size, the customer's own watts, and accepts appliances not on the list", async () => {
+    const { t } = await setup();
+    const run = (items: object[]) =>
+      t.query(api.estimator.recommend, { input: { mode: "appliances", items: items as never, ratePerKwh: 1000 }, grid: "reliable" });
+    // 55 in TV is 120 W typical: 120 W x 4 h = 0.48 kWh.
+    const sized = await run([{ name: "Television", guideKey: "tv", size: "55 in", quantity: 1, hoursPerDay: 4 }]);
+    expect(sized.summary.dailyKwh).toBe(0.48);
+    // The label says 90 W: 90 W x 4 h = 0.36 kWh.
+    const own = await run([{ name: "Television", guideKey: "tv", size: "55 in", powerW: 90, quantity: 1, hoursPerDay: 4 }]);
+    expect(own.summary.dailyKwh).toBe(0.36);
+    // Two TVs of different sizes are fine, and so is something we have never heard of.
+    const mixed = await run([
+      { name: "Television", guideKey: "tv", size: "32 in", quantity: 1, hoursPerDay: 2 },
+      { name: "Television", guideKey: "tv", size: "65 in", quantity: 1, hoursPerDay: 2 },
+      { name: "Popcorn machine", powerW: 500, quantity: 1, hoursPerDay: 2 }
+    ]);
+    expect(mixed.summary.dailyKwh).toBe(1.42); // 0.1 + 0.32 + 1.0
+  });
+
+  test("asks for watts on unknown appliances and rejects bad numbers", async () => {
     const { t } = await setup();
     const call = (input: object) => t.query(api.estimator.recommend, { input: input as never, grid: "reliable" });
-    await expect(call({ mode: "appliances", items: [{ name: "Death ray", quantity: 1, hoursPerDay: 1 }] })).rejects.toThrow(/not in the appliance list/);
+    await expect(call({ mode: "appliances", items: [{ name: "Death ray", quantity: 1, hoursPerDay: 1 }] })).rejects.toThrow(/watts/);
+    await expect(call({ mode: "appliances", items: [{ name: "Death ray", quantity: 1, hoursPerDay: 1, powerW: 999_999 }] })).rejects.toThrow(/power/);
     await expect(call({ mode: "appliances", items: [] })).rejects.toThrow(/at least one/);
-    await expect(call({ mode: "appliances", items: [{ name: "LED bulb", quantity: 0, hoursPerDay: 1 }] })).rejects.toThrow(/quantity/);
+    await expect(call({ mode: "appliances", items: [{ name: "LED bulb", quantity: 0, hoursPerDay: 1 }] })).rejects.toThrow(/how many/);
     await expect(call({ mode: "appliances", items: [{ name: "LED bulb", quantity: 1, hoursPerDay: 30 }] })).rejects.toThrow(/hours/);
     await expect(call({ mode: "bill", units: -5, days: 30 })).rejects.toThrow(/Units/);
     await expect(call({ mode: "bill", units: 100, days: 0 })).rejects.toThrow(/days/);

@@ -39,6 +39,8 @@ export type ApplianceInput = {
   surgeW?: number;
   powerFactor?: number;
   currentType: "ac" | "dc";
+  /** Share of the on-hours it actually draws power (fridges, freezers). Defaults to 1. */
+  duty?: number;
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -55,7 +57,7 @@ export function windowsForHours(hours: number): { start: number; end: number }[]
 export function linesFromAppliances(items: ApplianceInput[]): LoadLine[] {
   return items.map((item) => {
     const wholeHours = Math.max(1, Math.ceil(item.hoursPerDay));
-    const duty = item.hoursPerDay < 1 ? item.hoursPerDay : item.hoursPerDay / wholeHours;
+    const duty = (item.hoursPerDay < 1 ? item.hoursPerDay : item.hoursPerDay / wholeHours) * (item.duty ?? 1);
     const dutyFactor = duty < 1 ? round2(duty) || 0.01 : undefined;
     return {
       name: item.name,

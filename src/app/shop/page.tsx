@@ -133,7 +133,7 @@ function Shop() {
         <p className="form-success" role="status">Thank you. Your order has been sent and we will contact you to confirm it.</p>
       ) : null}
 
-      <label className="sr-only" htmlFor="shop-search">Search products</label>
+      <label className="visually-hidden" htmlFor="shop-search">Search products</label>
       <input id="shop-search" className="shop-search" type="search" placeholder="Search products, brands or models" value={search} onChange={(e) => setSearch(e.target.value)} />
 
       {grouped.length === 0 ? <p className="muted">No products found.</p> : null}

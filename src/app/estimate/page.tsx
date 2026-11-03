@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
+import { guideByKey } from "../../../convex/lib/applianceGuide";
+import { ApplianceEditor, rowsToItems, type ApplianceRow } from "./ApplianceEditor";
+import type { ReportLine } from "./usageReport";
+import { SmsImport, useSmsSummary } from "./SmsImport";
 
 type Grid = "none" | "unreliable" | "reliable";
 type Mode = "bill" | "appliances";
@@ -17,7 +21,6 @@ const CATEGORY_CHOICES: { value: Category; label: string; hint: string }[] = [
   { value: "commercial_medium", label: "Medium business", hint: "Hotel, clinic, school, large office." },
   { value: "industrial", label: "Industrial", hint: "Factory, workshop, processing plant." }
 ];
-type Selected = Record<string, { quantity: string; hours: string }>;
 
 const GRID_CHOICES: { value: Grid; label: string; hint: string }[] = [
   { value: "reliable", label: "Yes, mostly reliable", hint: "Power is on most of the time." },
@@ -61,25 +64,21 @@ function Estimator() {
   const [days, setDays] = useState("30");
   const [amount, setAmount] = useState("");
   const [rate, setRate] = useState("");
-  const [selected, setSelected] = useState<Selected>({});
-  const [search, setSearch] = useState("");
+  const [rows, setRows] = useState<ApplianceRow[]>([]);
+  // Bill mode: paste UEDCL messages (default) or type the numbers.
+  const [billSource, setBillSource] = useState<"sms" | "manual">("sms");
+  const [smsText, setSmsText] = useState("");
+  const [smsDays, setSmsDays] = useState("");
+  const sms = useSmsSummary(smsText, smsDays);
+  // What the shown results were calculated from, so the PDF matches the screen.
+  const [snapshot, setSnapshot] = useState<{ lines: ReportLine[]; category: Category } | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<FunctionReturnType<typeof api.estimator.recommend> | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", location: "", website: "" });
   const [done, setDone] = useState(false);
-
-  const grouped = useMemo(() => {
-    if (!config || !config.enabled) return [];
-    const term = search.trim().toLowerCase();
-    const map = new Map<string, typeof config.appliances>();
-    for (const a of config.appliances) {
-      if (term && !a.name.toLowerCase().includes(term)) continue;
-      map.set(a.category, [...(map.get(a.category) ?? []), a]);
-    }
-    return [...map.entries()];
-  }, [config, search]);
 
   function runQuery(input: FunctionArgs<typeof api.estimator.recommend>) {
     return convex.query(api.estimator.recommend, input);
@@ -102,6 +101,15 @@ function Estimator() {
   const currency = config.currency;
 
   function buildInput() {
+    if (mode === "bill" && billSource === "sms") {
+      return {
+        mode: "bill" as const,
+        category,
+        units: sms.summary.units,
+        days: sms.summary.days ?? 0,
+        amount: sms.summary.amount > 0 ? sms.summary.amount : undefined
+      };
+    }
     if (mode === "bill") {
       return {
         mode: "bill" as const,
@@ -114,11 +122,7 @@ function Estimator() {
     return {
       mode: "appliances" as const,
       category,
-      items: Object.entries(selected).map(([name, v]) => ({
-        name,
-        quantity: Number(v.quantity),
-        hoursPerDay: Number(v.hours)
-      })),
+      items: rowsToItems(rows),
       ratePerKwh: rate.trim() ? Number(rate) : undefined
     };
   }
@@ -129,18 +133,81 @@ function Estimator() {
       setError("Tell us about your grid power first.");
       return;
     }
+    if (mode === "bill" && billSource === "sms") {
+      if (sms.parsed.purchases.length === 0) {
+        setError("Paste at least one UEDCL payment message, or choose to type the numbers.");
+        return;
+      }
+      if (!sms.summary.days) {
+        setError("Tell us about how many days one top-up lasts.");
+        return;
+      }
+    }
+    if (mode === "appliances" && rows.length === 0) {
+      setError("Add at least one appliance.");
+      return;
+    }
     setBusy(true);
     setError(null);
     setChosen(null);
     try {
       const response = await runQuery({ input: buildInput(), grid });
       setResult(response);
+      setSnapshot({
+        category,
+        lines:
+          mode === "appliances"
+            ? rows.map((r) => {
+                const g = guideByKey(r.guideKey);
+                return {
+                  name: g && g.sizes.length > 1 && r.size ? `${r.name}, ${r.size}` : r.name,
+                  powerW: Number(r.powerW),
+                  quantity: Number(r.quantity),
+                  hoursPerDay: Number(r.hours),
+                  duty: g?.duty ?? 1
+                };
+              })
+            : []
+      });
       setTimeout(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch (e) {
       setResult(null);
+      setSnapshot(null);
       setError(message(e));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function downloadReport() {
+    if (!result || !snapshot) return;
+    setPdfBusy(true);
+    try {
+      const { buildUsageReport } = await import("./usageReport");
+      const bytes = await buildUsageReport({
+        companyName: config!.enabled ? config!.companyName : "Solar Switch",
+        customerType: CATEGORY_CHOICES.find((c) => c.value === snapshot.category)?.label ?? "",
+        currency: result.currency,
+        exponent: result.exponent,
+        rateMinorPerKwh: result.summary.ratePerKwhMinor,
+        dailyKwh: result.summary.dailyKwh,
+        peakW: result.summary.peakW,
+        basis: result.summary.basis,
+        lines: snapshot.lines
+      });
+      const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `power-usage-estimate-${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch {
+      setError("We could not create the PDF. Please try again.");
+    } finally {
+      setPdfBusy(false);
     }
   }
 
@@ -223,7 +290,7 @@ function Estimator() {
         <div className="choice-row" role="radiogroup" aria-label="Input method">
           <button type="button" role="radio" aria-checked={mode === "bill"} className={`choice ${mode === "bill" ? "choice-on" : ""}`} onClick={() => setMode("bill")}>
             <strong>From my UEDCL bill or token</strong>
-            <span>Quickest. Use units bought and what you paid.</span>
+            <span>Quickest. Paste your UEDCL token messages, or type units and what you paid.</span>
           </button>
           <button type="button" role="radio" aria-checked={mode === "appliances"} className={`choice ${mode === "appliances" ? "choice-on" : ""}`} onClick={() => setMode("appliances")}>
             <strong>From my appliances</strong>
@@ -232,6 +299,15 @@ function Estimator() {
         </div>
 
         {mode === "bill" ? (
+          <div className="segmented" role="radiogroup" aria-label="How to give your bill details">
+            <button type="button" role="radio" aria-checked={billSource === "sms"} className={billSource === "sms" ? "segmented-on" : ""} onClick={() => setBillSource("sms")}>Paste my UEDCL messages</button>
+            <button type="button" role="radio" aria-checked={billSource === "manual"} className={billSource === "manual" ? "segmented-on" : ""} onClick={() => setBillSource("manual")}>Type the numbers</button>
+          </div>
+        ) : null}
+
+        {mode === "bill" && billSource === "sms" ? (
+          <SmsImport text={smsText} setText={setSmsText} days={smsDays} setDays={setSmsDays} parsed={sms.parsed} summary={sms.summary} />
+        ) : mode === "bill" ? (
           <>
             <label htmlFor="es-units">Units (kWh) you bought or used</label>
             <input id="es-units" required inputMode="decimal" type="number" min="0.1" step="any" placeholder="e.g. 150" value={units} onChange={(e) => setUnits(e.target.value)} />
@@ -249,59 +325,7 @@ function Estimator() {
           </>
         ) : (
           <>
-            <label htmlFor="es-search">Find an appliance</label>
-            <input id="es-search" type="search" placeholder="e.g. fridge, TV, iron" value={search} onChange={(e) => setSearch(e.target.value)} />
-            <div className="appliance-picker">
-              {grouped.length === 0 ? <p className="hint">No appliance matches.</p> : null}
-              {grouped.map(([category, items]) => (
-                <details key={category} open={search.trim().length > 0}>
-                  <summary className="link-summary">{category}</summary>
-                  <div className="appliance-grid">
-                    {items.map((a) => (
-                      <button
-                        type="button"
-                        key={a.name}
-                        className={`chip ${selected[a.name] ? "chip-on" : ""}`}
-                        onClick={() =>
-                          setSelected((prev) => {
-                            const next = { ...prev };
-                            if (next[a.name]) delete next[a.name];
-                            else next[a.name] = { quantity: "1", hours: String(a.defaultHours) };
-                            return next;
-                          })
-                        }
-                      >
-                        {selected[a.name] ? "✓ " : "+ "}{a.name} <span className="muted">({a.powerW} W)</span>
-                      </button>
-                    ))}
-                  </div>
-                </details>
-              ))}
-            </div>
-            {Object.keys(selected).length > 0 ? (
-              <div className="table-scroll">
-                <table className="estimate-table">
-                  <thead><tr><th>Appliance</th><th>How many</th><th>Hours a day</th></tr></thead>
-                  <tbody>
-                    {Object.entries(selected).map(([name, v]) => (
-                      <tr key={name}>
-                        <td>{name}</td>
-                        <td>
-                          <input aria-label={`${name} quantity`} type="number" inputMode="numeric" min="1" max="100" value={v.quantity}
-                            onChange={(e) => setSelected((p) => ({ ...p, [name]: { ...p[name], quantity: e.target.value } }))} />
-                        </td>
-                        <td>
-                          <input aria-label={`${name} hours per day`} type="number" inputMode="decimal" min="0.25" max="24" step="any" value={v.hours}
-                            onChange={(e) => setSelected((p) => ({ ...p, [name]: { ...p[name], hours: e.target.value } }))} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="hint">Tap the appliances you use. Typical hours are filled in; change them to match your home.</p>
-            )}
+            <ApplianceEditor rows={rows} setRows={setRows} library={config.appliances} />
             <label htmlFor="es-rate">Your price per unit ({currency}/kWh) — optional</label>
             <input id="es-rate" inputMode="numeric" type="number" min="1" step="any" placeholder={String(unitRate / 10 ** exponent)} value={rate} onChange={(e) => setRate(e.target.value)} />
             <p className="hint">Leave blank to use the standard rate for your customer type: {money(unitRate, exponent, currency)} per unit.</p>
@@ -324,6 +348,12 @@ function Estimator() {
               <div className="stat"><span className="stat-value">{money(result.summary.costPerMonthMinor, result.exponent, result.currency)}</span><span className="stat-label">per month</span></div>
             ) : null}
             <div className="stat"><span className="stat-value">{result.summary.peakW} W</span><span className="stat-label">busiest moment (estimated)</span></div>
+          </div>
+          <div className="report-download">
+            <button type="button" className="button button-secondary" disabled={pdfBusy || !snapshot} onClick={downloadReport}>
+              {pdfBusy ? "Preparing PDF…" : "Download my usage report (PDF)"}
+            </button>
+            <p className="hint">Watts and running cost per hour, day, week, month and year. It is an estimate, not a bill.</p>
           </div>
 
           <h2>Solar options for you</h2>

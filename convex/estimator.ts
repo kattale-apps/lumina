@@ -4,6 +4,7 @@ import { mutation, query, type QueryCtx } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
 import { DEFAULT_APPLIANCES } from "./lib/applianceDefaults";
+import { guideByKey } from "./lib/applianceGuide";
 import {
   ESTIMATE_ENGINE_VERSION,
   optionsFor,
@@ -25,7 +26,9 @@ import { optionalText, validateOptionalEmail, validatePhone } from "./lib/crm";
 import { requireText } from "./lib/validation";
 
 /** Public, unauthenticated limits. Convex gives no IP address, so limits are per phone and overall. */
-const MAX_ITEMS = 30;
+const MAX_ITEMS = 40;
+const MAX_NAME = 60;
+const MAX_APPLIANCE_W = 50_000;
 const MAX_REQUESTS_PER_PHONE_PER_DAY = 3;
 const MAX_REQUESTS_PER_HOUR = 300;
 const HOUR = 60 * 60 * 1000;
@@ -52,7 +55,18 @@ const estimateInput = v.union(
   v.object({
     mode: v.literal("appliances"),
     category: categoryArg,
-    items: v.array(v.object({ name: v.string(), quantity: v.number(), hoursPerDay: v.number() })),
+    items: v.array(
+      v.object({
+        name: v.string(),
+        quantity: v.number(),
+        hoursPerDay: v.number(),
+        // Guide entry and size the customer picked, when they picked one.
+        guideKey: v.optional(v.string()),
+        size: v.optional(v.string()),
+        // The customer's own wattage, e.g. from the label. Otherwise the typical figure is used.
+        powerW: v.optional(v.number())
+      })
+    ),
     // Optional: the customer's own price per kWh instead of the company default.
     ratePerKwh: v.optional(v.number())
   })
@@ -121,18 +135,34 @@ async function compute(
     if (input.items.length === 0) throw new ConvexError("Choose at least one appliance.");
     if (input.items.length > MAX_ITEMS) throw new ConvexError(`Choose at most ${MAX_ITEMS} appliances.`);
     const library = await libraryFor(ctx, tenant);
-    const byName = new Map(library.map((a) => [a.name, a]));
-    const seen = new Set<string>();
+    const byName = new Map(library.map((a) => [a.name.toLowerCase(), a]));
     const items: ApplianceInput[] = input.items.map((item) => {
-      const base = byName.get(item.name);
-      if (!base) throw new ConvexError(`${item.name.slice(0, 40)} is not in the appliance list.`);
-      if (seen.has(item.name)) throw new ConvexError(`${item.name} is listed twice.`);
-      seen.add(item.name);
+      const name = item.name.trim().slice(0, MAX_NAME);
+      if (!name) throw new ConvexError("Give each appliance a name.");
+      const guide = guideByKey(item.guideKey);
+      const size = guide ? guide.sizes.find((s) => s.label === item.size) ?? guide.sizes[guide.defaultSize] : undefined;
+      const base = byName.get(name.toLowerCase());
+      const label = size && guide && guide.sizes.length > 1 ? `${name}, ${size.label}` : name;
       if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 100) {
-        throw new ConvexError(`${item.name}: quantity must be a whole number from 1 to 100.`);
+        throw new ConvexError(`${label}: how many must be a whole number from 1 to 100.`);
       }
-      const hours = positive(item.hoursPerDay, `${item.name}: hours per day`, 24);
-      return { ...base, quantity: item.quantity, hoursPerDay: hours };
+      const hours = positive(item.hoursPerDay, `${label}: hours per day`, 24);
+      const powerW =
+        item.powerW !== undefined
+          ? positive(item.powerW, `${label}: power`, MAX_APPLIANCE_W)
+          : size?.powerW ?? base?.powerW;
+      if (powerW === undefined) throw new ConvexError(`${label}: enter its power in watts (W). It is on the label.`);
+      const surgeRatio = guide?.surgeRatio ?? (base?.surgeW ? base.surgeW / base.powerW : undefined);
+      return {
+        name: label,
+        quantity: item.quantity,
+        hoursPerDay: hours,
+        powerW,
+        surgeW: surgeRatio ? Math.round(powerW * surgeRatio) : undefined,
+        powerFactor: guide?.powerFactor ?? base?.powerFactor ?? 0.9,
+        currentType: base?.currentType ?? "ac",
+        duty: guide?.duty
+      };
     });
     const rate =
       input.ratePerKwh === undefined
