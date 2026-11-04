@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { CustomerShell } from "@/components/CustomerShell";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
@@ -21,31 +21,7 @@ function money(minor: number, exponent: number, currency: string) {
 }
 
 function Page({ children, signedIn }: { children: ReactNode; signedIn?: boolean }) {
-  const { signOut } = useAuthActions();
-  return (
-    <div className="public-bg">
-      <div className="shell">
-        <header className="topbar">
-          <Link className="brand" href="/" aria-label="Solar Switch home">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="brand-logo" src="/icons/icon-192.png" alt="" width={38} height={38} />
-            <span>SOLAR SWITCH</span>
-          </Link>
-          <div className="hero-actions" style={{ margin: 0 }}>
-            {signedIn ? (
-              <Link className="button button-small button-secondary" href="/my-requests">My recommendations</Link>
-            ) : (
-              <Link className="button button-small button-secondary" href="/estimate">Power check</Link>
-            )}
-            {signedIn ? (
-              <button className="button button-small" type="button" onClick={() => void signOut()}>Sign out</button>
-            ) : null}
-          </div>
-        </header>
-        <main className="workspace">{children}</main>
-      </div>
-    </div>
-  );
+  return <CustomerShell signedIn={signedIn}>{children}</CustomerShell>;
 }
 
 function CompleteAccount() {

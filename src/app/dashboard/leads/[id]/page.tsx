@@ -192,14 +192,14 @@ function ResponseEditor({ lead }: { lead: Lead }) {
     }
   }
 
-  async function addPhotos(optionKey: string, files: FileList | null) {
-    if (!files?.length) return;
+  async function addPhotos(optionKey: string, files: File[]) {
+    if (!files.length) return;
     setBusy(`photo-${optionKey}`);
     setNotice(null);
     try {
       // Photos belong to an option that must exist on the server, so save the draft first.
       if (!sent) await save({ leadId: lead.id, message, options: payload(), send: false });
-      for (const file of Array.from(files).slice(0, 4)) {
+      for (const file of files.slice(0, 4)) {
         const blob = await shrinkImage(file);
         const url = await uploadUrl({ leadId: lead.id });
         const res = await fetch(url, { method: "POST", headers: { "Content-Type": blob.type }, body: blob });
@@ -264,7 +264,12 @@ function ResponseEditor({ lead }: { lead: Lead }) {
             ))}
             {(images.get(o.key)?.length ?? 0) < 4 ? (
               <label className="photo-add">
-                <input type="file" accept="image/*" multiple className="visually-hidden" disabled={busy !== null} onChange={(e) => { void addPhotos(o.key, e.target.files); e.target.value = ""; }} />
+                <input type="file" accept="image/*" multiple className="visually-hidden" disabled={busy !== null} onChange={(e) => {
+                    // Copy the chosen files before clearing the picker, which empties its list.
+                    const picked = Array.from(e.target.files ?? []);
+                    e.target.value = "";
+                    void addPhotos(o.key, picked);
+                  }} />
                 {busy === `photo-${o.key}` ? "Uploading…" : "📷 Add photos"}
               </label>
             ) : null}
