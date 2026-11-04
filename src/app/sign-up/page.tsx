@@ -1,5 +1,6 @@
 "use client";
 
+import { PasswordInput } from "@/components/PasswordInput";
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -62,7 +63,7 @@ function SignUpForm() {
       <label htmlFor="su-email">Email</label>
       <input id="su-email" required type="email" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
       <label htmlFor="su-password">Password (at least 8 characters)</label>
-      <input id="su-password" required type="password" minLength={8} autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+      <PasswordInput id="su-password" autoComplete="new-password" value={form.password} onChange={(password) => setForm({ ...form, password })} />
       {message ? <p className="auth-message" role="alert">{message}</p> : null}
       <button type="submit" disabled={busy}>{busy ? "Please wait…" : "Create my account"}</button>
       <p className="auth-note">

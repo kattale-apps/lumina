@@ -1,5 +1,6 @@
 "use client";
 
+import { PasswordInput } from "@/components/PasswordInput";
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -55,14 +56,11 @@ function SignInForm() {
         onChange={(event) => setEmail(event.target.value)}
       />
       <label htmlFor="password">Password</label>
-      <input
+      <PasswordInput
         id="password"
-        type="password"
         autoComplete={mode === "signIn" ? "current-password" : "new-password"}
-        minLength={8}
-        required
         value={password}
-        onChange={(event) => setPassword(event.target.value)}
+        onChange={setPassword}
       />
       {message ? <p className="auth-message" role="alert">{message}</p> : null}
       <button type="submit" disabled={busy}>
