@@ -15,20 +15,19 @@ import { AppUpdateNeeded, savePdf } from "../../lib/savePdf";
 type Grid = "none" | "unreliable" | "reliable";
 /** Matches RECOMMENDATION_KEY on the server: ask a technician to design a system. */
 const RECOMMENDATION = "recommendation";
-type Mode = "bill" | "appliances";
 type Category = "residential" | "commercial_small" | "commercial_medium" | "industrial";
 
-const CATEGORY_CHOICES: { value: Category; label: string; hint: string }[] = [
-  { value: "residential", label: "Home (residential)", hint: "A house or apartment." },
-  { value: "commercial_small", label: "Small business", hint: "Shop, salon, small office." },
-  { value: "commercial_medium", label: "Medium business", hint: "Hotel, clinic, school, large office." },
-  { value: "industrial", label: "Industrial", hint: "Factory, workshop, processing plant." }
+const CATEGORY_CHOICES: { value: Category; label: string; hint: string; emoji: string }[] = [
+  { value: "residential", label: "Home", hint: "A house or apartment.", emoji: "🏠" },
+  { value: "commercial_small", label: "Small business", hint: "Shop, salon, small office.", emoji: "🏪" },
+  { value: "commercial_medium", label: "Medium business", hint: "Hotel, clinic, school, large office.", emoji: "🏨" },
+  { value: "industrial", label: "Industry", hint: "Factory, workshop, processing plant.", emoji: "🏭" }
 ];
 
-const GRID_CHOICES: { value: Grid; label: string; hint: string }[] = [
-  { value: "reliable", label: "Yes, mostly reliable", hint: "Power is on most of the time." },
-  { value: "unreliable", label: "Yes, but it often goes off", hint: "Frequent outages or load-shedding." },
-  { value: "none", label: "No grid power", hint: "Not connected to UEDCL." }
+const GRID_CHOICES: { value: Grid; label: string; hint: string; emoji: string }[] = [
+  { value: "reliable", label: "Mostly reliable", hint: "UEDCL power is on most of the time.", emoji: "✅" },
+  { value: "unreliable", label: "Often goes off", hint: "Frequent outages or load-shedding.", emoji: "⚠️" },
+  { value: "none", label: "No grid power", hint: "Not connected to UEDCL.", emoji: "🚫" }
 ];
 
 function message(error: unknown) {
@@ -62,20 +61,19 @@ function Estimator() {
 
   const [category, setCategory] = useState<Category>("residential");
   const [grid, setGrid] = useState<Grid | null>(null);
-  const [mode, setMode] = useState<Mode>("bill");
-  const [units, setUnits] = useState("");
-  const [days, setDays] = useState("30");
-  const [amount, setAmount] = useState("");
-  const [rate, setRate] = useState("");
   const [rows, setRows] = useState<ApplianceRow[]>([]);
-  // Bill mode: paste UEDCL messages (default) or type the numbers.
-  const [billSource, setBillSource] = useState<"sms" | "manual">("sms");
+  // Step 4 (optional): UEDCL token messages give the real price per unit and actual use.
   const [smsText, setSmsText] = useState("");
   const [smsMeter, setSmsMeter] = useState<string | null>(null);
   const [smsDaysByMeter, setSmsDaysByMeter] = useState<Record<string, string>>({});
   const sms = useSmsSummary(smsText, smsMeter, smsDaysByMeter);
   // What the shown results were calculated from, so the PDF matches the screen.
-  const [snapshot, setSnapshot] = useState<{ lines: ReportLine[]; category: Category } | null>(null);
+  const [snapshot, setSnapshot] = useState<{
+    lines: ReportLine[];
+    category: Category;
+    /** What the token messages showed, when both appliances and messages were given. */
+    tokens: { dailyKwh: number; monthCost: number; pricePerUnit: number } | null;
+  } | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,8 +102,14 @@ function Estimator() {
   const unitRate = config.categoryRatesMinor?.[category] ?? config.tariffMinorPerKwh;
   const currency = config.currency;
 
+  // Token messages are usable once there is a time span to spread them over.
+  const tokensReady = sms.purchases.length > 0 && sms.summary.days !== null && sms.summary.units > 0;
+  // Whole currency units only: the server refuses fractions of a shilling.
+  const tokenRate = tokensReady && sms.summary.pricePerUnit ? Math.round(sms.summary.pricePerUnit) : undefined;
+
   function buildInput() {
-    if (mode === "bill" && billSource === "sms") {
+    // Appliances drive the design. Without them, the token messages alone give the usage.
+    if (rows.length === 0) {
       return {
         mode: "bill" as const,
         category,
@@ -114,20 +118,11 @@ function Estimator() {
         amount: sms.summary.amount > 0 ? sms.summary.amount : undefined
       };
     }
-    if (mode === "bill") {
-      return {
-        mode: "bill" as const,
-        category,
-        units: Number(units),
-        days: Number(days),
-        amount: amount.trim() ? Number(amount) : undefined
-      };
-    }
     return {
       mode: "appliances" as const,
       category,
       items: rowsToItems(rows),
-      ratePerKwh: rate.trim() ? Number(rate) : undefined
+      ratePerKwh: tokenRate
     };
   }
 
@@ -137,18 +132,12 @@ function Estimator() {
       setError("Tell us about your grid power first.");
       return;
     }
-    if (mode === "bill" && billSource === "sms") {
-      if (sms.purchases.length === 0) {
-        setError("Paste at least one UEDCL payment message, or choose to type the numbers.");
-        return;
-      }
-      if (!sms.summary.days) {
-        setError("Tell us about how many days one top-up lasts.");
-        return;
-      }
+    if (sms.purchases.length > 0 && !sms.summary.days) {
+      setError("In step 4, tell us about how many days one top-up lasts.");
+      return;
     }
-    if (mode === "appliances" && rows.length === 0) {
-      setError("Add at least one appliance.");
+    if (rows.length === 0 && !tokensReady) {
+      setError("Add the appliances you use in step 3, or paste your UEDCL messages in step 4.");
       return;
     }
     setBusy(true);
@@ -160,7 +149,7 @@ function Estimator() {
       setSnapshot({
         category,
         lines:
-          mode === "appliances"
+          rows.length > 0
             ? rows.map((r) => {
                 const g = guideByKey(r.guideKey);
                 return {
@@ -171,7 +160,11 @@ function Estimator() {
                   duty: g?.duty ?? 1
                 };
               })
-            : []
+            : [],
+        tokens:
+          rows.length > 0 && tokensReady && sms.summary.projection && tokenRate
+            ? { dailyKwh: sms.summary.projection.kwh.day, monthCost: sms.summary.projection.cost.month, pricePerUnit: tokenRate }
+            : null
       });
       setTimeout(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch (e) {
@@ -255,53 +248,42 @@ function Estimator() {
       </p>
 
       <form className="panel-form estimate-form" onSubmit={calculate}>
-        <h2>1. What do you need power for?</h2>
-        <div className="choice-row" role="radiogroup" aria-label="Customer type">
-          {CATEGORY_CHOICES.map((c) => (
-            <button type="button" key={c.value} role="radio" aria-checked={category === c.value} className={`choice ${category === c.value ? "choice-on" : ""}`} onClick={() => setCategory(c.value)}>
-              <strong>{c.label}</strong>
-              <span>{c.hint}</span>
-            </button>
-          ))}
-        </div>
-
-        <h2>2. Your grid power</h2>
-        <div className="choice-row" role="radiogroup" aria-label="Grid power">
-          {GRID_CHOICES.map((c) => (
-            <button
-              type="button"
-              key={c.value}
-              role="radio"
-              aria-checked={grid === c.value}
-              className={`choice ${grid === c.value ? "choice-on" : ""}`}
-              onClick={() => setGrid(c.value)}
-            >
-              <strong>{c.label}</strong>
-              <span>{c.hint}</span>
-            </button>
-          ))}
-        </div>
-
-        <h2>3. How would you like to tell us?</h2>
-        <div className="choice-row" role="radiogroup" aria-label="Input method">
-          <button type="button" role="radio" aria-checked={mode === "bill"} className={`choice ${mode === "bill" ? "choice-on" : ""}`} onClick={() => setMode("bill")}>
-            <strong>From my UEDCL bill or token</strong>
-            <span>Quickest. Paste your UEDCL token messages, or type units and what you paid.</span>
-          </button>
-          <button type="button" role="radio" aria-checked={mode === "appliances"} className={`choice ${mode === "appliances" ? "choice-on" : ""}`} onClick={() => setMode("appliances")}>
-            <strong>From my appliances</strong>
-            <span>Pick what you use and for how long.</span>
-          </button>
-        </div>
-
-        {mode === "bill" ? (
-          <div className="segmented" role="radiogroup" aria-label="How to give your bill details">
-            <button type="button" role="radio" aria-checked={billSource === "sms"} className={billSource === "sms" ? "segmented-on" : ""} onClick={() => setBillSource("sms")}>Paste my UEDCL messages</button>
-            <button type="button" role="radio" aria-checked={billSource === "manual"} className={billSource === "manual" ? "segmented-on" : ""} onClick={() => setBillSource("manual")}>Type the numbers</button>
+        <section className="step step-1" aria-labelledby="q1">
+          <h2 id="q1"><span className="step-num">1</span> Where do you need power?</h2>
+          <div className="choice-row" role="radiogroup" aria-labelledby="q1">
+            {CATEGORY_CHOICES.map((c) => (
+              <button type="button" key={c.value} role="radio" aria-checked={category === c.value} className={`choice ${category === c.value ? "choice-on" : ""}`} onClick={() => setCategory(c.value)}>
+                <strong><span aria-hidden="true">{c.emoji}</span> {c.label}</strong>
+                <span>{c.hint}</span>
+              </button>
+            ))}
           </div>
-        ) : null}
+        </section>
 
-        {mode === "bill" && billSource === "sms" ? (
+        <section className="step step-2" aria-labelledby="q2">
+          <h2 id="q2"><span className="step-num">2</span> How reliable is electricity?</h2>
+          <div className="choice-row" role="radiogroup" aria-labelledby="q2">
+            {GRID_CHOICES.map((c) => (
+              <button type="button" key={c.value} role="radio" aria-checked={grid === c.value} className={`choice ${grid === c.value ? "choice-on" : ""}`} onClick={() => setGrid(c.value)}>
+                <strong><span aria-hidden="true">{c.emoji}</span> {c.label}</strong>
+                <span>{c.hint}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="step step-3" aria-labelledby="q3">
+          <h2 id="q3"><span className="step-num">3</span> Which appliances need power?</h2>
+          <ApplianceEditor rows={rows} setRows={setRows} library={config.appliances} />
+        </section>
+
+        <section className="step step-4" aria-labelledby="q4">
+          <h2 id="q4"><span className="step-num">4</span> Cost of your UEDCL tokens <span className="step-optional">Optional</span></h2>
+          <p className="hint">
+            Paste your UEDCL token messages and we work out the units you use and what you really pay per unit.
+            {rows.length > 0 ? " Your appliance costs will then use your own price." : ""} Skip this to use the standard rate of{" "}
+            {money(unitRate, exponent, currency)} per unit.
+          </p>
           <SmsImport
             text={smsText}
             setText={setSmsText}
@@ -310,30 +292,7 @@ function Estimator() {
             daysByMeter={smsDaysByMeter}
             setDaysForMeter={(account, d) => setSmsDaysByMeter((prev) => ({ ...prev, [account]: d }))}
           />
-        ) : mode === "bill" ? (
-          <>
-            <label htmlFor="es-units">Units (kWh) you bought or used</label>
-            <input id="es-units" required inputMode="decimal" type="number" min="0.1" step="any" placeholder="e.g. 150" value={units} onChange={(e) => setUnits(e.target.value)} />
-            <label htmlFor="es-days">Over how many days?</label>
-            <div className="quick-row" role="group" aria-label="Quick pick days">
-              {[["A week", "7"], ["2 weeks", "14"], ["A month", "30"]].map(([label, v]) => (
-                <button type="button" key={v} className={`chip ${days === v ? "chip-on" : ""}`} onClick={() => setDays(v)}>{label}</button>
-              ))}
-            </div>
-            <input id="es-days" required inputMode="numeric" type="number" min="1" max="366" value={days} onChange={(e) => setDays(e.target.value)} />
-            <p className="hint">Tap a quick pick or type your own number. For a token, count how many days it lasted.</p>
-            <label htmlFor="es-amount">What you paid for them ({currency}) — optional</label>
-            <input id="es-amount" inputMode="numeric" type="number" min="1" step="any" placeholder="e.g. 120000" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            <p className="hint">If you leave this blank we use the standard rate for your customer type: {money(unitRate, exponent, currency)} per unit.</p>
-          </>
-        ) : (
-          <>
-            <ApplianceEditor rows={rows} setRows={setRows} library={config.appliances} />
-            <label htmlFor="es-rate">Your price per unit ({currency}/kWh) — optional</label>
-            <input id="es-rate" inputMode="numeric" type="number" min="1" step="any" placeholder={String(unitRate / 10 ** exponent)} value={rate} onChange={(e) => setRate(e.target.value)} />
-            <p className="hint">Leave blank to use the standard rate for your customer type: {money(unitRate, exponent, currency)} per unit.</p>
-          </>
-        )}
+        </section>
 
         {error && !result ? <p className="auth-message" role="alert">{error}</p> : null}
         <button className="button" type="submit" disabled={busy}>{busy && !chosen ? "Working it out…" : "Show my power use and options"}</button>
@@ -354,6 +313,16 @@ function Estimator() {
             <div className="tile tile-peak"><span className="tile-label">Busiest moment</span><span className="tile-value">{result.summary.peakW.toLocaleString("en-US")} W</span><span className="tile-sub">estimated</span></div>
           </div>
           </div>
+          {snapshot?.tokens ? (
+            <p className="token-compare">
+              Your UEDCL payments show about <strong>{snapshot.tokens.dailyKwh} kWh a day</strong> (about{" "}
+              {money(snapshot.tokens.monthCost, result.exponent, result.currency)} a month) at{" "}
+              {money(snapshot.tokens.pricePerUnit, result.exponent, result.currency)} per unit.
+              {Math.abs(snapshot.tokens.dailyKwh - result.summary.dailyKwh) > Math.max(0.5, result.summary.dailyKwh * 0.3)
+                ? " That differs from your appliance list: check the hours, or whether some of your power comes from elsewhere."
+                : " That matches your appliance list well."}
+            </p>
+          ) : null}
           <div className="result-block result-report report-download">
             <button type="button" className="button button-secondary" disabled={pdfBusy || !snapshot} onClick={downloadReport}>
               {pdfBusy ? "Preparing PDF…" : "Download my usage report (PDF)"}

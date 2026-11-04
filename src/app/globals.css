@@ -917,3 +917,75 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 .sms-days input { width: 100%; }
 .tile { container-type: inline-size; }
 .tile-value { font-size: clamp(14px, 12.5cqi, 22px); }
+
+/* Four colour-coded steps */
+.estimate-form { gap: 16px; }
+.step { display: grid; gap: 12px; min-width: 0; padding: 16px 14px; border: 1px solid; border-left-width: 6px; border-radius: 14px; }
+.step > * { min-width: 0; }
+.step h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 !important; font-size: 19px; line-height: 1.3; }
+.step-num { display: inline-grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 50%; color: white; font-size: 16px; font-weight: 800; }
+.step-optional { padding: 2px 10px; border-radius: 999px; background: white; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.step-1 { background: #effaf3; border-color: #bfe3cc; border-left-color: #1f8a52; }
+.step-1 .step-num { background: #1f8a52; }
+.step-2 { background: #eef5fd; border-color: #c4dbf3; border-left-color: #2369b3; }
+.step-2 .step-num { background: #2369b3; }
+.step-3 { background: #fff7e8; border-color: #f0d9a6; border-left-color: #c27c0e; }
+.step-3 .step-num { background: #c27c0e; }
+.step-4 { background: #f5f0fc; border-color: #dccff2; border-left-color: #6d45b0; }
+.step-4 .step-num { background: #6d45b0; }
+.step-4 .step-optional { color: #6d45b0; border: 1px solid #dccff2; }
+.step .choice { background: white; }
+.step-1 .choice-on { border-color: #1f8a52; background: #dff3e7; }
+.step-2 .choice-on { border-color: #2369b3; background: #dcebfa; }
+.choice strong { font-size: 16px; }
+.choice strong span[aria-hidden] { margin-right: 4px; }
+@media (min-width: 640px) { .step { padding: 20px; } }
+
+/* Appliance picker: tabs stay open */
+.picker { display: grid; gap: 10px; }
+.picker-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.picker-tab {
+  flex: none; min-height: 40px; padding: 0 12px; border: 1px solid #e6cf9b; border-radius: 999px;
+  background: white; color: var(--ink); font: inherit; font-size: 14px; white-space: nowrap; cursor: pointer;
+}
+.picker-tab-on { border-color: #c27c0e; background: #c27c0e; color: white; font-weight: 700; }
+.picker-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 560px) { .picker-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.pick {
+  position: relative; display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 8px 30px 8px 10px;
+  border: 1px solid #ead7ad; border-radius: 12px; background: white; color: var(--ink); font: inherit;
+  font-size: 14px; line-height: 1.25; text-align: left; cursor: pointer;
+}
+.pick:active { transform: scale(.98); }
+.pick-emoji { flex: none; font-size: 24px; line-height: 1; }
+.pick-name { min-width: 0; overflow-wrap: anywhere; }
+.pick-plus, .pick-count {
+  position: absolute; top: 50%; right: 8px; display: grid; place-items: center; width: 22px; height: 22px;
+  margin-top: -11px; border-radius: 50%; font-size: 14px; font-weight: 800;
+}
+.pick-plus { background: #fbefd5; color: #8a5a00; }
+.pick-on { border-color: #c27c0e; background: #fff1d6; }
+.pick-count { background: #c27c0e; color: white; font-size: 12px; }
+.appliance-card h3 span[aria-hidden] { margin-right: 4px; }
+.token-compare { margin: 0; padding: 12px 14px; border: 1px solid #dccff2; border-radius: 12px; background: #f5f0fc; line-height: 1.5; }
+
+/* Step header: number beside the question */
+.step h2 { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 10px; row-gap: 6px; }
+.step h2 .step-optional { grid-column: 2; justify-self: start; }
+
+/* Picker: whole words, badge in the corner, no scrollbar */
+.picker-tabs { scrollbar-width: none; }
+.picker-tabs::-webkit-scrollbar { display: none; }
+.pick { padding: 10px 26px 10px 10px; gap: 8px; hyphens: manual; }
+.pick-emoji { font-size: 22px; }
+.pick-name { overflow-wrap: normal; word-break: normal; }
+.pick-plus, .pick-count { top: 6px; right: 6px; margin-top: 0; width: 20px; height: 20px; font-size: 13px; }
+
+/* Appliance card head: name and remove on one row, daily energy below */
+.appliance-card-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; }
+.appliance-card-head > h3, .appliance-card-head > .appliance-name-input { grid-column: 1; grid-row: 1; }
+.appliance-card-head > .appliance-remove { grid-column: 2; grid-row: 1; }
+.appliance-card-head > .appliance-kwh {
+  grid-column: 1 / -1; grid-row: 2; justify-self: start; padding: 2px 10px; border-radius: 999px;
+  background: #e6f4ec; font-size: 13px;
+}

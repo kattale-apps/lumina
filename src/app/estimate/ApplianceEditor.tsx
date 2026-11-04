@@ -4,6 +4,7 @@ import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   APPLIANCE_GUIDE,
   dailyKwh,
+  emojiFor,
   guideByKey,
   searchGuide,
   type GuideAppliance
@@ -12,6 +13,7 @@ import {
 /** One appliance the customer has added. Numbers stay as text while they type. */
 export type ApplianceRow = {
   id: string;
+  emoji: string;
   guideKey?: string;
   name: string;
   size?: string;
@@ -35,6 +37,7 @@ function fromGuide(g: GuideAppliance): ApplianceRow {
   const size = g.sizes[g.defaultSize];
   return {
     id: newId(),
+    emoji: g.emoji,
     guideKey: g.key,
     name: g.name,
     size: size.label,
@@ -140,7 +143,7 @@ function RowCard({
             onChange={(e) => onChange({ name: e.target.value })}
           />
         ) : (
-          <h3>{row.name}</h3>
+          <h3><span aria-hidden="true">{row.emoji}</span> {row.name}</h3>
         )}
         <span className="appliance-kwh" aria-live="polite">{fmtKwh(kwh)} a day</span>
         <button type="button" className="appliance-remove" aria-label={`Remove ${row.name || "appliance"}`} onClick={onRemove}>×</button>
@@ -200,6 +203,7 @@ export function ApplianceEditor({
   library: LibraryItem[];
 }) {
   const [query, setQuery] = useState("");
+  const [tab, setTab] = useState("popular");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -226,16 +230,18 @@ export function ApplianceEditor({
     let row: ApplianceRow;
     if (s.kind === "guide") row = fromGuide(s.item);
     else if (s.kind === "library") {
-      row = { id: newId(), name: s.item.name, powerW: String(s.item.powerW), quantity: "1", hours: String(s.item.defaultHours) };
+      row = { id: newId(), emoji: emojiFor(s.item.category), name: s.item.name, powerW: String(s.item.powerW), quantity: "1", hours: String(s.item.defaultHours) };
     } else {
-      row = { id: newId(), name: s.name.slice(0, 60), powerW: "", quantity: "1", hours: "4" };
+      row = { id: newId(), emoji: "🔌", name: s.name.slice(0, 60), powerW: "", quantity: "1", hours: "4" };
     }
     setRows((prev) => [...prev, row]);
     setQuery("");
     setOpen(false);
     setActive(0);
-    // Bring the new card into view so the customer sees what to adjust.
-    setTimeout(() => document.getElementById(`card-${row.id}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
+    // From search, bring the new card into view; from the picker, stay put so several can be tapped in a row.
+    if (s.kind !== "guide" || query.trim()) {
+      setTimeout(() => document.getElementById(`card-${row.id}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
+    }
   }
 
   function onKey(e: KeyboardEvent<HTMLInputElement>) {
@@ -246,7 +252,12 @@ export function ApplianceEditor({
     else if (e.key === "Escape") setOpen(false);
   }
 
-  const popular = APPLIANCE_GUIDE.filter((g) => g.popular);
+  const tabs = useMemo(() => {
+    const cats: string[] = [];
+    for (const g of APPLIANCE_GUIDE) if (!cats.includes(g.category)) cats.push(g.category);
+    return [{ key: "popular", label: "Popular", emoji: "⭐" }, ...cats.map((c) => ({ key: c, label: c, emoji: emojiFor(c) }))];
+  }, []);
+  const tabItems = tab === "popular" ? APPLIANCE_GUIDE.filter((g) => g.popular) : APPLIANCE_GUIDE.filter((g) => g.category === tab);
   const total = rows.reduce((sum, r) => {
     const g = guideByKey(r.guideKey);
     const k = dailyKwh(Number(r.powerW), Number(r.quantity), Number(r.hours), g?.duty);
@@ -255,7 +266,42 @@ export function ApplianceEditor({
 
   return (
     <div className="appliance-editor">
-      <label htmlFor="es-search">Add an appliance</label>
+      <div className="picker">
+        <div className="picker-tabs" role="tablist" aria-label="Appliance groups">
+          {tabs.map((t) => (
+            <button
+              type="button"
+              role="tab"
+              key={t.key}
+              aria-selected={tab === t.key}
+              className={tab === t.key ? "picker-tab picker-tab-on" : "picker-tab"}
+              onClick={() => setTab(t.key)}
+            >
+              <span aria-hidden="true">{t.emoji}</span> {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="picker-grid" role="tabpanel" aria-label={tabs.find((t) => t.key === tab)?.label}>
+          {tabItems.map((g) => {
+            const count = rows.filter((r) => r.guideKey === g.key).length;
+            return (
+              <button
+                type="button"
+                key={g.key}
+                className={count ? "pick pick-on" : "pick"}
+                onClick={() => add({ kind: "guide", item: g })}
+                aria-label={count ? `Add another ${g.name} (${count} added)` : `Add ${g.name}`}
+              >
+                <span className="pick-emoji" aria-hidden="true">{g.emoji}</span>
+                <span className="pick-name">{g.name}</span>
+                {count ? <span className="pick-count">{count}</span> : <span className="pick-plus" aria-hidden="true">+</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <label htmlFor="es-search">Can’t find it? Search for any appliance</label>
       <div className="combo">
         <input
           id="es-search"
@@ -267,7 +313,7 @@ export function ApplianceEditor({
           aria-autocomplete="list"
           aria-activedescendant={open && suggestions.length ? `${listId}-${active}` : undefined}
           autoComplete="off"
-          placeholder="Type e.g. fridge, TV, pump…"
+          placeholder="e.g. posho mill, hair dryer, borehole…"
           value={query}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); setActive(0); }}
           onFocus={() => setOpen(true)}
@@ -288,7 +334,7 @@ export function ApplianceEditor({
               >
                 {s.kind === "guide" ? (
                   <>
-                    <strong>{s.item.name}</strong>
+                    <strong><span aria-hidden="true">{s.item.emoji}</span> {s.item.name}</strong>
                     <span>
                       {s.item.sizes.length > 1
                         ? `${s.item.sizes[0].powerW}–${s.item.sizes[s.item.sizes.length - 1].powerW} W · choose size next`
@@ -297,12 +343,12 @@ export function ApplianceEditor({
                   </>
                 ) : s.kind === "library" ? (
                   <>
-                    <strong>{s.item.name}</strong>
+                    <strong><span aria-hidden="true">{emojiFor(s.item.category)}</span> {s.item.name}</strong>
                     <span>about {s.item.powerW} W</span>
                   </>
                 ) : (
                   <>
-                    <strong>Add “{s.name}”</strong>
+                    <strong><span aria-hidden="true">🔌</span> Add “{s.name}”</strong>
                     <span>Not on our list — you enter the watts</span>
                   </>
                 )}
@@ -312,17 +358,9 @@ export function ApplianceEditor({
         ) : null}
       </div>
 
-      <div className="quick-row" aria-label="Common appliances">
-        {popular.map((g) => (
-          <button type="button" key={g.key} className="chip" onClick={() => add({ kind: "guide", item: g })}>
-            + {g.name}
-          </button>
-        ))}
-      </div>
-
       {rows.length === 0 ? (
         <p className="hint">
-          Tap a common appliance or type one above. We fill in typical sizes, watts and hours — change anything that
+          Tap an appliance above, or search for one. We fill in typical sizes, watts and hours — change anything that
           doesn&apos;t match yours.
         </p>
       ) : (
