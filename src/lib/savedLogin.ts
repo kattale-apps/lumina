@@ -22,19 +22,27 @@ export function savedLoginSupported() {
   return Boolean(cap?.isNativePlatform?.() && cap.isPluginAvailable?.("SecureStorage"));
 }
 
-async function storage() {
-  const { SecureStorage } = await import("@aparajita/capacitor-secure-storage");
-  return SecureStorage;
+/**
+ * Runs one call against the secure storage plugin, giving up after a short wait.
+ *
+ * The plugin object is a Capacitor proxy that treats every property as a native method,
+ * including `then`, so it must never be returned from an async function or awaited
+ * itself: only the promise of a method call may be awaited.
+ */
+async function withStorage<T>(call: (storage: SecureStorageApi) => Promise<T>, fallback: T): Promise<T> {
+  const mod = await import("@aparajita/capacitor-secure-storage");
+  return Promise.race([
+    call(mod.SecureStorage),
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), 2000)),
+  ]);
 }
+
+type SecureStorageApi = typeof import("@aparajita/capacitor-secure-storage").SecureStorage;
 
 export async function readSavedLogin(): Promise<SavedLogin | null> {
   if (!savedLoginSupported()) return null;
   try {
-    // Never keep the sign-in form waiting on storage for more than a moment.
-    const raw = await Promise.race([
-      storage().then((s) => s.getItem(KEY)),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)),
-    ]);
+    const raw = await withStorage((s) => s.getItem(KEY), null);
     if (!raw) return null;
     const value = JSON.parse(raw) as Partial<SavedLogin>;
     return typeof value.email === "string" && typeof value.password === "string"
@@ -50,7 +58,7 @@ export async function readSavedLogin(): Promise<SavedLogin | null> {
 export async function writeSavedLogin(login: SavedLogin) {
   if (!savedLoginSupported()) return;
   try {
-    await (await storage()).setItem(KEY, JSON.stringify(login));
+    await withStorage((s) => s.setItem(KEY, JSON.stringify(login)), undefined);
   } catch {
     // Saving is a convenience; signing in still worked.
   }
@@ -59,7 +67,7 @@ export async function writeSavedLogin(login: SavedLogin) {
 export async function forgetSavedLogin() {
   if (!savedLoginSupported()) return;
   try {
-    await (await storage()).removeItem(KEY);
+    await withStorage((s) => s.removeItem(KEY), undefined);
   } catch {
     // Nothing to forget.
   }
