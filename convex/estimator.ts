@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
-import { requireTenantMembership } from "./lib/auth";
+import { findViewerProfile, requireTenantMembership } from "./lib/auth";
 import { DEFAULT_APPLIANCES } from "./lib/applianceDefaults";
 import { guideByKey } from "./lib/applianceGuide";
 import {
@@ -289,7 +289,7 @@ export const submitRequest = mutation({
     website: v.optional(v.string())
   },
   handler: async (ctx, args) => {
-    if (args.website) return { ok: true as const };
+    if (args.website) return { ok: true as const, requestId: null, hasAccount: false, claimToken: null };
     const company = await publicCompany(ctx);
     if (!company) throw new ConvexError("Quote requests are not open right now.");
     const { tenant } = company;
@@ -337,8 +337,23 @@ export const submitRequest = mutation({
       sizing = inputs;
     }
 
+    // Signed-in customers get the recommendation in their account. Anyone else gets a
+    // secret code, kept on their phone, that attaches the request to the account they create.
+    const viewer = await findViewerProfile(ctx);
+    const account =
+      viewer?.profile && viewer.profile.status === "active"
+        ? await ctx.db
+            .query("customerAccounts")
+            .withIndex("by_user", (q) => q.eq("userId", viewer.profile!._id))
+            .first()
+        : null;
+    const claimToken = account && account.tenantId === tenant._id ? undefined : newClaimToken();
+
     const id = await ctx.db.insert("quoteRequests", {
       tenantId: tenant._id,
+      category: args.input.category,
+      customerAccountId: account && account.tenantId === tenant._id ? account._id : undefined,
+      claimToken,
       name,
       phone,
       email,
@@ -370,9 +385,16 @@ export const submitRequest = mutation({
       createdAt: now,
       updatedAt: now
     });
-    return { ok: true as const, requestId: id };
+    return { ok: true as const, requestId: id, hasAccount: claimToken === undefined, claimToken: claimToken ?? null };
   }
 });
+
+/** 128 random bits as hex. Convex seeds the generator per call, so clients cannot predict it. */
+function newClaimToken() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 export const getEstimatorSettings = query({
   args: { tenantId: v.id("tenants") },

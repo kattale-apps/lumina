@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { hasPendingRequests } from "@/lib/pendingRequests";
+import { useRouter } from "next/navigation";
 
 function msg(e: unknown) {
   return e instanceof ConvexError && typeof e.data === "string"
@@ -30,7 +32,11 @@ function Page({ children, signedIn }: { children: ReactNode; signedIn?: boolean 
             <span>SOLAR SWITCH</span>
           </Link>
           <div className="hero-actions" style={{ margin: 0 }}>
-            <Link className="button button-small button-secondary" href="/estimate">Power check</Link>
+            {signedIn ? (
+              <Link className="button button-small button-secondary" href="/my-requests">My recommendations</Link>
+            ) : (
+              <Link className="button button-small button-secondary" href="/estimate">Power check</Link>
+            )}
             {signedIn ? (
               <button className="button button-small" type="button" onClick={() => void signOut()}>Sign out</button>
             ) : null}
@@ -215,6 +221,12 @@ function Shop() {
 function Gate() {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const me = useQuery(api.shop.myAccount, isAuthenticated ? {} : "skip");
+  const router = useRouter();
+  const ready = Boolean(me?.signedIn && me.account);
+  // Someone who asked for a recommendation before signing up goes to see it; that page attaches it.
+  useEffect(() => {
+    if (ready && hasPendingRequests()) router.replace("/my-requests");
+  }, [ready, router]);
 
   if (isLoading || (isAuthenticated && me === undefined)) return <Page><p className="muted">Loading…</p></Page>;
   if (!isAuthenticated || !me?.signedIn) {

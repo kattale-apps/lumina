@@ -32,8 +32,8 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
     <section className="workspace-section">
       <h2>Quote requests ({data.leads.length})</h2>
       <p className="hint">
-        These come from the public power check. They show components only. Convert one to start a customer and
-        assessment, then run sizing and build the priced quotation as usual.
+        These come from the public power check. Open one to see the customer's full power needs and send them a
+        recommendation with options, prices and photos.
       </p>
       {error ? <p className="auth-message" role="alert">{error}</p> : null}
       {data.leads.length === 0 ? <p className="muted">No requests yet.</p> : null}
@@ -57,13 +57,25 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
                 <span className="record-meta">
                   {l.components.length ? l.components.map((c) => `${c.quantity} × ${c.name}`).join(", ") : "No catalogue option yet: design from the load details."}
                 </span>
-                <span className="record-meta">
+                <span className="pill-row">
                   <span className={l.status === "new" ? "pill pill-warn" : "pill pill-info"}>{l.status}</span>
-                  {l.assignedTo ? ` Assigned to ${l.assignedTo}` : ""}
-                  {l.email ? ` · ${l.email}` : ""}
+                  {l.responseStatus === "sent" ? <span className="pill pill-ok">Recommendation sent</span> : null}
+                  {l.responseStatus === "draft" ? <span className="pill pill-warn">Draft response</span> : null}
+                  {l.customerChose ? <span className="pill pill-ok">Customer chose an option</span> : null}
+                  <span className={l.hasAccount ? "pill pill-info" : "pill pill-muted"}>{l.hasAccount ? "Has an account" : "No account yet"}</span>
                 </span>
+                {l.assignedTo || l.email ? (
+                  <span className="record-meta">
+                    {l.assignedTo ? `Assigned to ${l.assignedTo}` : ""}
+                    {l.assignedTo && l.email ? " · " : ""}
+                    {l.email ?? ""}
+                  </span>
+                ) : null}
               </div>
               <div className="record-actions">
+                <Link className="button button-small" href={`/dashboard/leads/${l.id}`}>
+                  {l.responseStatus === "sent" ? "View request and response" : "Review and respond"}
+                </Link>
                 {l.status === "converted" && l.assessmentId ? (
                   <Link className="button button-small" href={`/dashboard/assessments/${l.assessmentId}`}>Open assessment</Link>
                 ) : null}
@@ -84,7 +96,7 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
                 ) : null}
                 {data.canAct && (l.status === "new" || l.status === "assigned") ? (
                   <>
-                    <button className="button button-small" type="button" onClick={() => run(() => convert({ leadId: l.id }))}>
+                    <button className="button button-small button-secondary" type="button" onClick={() => run(() => convert({ leadId: l.id }))}>
                       Convert
                     </button>
                     <button className="button button-small button-secondary" type="button" onClick={() => run(() => close({ leadId: l.id }))}>

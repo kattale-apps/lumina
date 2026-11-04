@@ -1,0 +1,412 @@
+import { ConvexError, v } from "convex/values";
+import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
+import {
+  action,
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx
+} from "./_generated/server";
+import { recordAudit } from "./lib/audit";
+import { findViewerProfile, requireTenantMembership } from "./lib/auth";
+import { MAX_IMAGE_BYTES, sniffFile } from "./lib/files";
+import { computeLoad, scheduledHours } from "./lib/load";
+import { currencyExponent, toMinorUnits } from "./lib/money";
+import { LEAD_MANAGERS, LEAD_VIEWERS } from "./leads";
+
+/** Who may prepare and send a recommendation: the technical side and the managers. */
+export const RESPONDERS = ["super_admin", "sales_manager", "technician"] as const;
+
+const MAX_OPTIONS = 3;
+const MAX_COMPONENTS = 20;
+const MAX_IMAGES_PER_OPTION = 4;
+const MAX_MESSAGE = 2000;
+const MAX_DESCRIPTION = 1000;
+const HEAD_BYTES = 16;
+
+type Ctx = QueryCtx | MutationCtx;
+
+/** Loads a request the caller may see, with the same visibility rules as the request list. */
+async function visibleLead(ctx: Ctx, leadId: Id<"quoteRequests">, roles: readonly string[] = LEAD_VIEWERS) {
+  const lead = await ctx.db.get(leadId);
+  if (!lead) throw new ConvexError("Request not found.");
+  const access = await requireTenantMembership(ctx, lead.tenantId, roles as never);
+  const role = access.membership.role as string;
+  const seesAll = (LEAD_MANAGERS as readonly string[]).includes(role) || role === "technician";
+  if (!seesAll && lead.assignedToUserId !== access.profile._id) throw new ConvexError("Request not found.");
+  return { lead, ...access };
+}
+
+async function responseFor(ctx: Ctx, requestId: Id<"quoteRequests">) {
+  return await ctx.db
+    .query("requestResponses")
+    .withIndex("by_request", (q) => q.eq("requestId", requestId))
+    .unique();
+}
+
+async function imagesByOption(ctx: Ctx, requestId: Id<"quoteRequests">) {
+  const rows = await ctx.db
+    .query("responseImages")
+    .withIndex("by_request", (q) => q.eq("requestId", requestId))
+    .collect();
+  const out = new Map<string, { id: Id<"responseImages">; url: string | null }[]>();
+  for (const row of rows.sort((a, b) => a.createdAt - b.createdAt)) {
+    const list = out.get(row.optionKey) ?? [];
+    list.push({ id: row._id, url: await ctx.storage.getUrl(row.storageId) });
+    out.set(row.optionKey, list);
+  }
+  return out;
+}
+
+async function presentResponse(ctx: Ctx, response: Doc<"requestResponses">) {
+  const images = await imagesByOption(ctx, response.requestId);
+  return {
+    status: response.status,
+    message: response.message,
+    sentAt: response.sentAt ?? null,
+    updatedAt: response.updatedAt,
+    chosenOptionKey: response.chosenOptionKey ?? null,
+    chosenAt: response.chosenAt ?? null,
+    options: response.options.map((o) => ({
+      key: o.key,
+      title: o.title,
+      description: o.description,
+      components: o.components,
+      priceMinor: o.priceMinor ?? null,
+      images: (images.get(o.key) ?? []).filter((i) => i.url).map((i) => ({ id: i.id, url: i.url as string }))
+    }))
+  };
+}
+
+/** Everything a technician needs to design a system for one request. */
+export const getLead = query({
+  args: { leadId: v.id("quoteRequests") },
+  handler: async (ctx, args) => {
+    const { lead, membership, profile, tenant } = await visibleLead(ctx, args.leadId);
+    const role = membership.role as string;
+    const load = computeLoad(lead.lines);
+    const response = await responseFor(ctx, lead._id);
+    const preparedBy = response ? await ctx.db.get(response.preparedByUserId) : null;
+    return {
+      id: lead._id,
+      createdAt: lead.createdAt,
+      status: lead.status,
+      name: lead.name,
+      phone: lead.phone,
+      email: lead.email ?? null,
+      location: lead.location,
+      category: lead.category ?? null,
+      gridAvailability: lead.gridAvailability,
+      inputMode: lead.inputMode,
+      systemType: lead.systemType,
+      backupHours: lead.backupHours ?? null,
+      autonomyDays: lead.autonomyDays ?? null,
+      optionTitle: lead.optionTitle,
+      isRecommendation: lead.optionKey === "recommendation",
+      components: lead.components,
+      dailyKwh: lead.dailyKwh,
+      costPerMonthMinor: lead.costPerMonthMinor ?? null,
+      currency: tenant.defaultCurrency,
+      exponent: currencyExponent(tenant.defaultCurrency),
+      load: {
+        connectedW: load.connectedLoadW,
+        peakW: load.coincidentPeakW,
+        peakWithSurgeW: load.peakWithSurgeW,
+        dayKwh: Math.round(load.daytimeEnergyWh / 10) / 100,
+        nightKwh: Math.round(load.nighttimeEnergyWh / 10) / 100
+      },
+      appliances: lead.lines.map((l) => {
+        const hours = scheduledHours(l.windows);
+        const duty = l.dutyFactor ?? 1;
+        return {
+          name: l.name,
+          quantity: l.quantity,
+          powerW: l.powerW,
+          hoursPerDay: hours,
+          duty,
+          surgeW: l.surgeW ?? null,
+          kwhPerDay: Math.round((l.quantity * l.powerW * hours * duty) / 10) / 100
+        };
+      }),
+      hasAccount: Boolean(lead.customerAccountId),
+      canRespond: (RESPONDERS as readonly string[]).includes(role),
+      assessmentId: lead.assessmentId ?? null,
+      response: response
+        ? { ...(await presentResponse(ctx, response)), preparedBy: preparedBy?.displayName ?? null }
+        : null,
+      viewerIsPreparer: response ? response.preparedByUserId === profile._id : false
+    };
+  }
+});
+
+const optionArg = v.object({
+  key: v.string(),
+  title: v.string(),
+  description: v.string(),
+  components: v.array(v.object({ name: v.string(), quantity: v.number() })),
+  // Whole currency units as typed (for example UGX 12500000); empty means "price on request".
+  price: v.optional(v.number())
+});
+
+/** Saves the response as a draft, or sends it so the customer sees it in the app. */
+export const saveResponse = mutation({
+  args: {
+    leadId: v.id("quoteRequests"),
+    message: v.string(),
+    options: v.array(optionArg),
+    send: v.boolean()
+  },
+  handler: async (ctx, args) => {
+    const { lead, profile, tenant } = await visibleLead(ctx, args.leadId, RESPONDERS);
+    if (lead.status === "closed") throw new ConvexError("This request is closed.");
+
+    const message = args.message.trim();
+    if (message.length > MAX_MESSAGE) throw new ConvexError(`The message must be ${MAX_MESSAGE} characters or fewer.`);
+    if (args.options.length > MAX_OPTIONS) throw new ConvexError(`Offer at most ${MAX_OPTIONS} options.`);
+    if (args.send && args.options.length === 0) throw new ConvexError("Add at least one option before sending.");
+    if (args.send && !message) throw new ConvexError("Write a short message to the customer before sending.");
+
+    const keys = new Set<string>();
+    const options = args.options.map((o, i) => {
+      const label = `Option ${i + 1}`;
+      if (!/^[a-z0-9]{4,32}$/i.test(o.key) || keys.has(o.key)) throw new ConvexError("Invalid option.");
+      keys.add(o.key);
+      const title = o.title.trim();
+      if (!title) throw new ConvexError(`${label} needs a title.`);
+      if (title.length > 100) throw new ConvexError(`${label}: the title must be 100 characters or fewer.`);
+      const description = o.description.trim();
+      if (description.length > MAX_DESCRIPTION) {
+        throw new ConvexError(`${label}: the description must be ${MAX_DESCRIPTION} characters or fewer.`);
+      }
+      if (o.components.length > MAX_COMPONENTS) throw new ConvexError(`${label}: list at most ${MAX_COMPONENTS} parts.`);
+      const components = o.components
+        .map((c) => ({ name: c.name.trim(), quantity: c.quantity }))
+        .filter((c) => c.name);
+      for (const c of components) {
+        if (c.name.length > 100) throw new ConvexError(`${label}: part names must be 100 characters or fewer.`);
+        if (!Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 1000) {
+          throw new ConvexError(`${label}: "${c.name}" needs a whole quantity from 1 to 1000.`);
+        }
+      }
+      if (args.send && components.length === 0) throw new ConvexError(`${label}: list the main parts before sending.`);
+      const priceMinor = o.price === undefined ? undefined : toMinorUnits(o.price, tenant.defaultCurrency);
+      if (priceMinor === 0) throw new ConvexError(`${label}: leave the price empty instead of zero.`);
+      return { key: o.key, title, description, components, priceMinor };
+    });
+
+    const now = Date.now();
+    const existing = await responseFor(ctx, lead._id);
+    // Once sent, a response stays visible to the customer; later saves update what they see.
+    const status = args.send || existing?.status === "sent" ? ("sent" as const) : ("draft" as const);
+    const chosenStillThere = existing?.chosenOptionKey && keys.has(existing.chosenOptionKey);
+    const fields = {
+      status,
+      message,
+      options,
+      preparedByUserId: profile._id,
+      updatedAt: now,
+      sentAt: args.send ? now : existing?.sentAt,
+      chosenOptionKey: chosenStillThere ? existing?.chosenOptionKey : undefined,
+      chosenAt: chosenStillThere ? existing?.chosenAt : undefined
+    };
+    if (existing) await ctx.db.patch(existing._id, fields);
+    else await ctx.db.insert("requestResponses", { tenantId: lead.tenantId, requestId: lead._id, createdAt: now, ...fields });
+
+    // Photos of options that were removed go too.
+    const images = await ctx.db
+      .query("responseImages")
+      .withIndex("by_request", (q) => q.eq("requestId", lead._id))
+      .collect();
+    for (const img of images) {
+      if (!keys.has(img.optionKey)) {
+        await ctx.storage.delete(img.storageId);
+        await ctx.db.delete(img._id);
+      }
+    }
+
+    if (args.send) {
+      await recordAudit(ctx, profile, {
+        tenantId: lead.tenantId,
+        action: "lead.response_sent",
+        entityType: "quoteRequests",
+        entityId: lead._id,
+        summary: `Recommendation with ${options.length} option(s) sent to ${lead.name}.`
+      });
+    }
+    return { status };
+  }
+});
+
+/** Step 1 of adding a photo to an option. */
+export const generateImageUploadUrl = mutation({
+  args: { leadId: v.id("quoteRequests") },
+  handler: async (ctx, args) => {
+    await visibleLead(ctx, args.leadId, RESPONDERS);
+    return await ctx.storage.generateUploadUrl();
+  }
+});
+
+export const authorizeImage = internalQuery({
+  args: { leadId: v.id("quoteRequests"), optionKey: v.string(), storageId: v.id("_storage") },
+  handler: async (ctx, args) => {
+    await visibleLead(ctx, args.leadId, RESPONDERS);
+    const used = await ctx.db
+      .query("responseImages")
+      .withIndex("by_storage", (q) => q.eq("storageId", args.storageId))
+      .first();
+    if (used) throw new ConvexError("That photo is already attached.");
+    return true;
+  }
+});
+
+export const recordImage = internalMutation({
+  args: {
+    leadId: v.id("quoteRequests"),
+    optionKey: v.string(),
+    storageId: v.id("_storage"),
+    contentType: v.string(),
+    size: v.number()
+  },
+  handler: async (ctx, args) => {
+    const { lead } = await visibleLead(ctx, args.leadId, RESPONDERS);
+    if (!/^[a-z0-9]{4,32}$/i.test(args.optionKey)) throw new ConvexError("Invalid option.");
+    const existing = await ctx.db
+      .query("responseImages")
+      .withIndex("by_request", (q) => q.eq("requestId", lead._id))
+      .collect();
+    if (existing.filter((i) => i.optionKey === args.optionKey).length >= MAX_IMAGES_PER_OPTION) {
+      throw new ConvexError(`An option can have at most ${MAX_IMAGES_PER_OPTION} photos.`);
+    }
+    return await ctx.db.insert("responseImages", {
+      tenantId: lead.tenantId,
+      requestId: lead._id,
+      optionKey: args.optionKey,
+      storageId: args.storageId,
+      contentType: args.contentType,
+      size: args.size,
+      createdAt: Date.now()
+    });
+  }
+});
+
+/** Step 2: checks the uploaded bytes really are a photo, then attaches it to the option. */
+export const attachImage = action({
+  args: { leadId: v.id("quoteRequests"), optionKey: v.string(), storageId: v.id("_storage") },
+  handler: async (ctx, args): Promise<{ imageId: Id<"responseImages"> }> => {
+    await ctx.runQuery(internal.responses.authorizeImage, args);
+    const reject = async (message: string): Promise<never> => {
+      await ctx.storage.delete(args.storageId);
+      throw new ConvexError(message);
+    };
+    const blob = await ctx.storage.get(args.storageId);
+    if (!blob) throw new ConvexError("The upload was not found. Please try again.");
+    const sniffed = sniffFile(new Uint8Array(await blob.slice(0, HEAD_BYTES).arrayBuffer()));
+    if (!sniffed || sniffed.kind !== "image") return await reject("Only PNG, JPEG and WebP photos are allowed.");
+    if (blob.size > MAX_IMAGE_BYTES) return await reject(`Photos can be at most ${MAX_IMAGE_BYTES / (1024 * 1024)} MB.`);
+    try {
+      const imageId: Id<"responseImages"> = await ctx.runMutation(internal.responses.recordImage, {
+        ...args,
+        contentType: sniffed.contentType,
+        size: blob.size
+      });
+      return { imageId };
+    } catch (error) {
+      await ctx.storage.delete(args.storageId);
+      throw error;
+    }
+  }
+});
+
+export const removeImage = mutation({
+  args: { imageId: v.id("responseImages") },
+  handler: async (ctx, args) => {
+    const image = await ctx.db.get(args.imageId);
+    if (!image) return { changed: false };
+    await visibleLead(ctx, image.requestId, RESPONDERS);
+    await ctx.storage.delete(image.storageId);
+    await ctx.db.delete(image._id);
+    return { changed: true };
+  }
+});
+
+// ----- The customer's side -----
+
+async function viewerAccount(ctx: Ctx) {
+  const viewer = await findViewerProfile(ctx);
+  if (!viewer?.profile || viewer.profile.status !== "active") return null;
+  return await ctx.db
+    .query("customerAccounts")
+    .withIndex("by_user", (q) => q.eq("userId", viewer.profile!._id))
+    .first();
+}
+
+/** The signed-in customer's requests, with the recommendation once a technician has sent it. */
+export const myRequests = query({
+  args: {},
+  handler: async (ctx) => {
+    const account = await viewerAccount(ctx);
+    if (!account) return null;
+    const tenant = await ctx.db.get(account.tenantId);
+    const currency = tenant?.defaultCurrency ?? "UGX";
+    const rows = await ctx.db
+      .query("quoteRequests")
+      .withIndex("by_customer_account", (q) => q.eq("customerAccountId", account._id))
+      .order("desc")
+      .take(50);
+    const out = [];
+    for (const r of rows) {
+      const response = await responseFor(ctx, r._id);
+      out.push({
+        id: r._id,
+        createdAt: r.createdAt,
+        location: r.location,
+        dailyKwh: r.dailyKwh,
+        gridAvailability: r.gridAvailability,
+        closed: r.status === "closed",
+        // Drafts stay private to staff.
+        response: response && response.status === "sent" ? await presentResponse(ctx, response) : null
+      });
+    }
+    return { currency, exponent: currencyExponent(currency), contactName: tenant?.name ?? null, requests: out };
+  }
+});
+
+/** Attaches requests made before signing up, using the codes kept on this phone. */
+export const claimRequests = mutation({
+  args: { tokens: v.array(v.string()) },
+  handler: async (ctx, args) => {
+    const account = await viewerAccount(ctx);
+    if (!account) throw new ConvexError("Please sign in first.");
+    let claimed = 0;
+    for (const token of args.tokens.slice(0, 20)) {
+      if (!/^[0-9a-f]{32}$/.test(token)) continue;
+      const lead = await ctx.db
+        .query("quoteRequests")
+        .withIndex("by_claim_token", (q) => q.eq("claimToken", token))
+        .unique();
+      if (!lead || lead.tenantId !== account.tenantId || lead.customerAccountId) continue;
+      await ctx.db.patch(lead._id, { customerAccountId: account._id, claimToken: undefined, updatedAt: Date.now() });
+      claimed++;
+    }
+    return { claimed };
+  }
+});
+
+/** The customer says which option they want; staff see it on the request. */
+export const chooseOption = mutation({
+  args: { requestId: v.id("quoteRequests"), optionKey: v.string() },
+  handler: async (ctx, args) => {
+    const account = await viewerAccount(ctx);
+    const lead = await ctx.db.get(args.requestId);
+    if (!account || !lead || lead.customerAccountId !== account._id) throw new ConvexError("Request not found.");
+    const response = await responseFor(ctx, lead._id);
+    if (!response || response.status !== "sent") throw new ConvexError("There is no recommendation to choose from yet.");
+    if (!response.options.some((o) => o.key === args.optionKey)) throw new ConvexError("That option is no longer offered.");
+    await ctx.db.patch(response._id, { chosenOptionKey: args.optionKey, chosenAt: Date.now() });
+    await ctx.db.patch(lead._id, { updatedAt: Date.now() });
+    return { changed: true };
+  }
+});

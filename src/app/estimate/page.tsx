@@ -11,6 +11,7 @@ import { ApplianceEditor, rowsToItems, type ApplianceRow } from "./ApplianceEdit
 import type { ReportLine } from "./usageReport";
 import { SmsImport, useSmsSummary } from "./SmsImport";
 import { AppUpdateNeeded, savePdf } from "../../lib/savePdf";
+import { rememberPendingRequest } from "../../lib/pendingRequests";
 
 type Grid = "none" | "unreliable" | "reliable";
 /** Matches RECOMMENDATION_KEY on the server: ask a technician to design a system. */
@@ -80,7 +81,8 @@ function Estimator() {
   const [result, setResult] = useState<FunctionReturnType<typeof api.estimator.recommend> | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", location: "", website: "" });
-  const [done, setDone] = useState(false);
+  // After sending: whether the request already went to a signed-in customer account.
+  const [done, setDone] = useState<null | { hasAccount: boolean }>(null);
 
   function runQuery(input: FunctionArgs<typeof api.estimator.recommend>) {
     return convex.query(api.estimator.recommend, input);
@@ -206,7 +208,7 @@ function Estimator() {
     setBusy(true);
     setError(null);
     try {
-      await submit({
+      const sent = await submit({
         input: buildInput(),
         grid,
         optionKey: chosen,
@@ -216,7 +218,8 @@ function Estimator() {
         location: form.location,
         website: form.website || undefined
       });
-      setDone(true);
+      if (sent.claimToken) rememberPendingRequest(sent.claimToken);
+      setDone({ hasAccount: sent.hasAccount });
     } catch (e) {
       setError(message(e));
     } finally {
@@ -229,11 +232,30 @@ function Estimator() {
       <Shell>
         <h1>Thank you, {form.name.split(" ")[0]}</h1>
         <p>
-          We have your request. A {config.companyName} adviser will contact you on{" "}
-          <strong>{form.phone}</strong> with a quotation that includes prices.
+          We have your request. A technician will review your power needs and prepare a recommendation with
+          options, photos and prices. We may call you on <strong>{form.phone}</strong> to check a few details.
         </p>
+        {done.hasAccount ? (
+          <div className="next-step next-step-ok">
+            <strong>✅ It will appear in your account</strong>
+            <p>Open My recommendations to see it as soon as it is ready.</p>
+            <Link className="button" href="/my-requests">Go to My recommendations</Link>
+          </div>
+        ) : (
+          <div className="next-step">
+            <strong>📲 Sign up to get your recommendation in the app</strong>
+            <p>
+              Create a free account on this phone to receive your recommendation with options, photos and prices, and
+              choose the one you want. It takes a minute.
+            </p>
+            <Link className="button" href="/sign-up?next=/my-requests">Create my free account</Link>
+            <p className="hint">
+              Already have an account? <Link href="/sign-in"><u>Sign in</u></Link> on this phone and your request is added to it.
+            </p>
+          </div>
+        )}
         {config.contactPhone ? <p className="muted">Questions? Call {config.contactPhone}.</p> : null}
-        <Link className="button" href="/">Back to home</Link>
+        <Link className="button button-secondary" href="/">Back to home</Link>
       </Shell>
     );
   }

@@ -603,12 +603,60 @@ export default defineSchema({
     assignedToUserId: v.optional(v.id("userProfiles")),
     customerId: v.optional(v.id("customers")),
     assessmentId: v.optional(v.id("assessments")),
+    // Where the power is needed (home, business, industry), when the person said.
+    category: v.optional(
+      v.union(v.literal("residential"), v.literal("commercial_small"), v.literal("commercial_medium"), v.literal("industrial"))
+    ),
+    // The customer account the recommendation goes to: set when sent signed in, or claimed after signing up.
+    customerAccountId: v.optional(v.id("customerAccounts")),
+    // Secret handed to an anonymous requester so the request can be attached to the account they create next.
+    claimToken: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number()
   })
     .index("by_tenant_time", ["tenantId", "createdAt"])
     .index("by_tenant_phone_time", ["tenantId", "phone", "createdAt"])
-    .index("by_tenant_assignee", ["tenantId", "assignedToUserId"]),
+    .index("by_tenant_assignee", ["tenantId", "assignedToUserId"])
+    .index("by_claim_token", ["claimToken"])
+    .index("by_customer_account", ["customerAccountId", "createdAt"]),
+
+  // A technician's answer to a quote request: a message and up to three system options.
+  requestResponses: defineTable({
+    tenantId: v.id("tenants"),
+    requestId: v.id("quoteRequests"),
+    status: v.union(v.literal("draft"), v.literal("sent")),
+    message: v.string(),
+    options: v.array(
+      v.object({
+        // Stable id chosen by the editor, so photos stay with their option.
+        key: v.string(),
+        title: v.string(),
+        description: v.string(),
+        components: v.array(v.object({ name: v.string(), quantity: v.number() })),
+        priceMinor: v.optional(v.number())
+      })
+    ),
+    // The option the customer said they want, by key.
+    chosenOptionKey: v.optional(v.string()),
+    chosenAt: v.optional(v.number()),
+    preparedByUserId: v.id("userProfiles"),
+    sentAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number()
+  }).index("by_request", ["requestId"]),
+
+  // Photos a technician attaches to one option of a response.
+  responseImages: defineTable({
+    tenantId: v.id("tenants"),
+    requestId: v.id("quoteRequests"),
+    optionKey: v.string(),
+    storageId: v.id("_storage"),
+    contentType: v.string(),
+    size: v.number(),
+    createdAt: v.number()
+  })
+    .index("by_request", ["requestId"])
+    .index("by_storage", ["storageId"]),
 
 
   // A customer who signed up to browse the catalogue and place orders. Not staff.

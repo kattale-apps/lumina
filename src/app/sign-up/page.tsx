@@ -11,6 +11,16 @@ import { useConvexAuth, useMutation } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
 
+/** Where to go after signing up: only paths on this site, defaulting to the shop. */
+function nextPath() {
+  try {
+    const next = new URLSearchParams(window.location.search).get("next");
+    return next && next.startsWith("/") && !next.startsWith("//") ? next : "/shop";
+  } catch {
+    return "/shop";
+  }
+}
+
 function SignUpForm() {
   const { signIn } = useAuthActions();
   const { isAuthenticated } = useConvexAuth();
@@ -27,7 +37,7 @@ function SignUpForm() {
     if (!isAuthenticated || !pending.current) return;
     pending.current = false;
     register({ name: form.name, phone: form.phone })
-      .then(() => router.replace("/shop"))
+      .then(() => router.replace(nextPath()))
       .catch((e) => {
         setMessage(
           e instanceof ConvexError && typeof e.data === "string"

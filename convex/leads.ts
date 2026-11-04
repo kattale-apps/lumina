@@ -6,10 +6,10 @@ import { CRM_WRITERS } from "./lib/crm";
 import { computeLoad, LOAD_ENGINE_VERSION } from "./lib/load";
 
 /** Managers and the owner see every request and hand them out; agents see what is assigned to them. */
-const LEAD_MANAGERS = ["super_admin", "sales_manager"] as const;
+export const LEAD_MANAGERS = ["super_admin", "sales_manager"] as const;
 const LEAD_ROLES = CRM_WRITERS;
 /** Technicians read every request so they can design systems; they do not assign or convert. */
-const LEAD_VIEWERS = [...CRM_WRITERS, "technician"] as const;
+export const LEAD_VIEWERS = [...CRM_WRITERS, "technician"] as const;
 
 export const listLeads = query({
   args: { tenantId: v.id("tenants") },
@@ -31,6 +31,14 @@ export const listLeads = query({
         names.set(r.assignedToUserId, p?.displayName ?? "Unknown");
       }
     }
+    const responses = new Map<string, { status: "draft" | "sent"; chosen: boolean }>();
+    for (const r of visible) {
+      const resp = await ctx.db
+        .query("requestResponses")
+        .withIndex("by_request", (q) => q.eq("requestId", r._id))
+        .unique();
+      if (resp) responses.set(r._id, { status: resp.status, chosen: Boolean(resp.chosenOptionKey) });
+    }
     return {
       canAssign: manager,
       canAct: !technician,
@@ -51,7 +59,10 @@ export const listLeads = query({
         components: r.components,
         assignedTo: r.assignedToUserId ? names.get(r.assignedToUserId) ?? null : null,
         assignedToMe: r.assignedToUserId === profile._id,
-        assessmentId: r.assessmentId ?? null
+        assessmentId: r.assessmentId ?? null,
+        hasAccount: Boolean(r.customerAccountId),
+        responseStatus: responses.get(r._id)?.status ?? null,
+        customerChose: responses.get(r._id)?.chosen ?? false
       }))
     };
   }
