@@ -1,6 +1,8 @@
 "use client";
 
 import { PasswordInput } from "@/components/PasswordInput";
+import { RememberLogin } from "@/components/RememberLogin";
+import { useSavedLogin } from "@/lib/savedLogin";
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -18,6 +20,7 @@ function SignUpForm() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
+  const login = useSavedLogin();
 
   // Once the new auth account is live, attach the customer details and go to the shop.
   useEffect(() => {
@@ -41,12 +44,14 @@ function SignUpForm() {
     setBusy(true);
     try {
       const data = new FormData();
-      data.set("email", form.email.trim().toLowerCase());
+      const email = form.email.trim().toLowerCase();
+      data.set("email", email);
       data.set("password", form.password);
       data.set("name", form.name.trim());
       data.set("flow", "signUp");
       pending.current = true;
       await signIn("password", data);
+      await login.afterSuccess({ email, password: form.password });
     } catch {
       pending.current = false;
       setMessage("We could not create the account. This email may already be registered. Try signing in instead.");
@@ -64,6 +69,7 @@ function SignUpForm() {
       <input id="su-email" required type="email" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
       <label htmlFor="su-password">Password (at least 8 characters)</label>
       <PasswordInput id="su-password" autoComplete="new-password" value={form.password} onChange={(password) => setForm({ ...form, password })} />
+      {login.supported ? <RememberLogin checked={login.remember} onChange={login.setRemember} /> : null}
       {message ? <p className="auth-message" role="alert">{message}</p> : null}
       <button type="submit" disabled={busy}>{busy ? "Please wait…" : "Create my account"}</button>
       <p className="auth-note">

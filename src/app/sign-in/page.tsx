@@ -1,6 +1,8 @@
 "use client";
 
 import { PasswordInput } from "@/components/PasswordInput";
+import { RememberLogin } from "@/components/RememberLogin";
+import { useSavedLogin, type SavedLogin } from "@/lib/savedLogin";
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -16,23 +18,32 @@ function SignInForm() {
   const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const login = useSavedLogin();
+  // With a saved login the form starts folded away behind a one-tap button.
+  const [useOther, setUseOther] = useState(false);
+  const showSaved = login.saved && !useOther && mode === "signIn";
 
   // Covers both a successful sign-in and arriving here already signed in.
   useEffect(() => {
     if (isAuthenticated) router.replace("/dashboard");
   }, [isAuthenticated, router]);
 
+  async function attempt(details: SavedLogin, flow: "signIn" | "signUp") {
+    const formData = new FormData();
+    formData.set("email", details.email);
+    formData.set("password", details.password);
+    formData.set("flow", flow);
+    await signIn("password", formData);
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
     setBusy(true);
-
+    const details = { email: email.trim().toLowerCase(), password };
     try {
-      const formData = new FormData();
-      formData.set("email", email.trim().toLowerCase());
-      formData.set("password", password);
-      formData.set("flow", mode);
-      await signIn("password", formData);
+      await attempt(details, mode);
+      await login.afterSuccess(details);
     } catch {
       setMessage(
         mode === "signIn"
@@ -42,6 +53,48 @@ function SignInForm() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function signInSaved() {
+    if (!login.saved) return;
+    setMessage("");
+    setBusy(true);
+    const saved = login.saved;
+    try {
+      await attempt(saved, "signIn");
+    } catch {
+      // Most likely the password was changed: fall back to the form with the email filled in.
+      await login.forget();
+      setEmail(saved.email);
+      setPassword("");
+      setUseOther(true);
+      setMessage("Your saved login did not work. Type your password again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!login.loaded && login.supported) return null;
+
+  if (showSaved && login.saved) {
+    return (
+      <div className="auth-form">
+        <div className="saved-login">
+          <span className="saved-login-label">Saved on this phone</span>
+          <strong>{login.saved.email}</strong>
+        </div>
+        {message ? <p className="auth-message" role="alert">{message}</p> : null}
+        <button type="submit" disabled={busy} onClick={signInSaved}>
+          {busy ? "Please wait…" : "Sign in"}
+        </button>
+        <button className="auth-mode" type="button" onClick={() => setUseOther(true)}>
+          Use a different account
+        </button>
+        <button className="auth-mode auth-mode-quiet" type="button" onClick={() => login.forget()}>
+          Remove saved login from this phone
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -62,6 +115,7 @@ function SignInForm() {
         value={password}
         onChange={setPassword}
       />
+      {login.supported ? <RememberLogin checked={login.remember} onChange={login.setRemember} /> : null}
       {message ? <p className="auth-message" role="alert">{message}</p> : null}
       <button type="submit" disabled={busy}>
         {busy ? "Please wait…" : mode === "signIn" ? "Sign in" : "Create account"}

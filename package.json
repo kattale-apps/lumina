@@ -12,6 +12,7 @@
     "android:open": "cap open android"
   },
   "dependencies": {
+    "@aparajita/capacitor-secure-storage": "^7.1.6",
     "@auth/core": "0.41.3",
     "@capacitor/core": "^7.6.10",
     "@capacitor/filesystem": "^7.1.9",
