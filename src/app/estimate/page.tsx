@@ -295,13 +295,13 @@ function Estimator() {
         </section>
 
         {error && !result ? <p className="auth-message" role="alert">{error}</p> : null}
-        <button className="button" type="submit" disabled={busy}>{busy && !chosen ? "Working it out…" : "Show my power use and options"}</button>
+        <button className="button" type="submit" disabled={busy}>{busy && !chosen ? "Working it out…" : "Show my power needs"}</button>
       </form>
 
       {result ? (
         <section id="results" className="estimate-results" aria-live="polite">
           <div className="result-block result-use">
-          <h2>What you use today</h2>
+          <h2>Your power needs</h2>
           <div className="projection-grid">
             <div className="tile tile-energy"><span className="tile-label">Energy</span><span className="tile-value">{result.summary.dailyKwh} kWh</span><span className="tile-sub">per day</span></div>
             {result.summary.costPerDayMinor !== null ? (
