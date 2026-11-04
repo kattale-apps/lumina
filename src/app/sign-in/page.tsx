@@ -44,13 +44,13 @@ function SignInForm() {
     try {
       await attempt(details, mode);
       await login.afterSuccess(details);
+      // Stay on "Please wait…" until the redirect to the workspace happens.
     } catch {
       setMessage(
         mode === "signIn"
           ? "Sign-in failed. Check your email and password."
           : "Account registration failed. Check the details and try again."
       );
-    } finally {
       setBusy(false);
     }
   }
@@ -69,7 +69,6 @@ function SignInForm() {
       setPassword("");
       setUseOther(true);
       setMessage("Your saved login did not work. Type your password again.");
-    } finally {
       setBusy(false);
     }
   }
