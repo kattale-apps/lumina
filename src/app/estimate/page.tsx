@@ -58,7 +58,8 @@ export default function EstimatePage() {
 function Estimator() {
   const convex = useConvex();
   const config = useQuery(api.estimator.publicConfig, {});
-  const viewer = useQuery(api.users.viewerContext, {});
+  // Use the same customer-account lookup as the customer dashboard, not staff/profile state.
+  const customer = useQuery(api.shop.myAccount, {});
   const submit = useMutation(api.estimator.submitRequest);
 
   const [category, setCategory] = useState<Category>("residential");
@@ -82,7 +83,7 @@ function Estimator() {
   const [result, setResult] = useState<FunctionReturnType<typeof api.estimator.recommend> | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", location: "", website: "" });
-  const signedInProfile = viewer && viewer.state !== "signed_out" && viewer.state !== "profile_missing" && viewer.state !== "disabled" ? viewer.profile : null;
+  const signedInCustomer = customer?.signedIn === true && customer.account !== null;
   // After sending: whether the request already went to a signed-in customer account.
   const [done, setDone] = useState<null | { hasAccount: boolean }>(null);
 
@@ -233,10 +234,10 @@ function Estimator() {
   if (done) {
     return (
       <Shell>
-        <h1>Thank you, {form.name.split(" ")[0]}</h1>
+        <h1>Thank you, {(signedInCustomer ? customer.account!.name : form.name).split(" ")[0]}</h1>
         <p>
           We have your request. A technician will review your power needs and prepare a recommendation with
-          options, photos and prices. We may call you on <strong>{form.phone}</strong> to check a few details.
+          options, photos and prices. We may call you on <strong>{signedInCustomer ? customer.account!.phone : form.phone}</strong> to check a few details.
         </p>
         {done.hasAccount ? (
           <div className="next-step next-step-ok">
@@ -409,7 +410,7 @@ function Estimator() {
                   ? "A technician will look at your numbers, recommend a system and send a quotation with prices. No payment is needed now."
                   : "We will contact you with a quotation that includes prices. No payment is needed now."}
               </p>
-              {signedInProfile ? (
+              {customer === undefined ? (\n                <p className="hint">Checking your account…</p>\n              ) : signedInCustomer ? (
                 <div className="signed-in-request">
                   <strong>Requesting as {signedInProfile.displayName}</strong>
                   {signedInProfile.email ? <p className="hint">{signedInProfile.email}</p> : null}
@@ -434,7 +435,7 @@ function Estimator() {
                 <input id="rq-site" tabIndex={-1} autoComplete="off" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
               </div>
               {error ? <p className="auth-message" role="alert">{error}</p> : null}
-              <button className="button" type="submit" disabled={busy}>{busy ? "Sending…" : "Send my request"}</button>
+              <button className="button" type="submit" disabled={busy || customer === undefined}>{busy ? "Sending…" : "Send my request"}</button>
             </form>
           ) : null}
         </section>
