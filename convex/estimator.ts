@@ -299,8 +299,8 @@ export const submitRequest = mutation({
     const account = signedIn
       ? await ctx.db.query("customerAccounts").withIndex("by_user", (q) => q.eq("userId", signedIn._id)).first()
       : null;
-    const name = requireText(signedIn?.displayName ?? args.name, "Name", 100);
-    const phone = validatePhone(account?.phone ?? args.phone);
+    const name = requireText(signedIn?.displayName ?? account?.name ?? args.name ?? "", "Name", 100);
+    const phone = validatePhone(account?.phone ?? args.phone ?? "");
     const email = validateOptionalEmail(signedIn?.email ?? args.email);
     const location = requireText(args.location, "Location", 200);
     // "recommendation": no option fits or none was chosen; a technician designs one.
