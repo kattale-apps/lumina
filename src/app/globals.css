@@ -1182,3 +1182,19 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
   white-space: nowrap;
 }
 .customer-tab-on { border-color: var(--green); background: #e5f0ec; color: #0f5a3a; }
+
+/* Unread count next to a menu item */
+.nav-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #d93025;
+  color: white;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}

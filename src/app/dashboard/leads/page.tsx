@@ -6,6 +6,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { CompanyPage, ConfiguredOnly, errorMessage } from "../workspace";
+import { useMarkSeen } from "@/lib/appInbox";
 
 const GRID_LABELS = { none: "No grid", unreliable: "Unreliable grid", reliable: "Reliable grid" } as const;
 
@@ -16,6 +17,8 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
   const convert = useMutation(api.leads.convertLead);
   const close = useMutation(api.leads.closeLead);
   const [error, setError] = useState<string | null>(null);
+  const inbox = useQuery(api.inbox.myInbox, {});
+  useMarkSeen("staff", data !== undefined, inbox?.staff);
 
   if (!data) return <p className="muted">Loading requests…</p>;
 

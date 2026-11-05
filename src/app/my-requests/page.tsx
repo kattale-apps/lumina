@@ -9,6 +9,7 @@ import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useClaimPendingRequests } from "@/lib/pendingRequests";
+import { useMarkSeen } from "@/lib/appInbox";
 
 type Mine = NonNullable<FunctionReturnType<typeof api.responses.myRequests>>;
 
@@ -95,6 +96,8 @@ function Mine() {
   const ready = Boolean(me?.signedIn && me.account);
   useClaimPendingRequests(ready);
   const mine = useQuery(api.responses.myRequests, ready ? {} : "skip");
+  const inbox = useQuery(api.inbox.myInbox, ready ? {} : "skip");
+  useMarkSeen("customer", mine !== undefined && mine !== null, inbox?.customer);
   const config = useQuery(api.estimator.publicConfig, {});
   const contactPhone = config?.enabled ? config.contactPhone ?? null : null;
 

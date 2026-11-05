@@ -3,6 +3,7 @@
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
 import type { ReactNode } from "react";
+import { AppInbox } from "./AppInbox";
 
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 const convex = convexUrl ? new ConvexReactClient(convexUrl) : null;
@@ -16,6 +17,7 @@ export function ConvexClientProvider({
 
   return (
     <ConvexAuthProvider client={convex}>
+      <AppInbox />
       {children}
     </ConvexAuthProvider>
   );

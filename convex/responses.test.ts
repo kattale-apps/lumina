@@ -143,3 +143,46 @@ describe("technician responses to quote requests", () => {
     expect(left.map((i) => i.optionKey)).toEqual(["opta1"]);
   });
 });
+
+describe("app icon badge", () => {
+  const ask = (t: T, key: string) =>
+    t.fetch("/app-inbox", { method: "POST", body: JSON.stringify({ key }) }).then((r) => r.json());
+
+  test("technicians are counted for new requests and choices, customers for recommendations, and opening clears it", async () => {
+    const { t, tech, buyer } = await setup();
+    const techDevice = await tech.mutation(api.inbox.registerDevice, {});
+    expect(await ask(t, techDevice.key)).toMatchObject({ count: 0 });
+
+    await buyer.mutation(api.shop.registerCustomer, { name: "Kats", phone: "+256 782 872796" });
+    const buyerDevice = await buyer.mutation(api.inbox.registerDevice, {});
+    const sent = await buyer.mutation(api.estimator.submitRequest, {
+      input: appliances, grid: "unreliable", optionKey: "recommendation", ...person
+    });
+    const leadId = sent.requestId as Id<"quoteRequests">;
+    expect(await ask(t, techDevice.key)).toMatchObject({ count: 1, path: "/dashboard/leads" });
+    expect((await ask(t, buyerDevice.key)).count).toBe(0);
+
+    await tech.mutation(api.inbox.markSeen, { kind: "staff" });
+    expect((await ask(t, techDevice.key)).count).toBe(0);
+
+    await tech.mutation(api.responses.saveResponse, { leadId, message: "Here you go.", options: [option("opta1")], send: true });
+    expect(await ask(t, buyerDevice.key)).toMatchObject({ count: 1, path: "/my-requests" });
+    expect((await buyer.query(api.inbox.myInbox, {}))!.customer).toBe(1);
+    await buyer.mutation(api.inbox.markSeen, { kind: "customer" });
+    expect((await ask(t, buyerDevice.key)).count).toBe(0);
+
+    // The customer picking an option shows up for the technician.
+    await buyer.mutation(api.responses.chooseOption, { requestId: leadId, optionKey: "opta1" });
+    expect((await ask(t, techDevice.key)).count).toBe(1);
+  });
+
+  test("a replaced or unknown key stops the phone checking", async () => {
+    const { t, tech, buyer } = await setup();
+    const first = await tech.mutation(api.inbox.registerDevice, {});
+    // Someone else signs in on the same phone: the old key is dropped.
+    await buyer.mutation(api.inbox.registerDevice, { previousKey: first.key });
+    expect(await ask(t, first.key)).toMatchObject({ count: 0, stop: true });
+    const bad = await t.fetch("/app-inbox", { method: "POST", body: JSON.stringify({ key: "nope" }) });
+    expect(bad.status).toBe(400);
+  });
+});

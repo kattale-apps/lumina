@@ -643,7 +643,26 @@ export default defineSchema({
     sentAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number()
-  }).index("by_request", ["requestId"]),
+  })
+    .index("by_request", ["requestId"])
+    .index("by_tenant_chosen", ["tenantId", "chosenAt"]),
+
+  // A phone with the Android app that checks in the background for new messages.
+  // Only a hash of its secret key is kept.
+  appDevices: defineTable({
+    userId: v.id("userProfiles"),
+    keyHash: v.string(),
+    createdAt: v.number()
+  })
+    .index("by_key_hash", ["keyHash"])
+    .index("by_user", ["userId"]),
+
+  // When someone last opened their messages: customers their recommendations, staff the quote requests.
+  inboxSeen: defineTable({
+    userId: v.id("userProfiles"),
+    kind: v.union(v.literal("customer"), v.literal("staff")),
+    seenAt: v.number()
+  }).index("by_user_kind", ["userId", "kind"]),
 
   // Photos a technician attaches to one option of a response.
   responseImages: defineTable({

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 const TABS = [
   { href: "/my-requests", label: "My recommendations" },
@@ -15,6 +17,7 @@ const TABS = [
 export function CustomerShell({ children, signedIn }: { children: ReactNode; signedIn?: boolean }) {
   const { signOut } = useAuthActions();
   const path = usePathname();
+  const inbox = useQuery(api.inbox.myInbox, signedIn ? {} : "skip");
   return (
     <div className="public-bg">
       <div className="shell">
@@ -35,6 +38,7 @@ export function CustomerShell({ children, signedIn }: { children: ReactNode; sig
             {TABS.map((t) => (
               <Link key={t.href} href={t.href} className={path === t.href ? "customer-tab customer-tab-on" : "customer-tab"} aria-current={path === t.href ? "page" : undefined}>
                 {t.label}
+                {t.href === "/my-requests" && inbox?.customer ? <span className="nav-count" aria-label={`${inbox.customer} new`}>{inbox.customer}</span> : null}
               </Link>
             ))}
           </nav>

@@ -18,6 +18,7 @@ import type * as customers from "../customers.js";
 import type * as estimator from "../estimator.js";
 import type * as files from "../files.js";
 import type * as http from "../http.js";
+import type * as inbox from "../inbox.js";
 import type * as leads from "../leads.js";
 import type * as lib_applianceDefaults from "../lib/applianceDefaults.js";
 import type * as lib_applianceGuide from "../lib/applianceGuide.js";
@@ -69,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   estimator: typeof estimator;
   files: typeof files;
   http: typeof http;
+  inbox: typeof inbox;
   leads: typeof leads;
   "lib/applianceDefaults": typeof lib_applianceDefaults;
   "lib/applianceGuide": typeof lib_applianceGuide;

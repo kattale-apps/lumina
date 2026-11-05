@@ -69,6 +69,8 @@ export function SignOutButton() {
 }
 
 export function WorkspaceHeader({ role }: { role?: string }) {
+  const inbox = useQuery(api.inbox.myInbox, role ? {} : "skip");
+  const unread: Record<string, number> = { "/dashboard/leads": inbox?.staff ?? 0 };
   // Inventory administrators have no access to customer data.
   const crm = role !== undefined && role !== "inventory_admin";
   const links = [
@@ -113,6 +115,7 @@ export function WorkspaceHeader({ role }: { role?: string }) {
             .map((link) => (
               <Link key={link.href} href={link.href}>
                 {link.label}
+                {unread[link.href] ? <span className="nav-count" aria-label={`${unread[link.href]} new`}>{unread[link.href]}</span> : null}
               </Link>
             ))}
         </nav>
@@ -167,8 +170,11 @@ export function CompanyPage({
   const viewer = useQuery(api.users.viewerContext, isAuthenticated ? {} : "skip");
 
   const company = viewer?.state === "active" ? viewer.companies[0] : undefined;
-  const settled = !isLoading && viewer !== undefined;
-  const redirect = settled && !company;
+  // Straight after a full page load the first answer can say "signed out" before the sign-in
+  // token reaches the server; wait for the real answer instead of leaving the page.
+  const settled = !isLoading && viewer !== undefined && viewer.state !== "signed_out";
+  // Truly signed out, or no company access: the home page explains and signs in again.
+  const redirect = (!isLoading && !isAuthenticated) || (settled && !company);
 
   useEffect(() => {
     if (redirect) router.replace("/dashboard");
