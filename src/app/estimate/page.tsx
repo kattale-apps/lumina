@@ -58,6 +58,7 @@ export default function EstimatePage() {
 function Estimator() {
   const convex = useConvex();
   const config = useQuery(api.estimator.publicConfig, {});
+  const viewer = useQuery(api.users.viewerContext, {});
   const submit = useMutation(api.estimator.submitRequest);
 
   const [category, setCategory] = useState<Category>("residential");
@@ -81,6 +82,7 @@ function Estimator() {
   const [result, setResult] = useState<FunctionReturnType<typeof api.estimator.recommend> | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", location: "", website: "" });
+  const signedInProfile = viewer && viewer.state !== "signed_out" && viewer.state !== "profile_missing" && viewer.state !== "disabled" ? viewer.profile : null;
   // After sending: whether the request already went to a signed-in customer account.
   const [done, setDone] = useState<null | { hasAccount: boolean }>(null);
 
@@ -212,9 +214,10 @@ function Estimator() {
         input: buildInput(),
         grid,
         optionKey: chosen,
-        name: form.name,
-        phone: form.phone,
-        email: form.email || undefined,
+        // Profile identity is authoritative for signed-in users; never trust editable client fields.
+        name: signedInProfile?.displayName ?? form.name,
+        phone: signedInProfile ? undefined : form.phone,
+        email: signedInProfile?.email ?? (form.email || undefined),
         location: form.location,
         website: form.website || undefined
       });
@@ -406,14 +409,26 @@ function Estimator() {
                   ? "A technician will look at your numbers, recommend a system and send a quotation with prices. No payment is needed now."
                   : "We will contact you with a quotation that includes prices. No payment is needed now."}
               </p>
-              <label htmlFor="rq-name">Your name</label>
-              <input id="rq-name" required maxLength={100} autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <label htmlFor="rq-phone">Phone</label>
-              <input id="rq-phone" required type="tel" maxLength={20} autoComplete="tel" placeholder="+256 700 000000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-              <label htmlFor="rq-email">Email (optional)</label>
-              <input id="rq-email" type="email" maxLength={120} autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-              <label htmlFor="rq-loc">Where is the property? (town / area)</label>
-              <input id="rq-loc" required maxLength={200} autoComplete="address-level2" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+              {signedInProfile ? (
+                <div className="signed-in-request">
+                  <strong>Requesting as {signedInProfile.displayName}</strong>
+                  {signedInProfile.email ? <p className="hint">{signedInProfile.email}</p> : null}
+                  <p className="hint">Your account details will be used. You only need to provide the property's location.</p>
+                  <label htmlFor="rq-loc">Where is the property? (town / area)</label>
+                  <input id="rq-loc" required maxLength={200} autoComplete="address-level2" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+                </div>
+              ) : (
+                <>
+                  <label htmlFor="rq-name">Your name</label>
+                  <input id="rq-name" required maxLength={100} autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                  <label htmlFor="rq-phone">Phone</label>
+                  <input id="rq-phone" required type="tel" maxLength={20} autoComplete="tel" placeholder="+256 700 000000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                  <label htmlFor="rq-email">Email (optional)</label>
+                  <input id="rq-email" type="email" maxLength={120} autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                  <label htmlFor="rq-loc">Where is the property? (town / area)</label>
+                  <input id="rq-loc" required maxLength={200} autoComplete="address-level2" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+                </>
+              )}
               <div className="honeypot" aria-hidden="true">
                 <label htmlFor="rq-site">Website</label>
                 <input id="rq-site" tabIndex={-1} autoComplete="off" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
