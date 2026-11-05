@@ -281,8 +281,8 @@ export const submitRequest = mutation({
     input: estimateInput,
     grid: gridArg,
     optionKey: v.string(),
-    name: v.string(),
-    phone: v.string(),
+    name: v.optional(v.string()),
+    phone: v.optional(v.string()),
     email: v.optional(v.string()),
     location: v.string(),
     // Real people leave this empty; bots tend to fill every field.
@@ -294,9 +294,14 @@ export const submitRequest = mutation({
     if (!company) throw new ConvexError("Quote requests are not open right now.");
     const { tenant } = company;
 
-    const name = requireText(args.name, "Name", 100);
-    const phone = validatePhone(args.phone);
-    const email = validateOptionalEmail(args.email);
+    const viewer = await findViewerProfile(ctx);
+    const signedIn = viewer?.profile && viewer.profile.status === "active" ? viewer.profile : null;
+    const account = signedIn
+      ? await ctx.db.query("customerAccounts").withIndex("by_user", (q) => q.eq("userId", signedIn._id)).first()
+      : null;
+    const name = requireText(signedIn?.displayName ?? args.name, "Name", 100);
+    const phone = validatePhone(account?.phone ?? args.phone);
+    const email = validateOptionalEmail(signedIn?.email ?? args.email);
     const location = requireText(args.location, "Location", 200);
     // "recommendation": no option fits or none was chosen; a technician designs one.
     const recommendation = args.optionKey === RECOMMENDATION_KEY;
@@ -339,14 +344,6 @@ export const submitRequest = mutation({
 
     // Signed-in customers get the recommendation in their account. Anyone else gets a
     // secret code, kept on their phone, that attaches the request to the account they create.
-    const viewer = await findViewerProfile(ctx);
-    const account =
-      viewer?.profile && viewer.profile.status === "active"
-        ? await ctx.db
-            .query("customerAccounts")
-            .withIndex("by_user", (q) => q.eq("userId", viewer.profile!._id))
-            .first()
-        : null;
     const claimToken = account && account.tenantId === tenant._id ? undefined : newClaimToken();
 
     const id = await ctx.db.insert("quoteRequests", {
