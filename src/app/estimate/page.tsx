@@ -216,7 +216,7 @@ function Estimator() {
         optionKey: chosen,
         // Profile identity is authoritative for signed-in users; never trust editable client fields.
         name: signedInProfile?.displayName ?? form.name,
-        phone: signedInProfile ? undefined : form.phone,
+        phone: signedInProfile ? "" : form.phone,
         email: signedInProfile?.email ?? (form.email || undefined),
         location: form.location,
         website: form.website || undefined
