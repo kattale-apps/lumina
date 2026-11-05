@@ -276,6 +276,34 @@ describe("public power check", () => {
   });
 });
 
+describe("signed-in customer quote requests", () => {
+  test("uses the signed-in profile and customer account phone without asking for identity fields", async () => {
+    const c = await setup();
+    const customer = await registerUser(c.t, "amina@example.com");
+    const customerProfile = await c.t.run(async (ctx) => {
+      const authSubject = customer.subject.split("|")[0];
+      return await ctx.db.query("userProfiles").withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject)).unique();
+    });
+    if (!customerProfile) throw new Error("missing profile");
+    await c.t.run(async (ctx) => {
+      await ctx.db.insert("customerAccounts", {
+        tenantId: c.tenantId, userId: customerProfile._id, name: "Amina Customer", phone: "+256 700 111222", createdAt: Date.now()
+      });
+    });
+    const signedIn = c.t.withIdentity({ subject: customer.subject });
+    const result = await signedIn.query(api.estimator.recommend, { input: bill, grid: "unreliable" });
+    await signedIn.mutation(api.estimator.submitRequest, {
+      input: bill, grid: "unreliable", optionKey: result.options[0].key, location: "Kampala, Ntinda"
+    });
+    const rows = await c.t.run((ctx) => ctx.db.query("quoteRequests").collect());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      name: "amina", phone: "+256 700 111222", email: "amina@example.com",
+      location: "Kampala, Ntinda", customerAccountId: expect.anything()
+    });
+  });
+});
+
 describe("staff leads", () => {
   async function withLead() {
     const c = await setup();
