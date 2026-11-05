@@ -83,7 +83,8 @@ function Estimator() {
   const [result, setResult] = useState<FunctionReturnType<typeof api.estimator.recommend> | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", location: "", website: "" });
-  const signedInCustomer = customer?.signedIn === true;\n  const hasCustomerAccount = signedInCustomer && customer.account !== null;
+  const signedInCustomer = customer?.signedIn === true;
+  const hasCustomerAccount = signedInCustomer && customer.account !== null;
   // After sending: whether the request already went to a signed-in customer account.
   const [done, setDone] = useState<null | { hasAccount: boolean }>(null);
 
@@ -410,7 +411,11 @@ function Estimator() {
                   ? "A technician will look at your numbers, recommend a system and send a quotation with prices. No payment is needed now."
                   : "We will contact you with a quotation that includes prices. No payment is needed now."}
               </p>
-              {customer === undefined ? (\n                <p className="hint">Checking your account…</p>\n              ) : signedInCustomer && !hasCustomerAccount ? (\n                <p className="hint">Your sign-in is active, but your customer account setup is incomplete. Please <Link href="/shop"><u>finish setting up your customer account</u></Link> before requesting a quotation.</p>\n              ) : hasCustomerAccount ? (
+              {customer === undefined ? (
+                <p className="hint">Checking your account…</p>
+              ) : signedInCustomer && !hasCustomerAccount ? (
+                <p className="hint">Your sign-in is active, but your customer account setup is incomplete. Please <Link href="/shop"><u>finish setting up your customer account</u></Link> before requesting a quotation.</p>
+              ) : hasCustomerAccount ? (
                 <div className="signed-in-request">
                   <strong>Requesting as {signedInProfile.displayName}</strong>
                   {signedInProfile.email ? <p className="hint">{signedInProfile.email}</p> : null}
