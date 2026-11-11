@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppDownload } from "@/components/AppDownload";
 
 export default function HomePage() {
   return (
@@ -29,6 +30,7 @@ export default function HomePage() {
               Want to see our products and order? <Link href="/sign-up">Create an account</Link>
             </p>
           </div>
+          <AppDownload />
         </section>
       </main>
     </div>

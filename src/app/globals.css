@@ -1198,3 +1198,18 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
   font-weight: 800;
   line-height: 1;
 }
+
+/* Android app download on the home page */
+.app-download { display: grid; gap: 8px; margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); }
+.app-download-button { width: 100%; min-height: 54px; font-size: 17px; border-radius: 14px; }
+.app-download-meta { margin: 0; color: var(--muted); font-size: 14px; text-align: center; }
+.app-download-help { color: var(--muted); font-size: 15px; line-height: 1.55; }
+.app-download-help summary { min-height: 44px; display: flex; align-items: center; justify-content: center; color: var(--green); font-weight: 700; cursor: pointer; }
+.app-download-help ol { margin: 4px 0 0; padding-left: 22px; }
+.app-download-help p { margin: 8px 0 0; }
+.app-download-note { margin: 22px 0 0; padding: 12px 14px; border-radius: 12px; background: #eef5fc; color: #1f5a92; font-size: 15px; line-height: 1.5; }
+@media (min-width: 640px) {
+  .app-download { justify-items: start; }
+  .app-download-button { width: auto; padding: 0 30px; }
+  .app-download-meta, .app-download-help summary { text-align: left; justify-content: flex-start; }
+}

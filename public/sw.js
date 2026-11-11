@@ -42,6 +42,8 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
+  // App downloads are large and must always be the latest release: leave them to the browser.
+  if (url.pathname.startsWith("/download/")) return;
 
   // Built assets are content-hashed, so a cached copy is always correct.
   if (url.pathname.startsWith("/_next/static/")) {
