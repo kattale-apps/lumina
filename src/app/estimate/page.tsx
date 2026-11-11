@@ -217,9 +217,10 @@ function Estimator() {
         grid,
         optionKey: chosen,
         // Profile identity is authoritative for signed-in users; never trust editable client fields.
-        name: signedInProfile?.displayName ?? form.name,
-        phone: signedInProfile ? "" : form.phone,
-        email: signedInProfile?.email ?? (form.email || undefined),
+        // The server takes these from the account when signed in, so only send them otherwise.
+        name: hasCustomerAccount ? undefined : form.name,
+        phone: hasCustomerAccount ? undefined : form.phone,
+        email: hasCustomerAccount ? undefined : form.email || undefined,
         location: form.location,
         website: form.website || undefined
       });
@@ -417,8 +418,8 @@ function Estimator() {
                 <p className="hint">Your sign-in is active, but your customer account setup is incomplete. Please <Link href="/shop"><u>finish setting up your customer account</u></Link> before requesting a quotation.</p>
               ) : hasCustomerAccount ? (
                 <div className="signed-in-request">
-                  <strong>Requesting as {signedInProfile.displayName}</strong>
-                  {signedInProfile.email ? <p className="hint">{signedInProfile.email}</p> : null}
+                  <strong>Requesting as {customer.account!.name}</strong>
+                  {customer.email ? <p className="hint">{customer.email}</p> : null}
                   <p className="hint">Your account details will be used. You only need to provide the property's location.</p>
                   <label htmlFor="rq-loc">Where is the property? (town / area)</label>
                   <input id="rq-loc" required maxLength={200} autoComplete="address-level2" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />

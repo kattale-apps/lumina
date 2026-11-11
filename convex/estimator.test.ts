@@ -277,7 +277,7 @@ describe("public power check", () => {
 });
 
 describe("signed-in customer quote requests", () => {
-  test("uses the signed-in profile and customer account phone without asking for identity fields", async () => {
+  test("uses the customer account name and phone without asking for identity fields", async () => {
     const c = await setup();
     const customer = await registerUser(c.t, "amina@example.com");
     const customerProfile = await c.t.run(async (ctx) => {
@@ -298,7 +298,7 @@ describe("signed-in customer quote requests", () => {
     const rows = await c.t.run((ctx) => ctx.db.query("quoteRequests").collect());
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      name: "amina", phone: "+256 700 111222", email: "amina@example.com",
+      name: "Amina Customer", phone: "+256 700 111222", email: "amina@example.com",
       location: "Kampala, Ntinda", customerAccountId: expect.anything()
     });
   });
