@@ -1352,3 +1352,21 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 .user-card-body { display: grid; gap: 4px; min-width: 0; }
 .user-grant { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .user-grant select { min-height: 40px; padding: 0 10px; border: 1px solid #c9d6cf; border-radius: 10px; background: white; font: inherit; font-size: 14px; }
+
+/* Back to the home page from sign-in and sign-up */
+.auth-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin: -8px 0 14px -6px;
+  padding: 0 12px 0 8px;
+  border-radius: 999px;
+  color: var(--green);
+  font-size: 15px;
+  font-weight: 700;
+}
+.auth-home > span:first-child { font-size: 24px; line-height: 1; }
+.auth-home img { border-radius: 6px; mix-blend-mode: multiply; }
+.auth-home:hover { background: #eef7f2; }
+.auth-home:focus-visible { outline: 3px solid #26a269; outline-offset: 2px; }

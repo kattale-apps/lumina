@@ -4,6 +4,7 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { RememberLogin } from "@/components/RememberLogin";
 import { useSavedLogin, type SavedLogin } from "@/lib/savedLogin";
 import Link from "next/link";
+import { AuthHome } from "@/components/AuthHome";
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -160,6 +161,7 @@ export default function SignInPage() {
   return (
     <main className="auth-shell">
       <section className="auth-card">
+        <AuthHome />
         <p className="eyebrow">SOLAR SWITCH WORKSPACE</p>
         <h1>Welcome back</h1>
         <p>Sign in as staff or as a customer.</p>

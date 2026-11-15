@@ -4,6 +4,7 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { RememberLogin } from "@/components/RememberLogin";
 import { useSavedLogin } from "@/lib/savedLogin";
 import Link from "next/link";
+import { AuthHome } from "@/components/AuthHome";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -103,6 +104,7 @@ export default function SignUpPage() {
   return (
     <main className="auth-shell">
       <section className="auth-card">
+        <AuthHome />
         <p className="eyebrow">SOLAR SWITCH CUSTOMERS</p>
         <h1>Create your account</h1>
         <p>Sign up to see our full product catalogue and place orders.</p>
