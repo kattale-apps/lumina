@@ -1,7 +1,7 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
-import type { ExistingSystem, Goal, UpgradeNeeds } from "./describe";
+import { FAULTY_PART_LABEL, type ExistingSystem, type Goal, type UpgradeNeeds } from "./describe";
 
 type SystemType = ExistingSystem["systemType"];
 type Chemistry = "lithium" | "lead_acid" | "unknown";
@@ -42,7 +42,11 @@ export type UpgradeFormState = {
   backupLoadW: string;
   dailyKwh: string;
   peakLoadW: string;
+  faultyParts: FaultyPart[];
+  faultNote: string;
 };
+
+type FaultyPart = NonNullable<UpgradeNeeds["faultyParts"]>[number];
 
 export function blankUpgradeForm(): UpgradeFormState {
   return {
@@ -79,7 +83,9 @@ export function blankUpgradeForm(): UpgradeFormState {
     backupHours: "",
     backupLoadW: "",
     dailyKwh: "",
-    peakLoadW: ""
+    peakLoadW: "",
+    faultyParts: [],
+    faultNote: ""
   };
 }
 
@@ -164,6 +170,21 @@ export function toPayload(
     }
     if (f.goals.includes("panels")) needs.dailyKwh = maybe(f.dailyKwh, "Energy wanted from solar");
     if (f.goals.includes("inverter")) needs.peakLoadW = maybe(f.peakLoadW, "Most power at once");
+    if (f.goals.includes("repair")) {
+      // Only parts that are part of the system can be faulty.
+      const present: Record<FaultyPart, boolean> = {
+        inverter: f.hasInverter,
+        battery: f.hasBatteries,
+        panels: f.hasPanels,
+        controller: f.hasController
+      };
+      const parts = f.faultyParts.filter((p) => present[p]);
+      if (parts.length === 0) throw new FormProblem("Tick the part that is faulty or no longer works as well as it should.");
+      needs.faultyParts = parts;
+      const note = f.faultNote.trim();
+      if (note.length > 500) throw new FormProblem("Keep the description of the problem to 500 characters.");
+      if (note) needs.faultNote = note;
+    }
     return { ok: true, system: clean(system), needs: clean(needs) };
   } catch (e) {
     if (e instanceof FormProblem) return { ok: false, error: e.message };
@@ -176,6 +197,13 @@ function clean<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+const FAULTY_HINT: Record<FaultyPart, string> = {
+  inverter: "Beeps, trips, switches off or will not power the load.",
+  battery: "Do not last as long as before or no longer hold charge.",
+  panels: "Cracked, burnt, or making much less power than before.",
+  controller: "Stopped charging, or charging much less than before."
+};
+
 const SYSTEM_TYPES: { value: SystemType; label: string; hint: string }[] = [
   { value: "hybrid", label: "Hybrid", hint: "Solar and batteries, with grid power as well." },
   { value: "off_grid", label: "Off-grid", hint: "Solar and batteries, no grid connection." },
@@ -187,7 +215,8 @@ const GOALS: { value: Goal; label: string; hint: string }[] = [
   { value: "battery", label: "Longer backup", hint: "Add batteries or get a bigger bank." },
   { value: "panels", label: "More solar", hint: "Add panels to make more power." },
   { value: "inverter", label: "Run more at once", hint: "A bigger inverter or charge controller." },
-  { value: "swaps", label: "Cheaper or better parts", hint: "See what could replace what is there." }
+  { value: "swaps", label: "Cheaper or better parts", hint: "See what could replace what is there." },
+  { value: "repair", label: "Fix a faulty or worn-out part", hint: "Something is broken or no longer works as well." }
 ];
 
 function Num({
@@ -418,6 +447,40 @@ export function UpgradeForm({
         {f.goals.includes("panels") ? (
           <Num id="up-need-kwh" label="Energy wanted from solar each day" unit="kWh" value={f.dailyKwh} onChange={(v) => set("dailyKwh", v)} placeholder="e.g. 8"
             hint="One Yaka unit is 1 kWh. 150 units a month is about 5 kWh a day. Leave empty to see how many panels fit." />
+        ) : null}
+        {f.goals.includes("repair") ? (
+          <div className="upgrade-fault">
+            <p className="upgrade-fault-q">{you ? "Which part is giving trouble?" : "Which part is faulty?"} <span className="hint">Tick all that apply.</span></p>
+            <div className="choice-row">
+              {(Object.keys(FAULTY_PART_LABEL) as FaultyPart[]).map((part) => {
+                const present = { inverter: f.hasInverter, battery: f.hasBatteries, panels: f.hasPanels, controller: f.hasController }[part];
+                if (!present) return null;
+                const on = f.faultyParts.includes(part);
+                return (
+                  <button
+                    type="button"
+                    key={part}
+                    aria-pressed={on}
+                    className={`choice ${on ? "choice-on" : ""}`}
+                    onClick={() => set("faultyParts", on ? f.faultyParts.filter((p) => p !== part) : [...f.faultyParts, part])}
+                  >
+                    <strong>{on ? "✓ " : ""}{FAULTY_PART_LABEL[part]}</strong>
+                    <span>{FAULTY_HINT[part]}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <label htmlFor="up-fault-note">{you ? "What is wrong?" : "What is wrong with it?"} <span className="step-optional">Optional</span></label>
+            <textarea
+              id="up-fault-note"
+              rows={3}
+              maxLength={500}
+              placeholder="e.g. The batteries no longer last the night, or the inverter beeps and switches off."
+              value={f.faultNote}
+              onChange={(e) => set("faultNote", e.target.value)}
+            />
+            <p className="hint">A technician tests the part before anything is replaced, so you only pay for what has really failed.</p>
+          </div>
         ) : null}
         {f.goals.includes("inverter") ? (
           <Num id="up-need-peak" label="Most power running at the same time" unit="W" value={f.peakLoadW} onChange={(v) => set("peakLoadW", v)} placeholder="e.g. 3500"

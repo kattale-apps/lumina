@@ -26,8 +26,9 @@ import {
 export const UPGRADE_ENGINE_VERSION = "upgrade-1";
 
 export type Chemistry = "lithium" | "lead_acid" | "unknown";
-export type UpgradeGoal = "battery" | "panels" | "inverter" | "swaps";
-export const UPGRADE_GOALS: UpgradeGoal[] = ["battery", "panels", "inverter", "swaps"];
+export type UpgradeGoal = "battery" | "panels" | "inverter" | "swaps" | "repair";
+export const UPGRADE_GOALS: UpgradeGoal[] = ["battery", "panels", "inverter", "swaps", "repair"];
+export type FaultyPart = "battery" | "panels" | "inverter" | "controller";
 
 export type ExistingSystem = {
   systemType: SystemType;
@@ -78,6 +79,22 @@ export type UpgradeNeeds = {
   backupHours?: number;
   /** Load to carry during those backup hours. */
   backupLoadW?: number;
+  /** With the "repair" goal: the parts that are faulty or no longer work as well as they should. */
+  faultyParts?: FaultyPart[];
+  /** The owner's own words about what is wrong. */
+  faultNote?: string;
+};
+
+/** True when the owner reported this part as faulty or worn out. */
+export function isFaulty(needs: UpgradeNeeds, part: FaultyPart) {
+  return needs.goals.includes("repair") && (needs.faultyParts ?? []).includes(part);
+}
+
+const FAULTY_LABEL: Record<FaultyPart, string> = {
+  battery: "batteries",
+  panels: "panels",
+  inverter: "inverter",
+  controller: "charge controller"
 };
 
 export type UpgradeArea = "battery" | "panels" | "inverter" | "controller";
@@ -259,6 +276,20 @@ export function validateExisting(sys: ExistingSystem, needs: UpgradeNeeds): stri
     }
   }
   if (needs.goals.length === 0) return "Choose what the customer wants to improve.";
+  if (needs.goals.includes("repair")) {
+    const parts = needs.faultyParts ?? [];
+    if (parts.length === 0) return "Say which part is faulty or no longer works as well as it should.";
+    const present: Record<FaultyPart, boolean> = {
+      battery: Boolean(sys.batteries),
+      panels: Boolean(sys.panels),
+      inverter: Boolean(sys.inverter),
+      controller: Boolean(sys.controller)
+    };
+    for (const part of parts) {
+      if (!present[part]) return `The ${FAULTY_LABEL[part]} marked as faulty must be described above as part of the system.`;
+    }
+  }
+  if (needs.faultNote !== undefined && needs.faultNote.length > 500) return "Keep the description of the fault to 500 characters.";
   if (!within(needs.dailyKwh, 0, 100_000)) return "Daily energy must be above 0 kWh.";
   if (!within(needs.peakLoadW, 0, 10_000_000)) return "Peak load must be above 0 W.";
   if (!within(needs.backupHours, 0, 240)) return "Backup hours must be above 0 and at most 240.";
@@ -519,6 +550,11 @@ function batterySection(
   }
 
   const existing = sys.batteries;
+  if (isFaulty(needs, "battery")) {
+    section.messages.push(
+      "The existing batteries are reported faulty or no longer holding charge, so the bank should be replaced. New batteries should not be added to a failing bank: the weak ones drag the new ones down and shorten their life."
+    );
+  }
   const batteries = catalogue.filter((c) => c.categoryKey === "battery");
   if (batteries.length === 0) section.messages.push("There are no active batteries in the catalogue.");
 
@@ -571,7 +607,7 @@ function batterySection(
     };
 
     // Adding to the bank: only the same chemistry family can share a bank.
-    if (existing && current.batteryNominalWh > 0 && existing.chemistry !== "unknown" && family === existing.chemistry) {
+    if (existing && current.batteryNominalWh > 0 && existing.chemistry !== "unknown" && family === existing.chemistry && !isFaulty(needs, "battery")) {
       const shortWh = wantWh === null ? 0 : wantWh - current.batteryUsableWh;
       if (wantWh === null || shortWh > 0) {
         const strings = Math.max(1, Math.ceil(shortWh / usablePerString - 1e-9));
@@ -627,7 +663,8 @@ function batterySection(
 
     // Replacing the whole bank: sized to the backup target, or to match today's usable energy.
     const targetUsable = wantWh !== null ? Math.max(wantWh, 0) : current.batteryUsableWh;
-    const offerReplace = wantWh !== null ? wantWh > current.batteryUsableWh || needs.goals.includes("swaps") || !existing : needs.goals.includes("swaps") || !existing;
+    const replaceAnyway = needs.goals.includes("swaps") || isFaulty(needs, "battery") || !existing;
+    const offerReplace = wantWh !== null ? wantWh > current.batteryUsableWh || replaceAnyway : replaceAnyway;
     if (offerReplace) {
       const strings = Math.max(1, Math.ceil(targetUsable / usablePerString - 1e-9));
       const checks = [...common];
@@ -1224,7 +1261,7 @@ export function buildUpgradeReport(
     goals.has("panels") && (now.charger === null || (headroomWp !== null && (gapWp > headroomWp || headroomWp <= 0)));
 
   const battery =
-    goals.has("battery") || (goals.has("swaps") && sys.batteries)
+    goals.has("battery") || (goals.has("swaps") && sys.batteries) || isFaulty(needs, "battery")
       ? batterySection(sys, needs, a, catalogue, now.current, now.charger)
       : null;
 
@@ -1235,14 +1272,14 @@ export function buildUpgradeReport(
     usesController &&
     V !== undefined &&
     (sys.panels !== undefined || goals.has("panels")) &&
-    (controllerFull || pvShort || (sys.controller !== undefined && (goals.has("inverter") || goals.has("swaps"))))
+    (controllerFull || pvShort || (sys.controller !== undefined && (goals.has("inverter") || goals.has("swaps") || isFaulty(needs, "controller"))))
       ? controllerSection(sys, a, catalogue, now.current, Math.max(now.current.arrayWp, required.pvWp ?? 0, 1))
       : null;
 
   const overloaded = sys.inverter !== undefined && required.inverterW !== null && sys.inverter.ratedW < required.inverterW;
   const inverterIsCharger = now.charger?.source === "inverter";
   const inverter =
-    goals.has("inverter") || overloaded || (goals.has("swaps") && sys.inverter) || (pvShort && inverterIsCharger)
+    goals.has("inverter") || overloaded || (goals.has("swaps") && sys.inverter) || (pvShort && inverterIsCharger) || (sys.inverter && isFaulty(needs, "inverter"))
       ? inverterSection(sys, needs, a, catalogue, now.current, required.inverterW)
       : null;
 
@@ -1280,6 +1317,34 @@ export function buildUpgradeReport(
     panels = panelSection(sys, needs, a, catalogue, now.current, now.charger, required.pvWp, partner);
   }
 
+  if (isFaulty(needs, "panels") && sys.panels) {
+    const repair = faultyPanelSection(sys.panels, catalogue);
+    if (panels) {
+      panels.requirements.push(...repair.requirements);
+      panels.messages.push(...repair.messages);
+      panels.options.push(...repair.options);
+    } else {
+      panels = repair;
+    }
+  }
+  if (inverter && isFaulty(needs, "inverter")) {
+    inverter.messages.unshift("The existing inverter is reported faulty or no longer working well, so these options replace it at the same size or larger.");
+  }
+  if (controller && isFaulty(needs, "controller")) {
+    controller.messages.unshift("The existing charge controller is reported faulty or no longer working well, so these options replace it.");
+  }
+
+  const findings = [...now.findings];
+  if (goals.has("repair")) {
+    const parts = (needs.faultyParts ?? []).map((part) => FAULTY_LABEL[part]).join(", ");
+    findings.unshift({
+      id: "reported_fault",
+      label: "Reported fault",
+      state: "review",
+      detail: `The owner reports a problem with the ${parts}${needs.faultNote ? `: "${needs.faultNote}"` : "."} A technician should test it on site before anything is replaced.`
+    });
+  }
+
   const sections = [battery, panels, inverter, controller].filter((s): s is UpgradeSection => s !== null);
 
   return {
@@ -1287,9 +1352,63 @@ export function buildUpgradeReport(
     blockers: [],
     current: now.current,
     required,
-    findings: now.findings,
+    findings,
     sections
   };
+}
+
+/**
+ * Replacing faulty panels: new panels share strings with the old ones, so they must match
+ * them closely in power, voltage and current, or the whole string loses output.
+ */
+function faultyPanelSection(old: NonNullable<ExistingSystem["panels"]>, catalogue: CatalogueItem[]): UpgradeSection {
+  const section: UpgradeSection = { area: "panels", title: "Panels", requirements: [], messages: [], options: [], rejected: [] };
+  section.messages.push(
+    "Some panels are reported faulty or producing less than they should. A technician should test each panel to find the weak ones; only those need replacing."
+  );
+  section.requirements.push(`Replacements should be close to the existing ${old.wp} W panels, so the strings stay matched.`);
+  if (old.vmp !== undefined) section.requirements.push(`Voltage at maximum power within about 5% of ${old.vmp} V.`);
+  if (old.voc !== undefined) section.requirements.push(`Open-circuit voltage within about 5% of ${old.voc} V.`);
+  if (old.isc !== undefined) section.requirements.push(`A similar current (about ${old.isc} A): a weaker panel pulls the whole string down.`);
+  const close = (mine: number | undefined, theirs: number | undefined) =>
+    mine === undefined || theirs === undefined ? null : Math.abs(mine - theirs) / theirs <= STRING_MATCH_TOLERANCE;
+  for (const panel of catalogue.filter((c) => c.categoryKey === "pv_panel")) {
+    const wp = num(panel, "rated_power");
+    if (wp === undefined) continue;
+    if (Math.abs(wp - old.wp) / old.wp > 0.15) {
+      if (section.rejected.length < MAX_REJECTED) section.rejected.push(`${panel.sku} (${wp} W) is too different from the existing ${old.wp} W panels.`);
+      continue;
+    }
+    const checks: Check[] = [];
+    const pairs: [string, string, number | undefined, number | undefined][] = [
+      ["panel_vmp", "Voltage at maximum power", num(panel, "vmp"), old.vmp],
+      ["panel_voc", "Open-circuit voltage", num(panel, "voc"), old.voc]
+    ];
+    for (const [id, label, mine, theirs] of pairs) {
+      const ok = close(mine, theirs);
+      checks.push(
+        ok === null
+          ? { id, label, state: "review", detail: "Not known for both panels, so a technician must compare them." }
+          : ok
+            ? { id, label, state: "pass", detail: `${mine} V against the existing ${theirs} V.` }
+            : { id, label, state: "fail", detail: `${mine} V is too far from the existing ${theirs} V for the same string.` }
+      );
+    }
+    section.options.push({
+      key: `panels:replace:${panel.id}`,
+      area: "panels",
+      action: "replace",
+      productId: panel.id,
+      quantity: 1,
+      title: `Replace faulty panels with ${panel.name}`,
+      summary: `${wp} W each, against the existing ${old.wp} W. Priced per panel; the technician confirms how many have failed.`,
+      figures: { wp },
+      checks,
+      status: statusOf(checks)
+    });
+  }
+  if (section.options.length === 0) section.messages.push("No panel in the catalogue is close enough to the existing ones; a technician will source a match.");
+  return finish(section);
 }
 
 /** Every option in a report, for looking one up by key. */

@@ -308,3 +308,53 @@ describe("determinism", () => {
     );
   });
 });
+
+describe("faulty or worn-out parts", () => {
+  const repair = (parts: NonNullable<UpgradeNeeds["faultyParts"]>, note?: string): UpgradeNeeds => ({
+    goals: ["repair"], faultyParts: parts, faultNote: note
+  });
+
+  test("the faulty part must be named and must be part of the system", () => {
+    expect(validateExisting(home, { goals: ["repair"] })).toMatch(/which part/);
+    const noController = { ...home, controller: undefined, inverter: { ...home.inverter!, hasSolarInput: true } };
+    expect(validateExisting(noController, repair(["controller"]))).toMatch(/charge controller/);
+    expect(validateExisting(home, repair(["battery"], "x".repeat(501)))).toMatch(/500/);
+    expect(validateExisting(home, repair(["battery"]))).toBeNull();
+  });
+
+  test("faulty batteries are replaced, never topped up, and the report says why", () => {
+    const report = buildUpgradeReport(home, repair(["battery"], "They no longer last the night"), a, catalogue);
+    const battery = report.sections.find((s) => s.area === "battery")!;
+    expect(battery.options.length).toBeGreaterThan(0);
+    expect(battery.options.every((o) => o.action === "replace")).toBe(true);
+    expect(battery.messages.join(" ")).toMatch(/should not be added to a failing bank/);
+    expect(report.findings[0]).toMatchObject({ id: "reported_fault", state: "review" });
+    expect(report.findings[0].detail).toContain("They no longer last the night");
+    // Only the faulty part is looked at.
+    expect(report.sections.map((s) => s.area)).toEqual(["battery"]);
+  });
+
+  test("a faulty inverter gets like-for-like or larger replacements", () => {
+    const report = buildUpgradeReport(home, repair(["inverter"]), a, catalogue);
+    const inverter = report.sections.find((s) => s.area === "inverter")!;
+    expect(inverter.messages[0]).toMatch(/reported faulty/);
+    expect(optionsOf(report).some((o) => o.area === "inverter" && o.action === "replace")).toBe(true);
+  });
+
+  test("a faulty controller brings in controller replacements", () => {
+    const report = buildUpgradeReport(home, repair(["controller"]), a, catalogue);
+    expect(report.sections.map((s) => s.area)).toContain("controller");
+    expect(report.sections.find((s) => s.area === "controller")!.messages[0]).toMatch(/reported faulty/);
+  });
+
+  test("faulty panels are matched to the existing ones so the strings stay balanced", () => {
+    const report = buildUpgradeReport(home, repair(["panels"]), a, catalogue);
+    const panels = report.sections.find((s) => s.area === "panels")!;
+    const keys = panels.options.map((o) => o.key);
+    // 330 W panels match; 550 W panels are too different to share a string.
+    expect(keys).toContain("panels:replace:pv330");
+    expect(keys).not.toContain("panels:replace:pv550");
+    expect(panels.options[0].status).toBe("compatible");
+    expect(panels.requirements.join(" ")).toMatch(/37.6 V/);
+  });
+});

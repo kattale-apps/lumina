@@ -16,7 +16,15 @@ export const GOAL_LABEL: Record<Goal, string> = {
   battery: "Longer backup",
   panels: "More solar",
   inverter: "More power at once",
-  swaps: "Cheaper or better parts"
+  swaps: "Cheaper or better parts",
+  repair: "Fix a faulty or worn-out part"
+};
+
+export const FAULTY_PART_LABEL: Record<NonNullable<UpgradeNeeds["faultyParts"]>[number], string> = {
+  inverter: "Inverter",
+  battery: "Batteries",
+  panels: "Panels",
+  controller: "Charge controller"
 };
 
 const CHEMISTRY_LABEL = { lithium: "lithium", lead_acid: "lead-acid", unknown: "chemistry not known" } as const;
@@ -76,5 +84,9 @@ export function describeNeeds(needs: UpgradeNeeds): string[] {
   }
   if (needs.dailyKwh !== undefined) lines.push(`Solar energy wanted: ${needs.dailyKwh} kWh a day`);
   if (needs.peakLoadW !== undefined) lines.push(`Most power at once: ${needs.peakLoadW} W`);
+  if (needs.faultyParts?.length) {
+    lines.push(`Faulty or worn out: ${needs.faultyParts.map((p) => FAULTY_PART_LABEL[p].toLowerCase()).join(", ")}`);
+  }
+  if (needs.faultNote) lines.push(`What is wrong: ${needs.faultNote}`);
   return lines;
 }

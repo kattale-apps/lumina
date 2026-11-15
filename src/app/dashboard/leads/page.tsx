@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -18,6 +18,18 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
   const convertUpgrade = useMutation(api.leads.convertUpgradeLead);
   const close = useMutation(api.leads.closeLead);
   const [error, setError] = useState<string | null>(null);
+  // Power check requests and upgrade requests are separate lists; ?type=upgrade opens the second.
+  const [tab, setTab] = useState<"power" | "upgrade">("power");
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("type") === "upgrade") setTab("upgrade");
+  }, []);
+  function choose(next: "power" | "upgrade") {
+    setTab(next);
+    const url = new URL(window.location.href);
+    if (next === "upgrade") url.searchParams.set("type", "upgrade");
+    else url.searchParams.delete("type");
+    window.history.replaceState(null, "", url);
+  }
   const inbox = useQuery(api.inbox.myInbox, {});
   useMarkSeen("staff", data !== undefined, inbox?.staff);
 
@@ -32,17 +44,43 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
     }
   }
 
+  const powerChecks = data.leads.filter((l) => !l.isUpgrade);
+  const upgrades = data.leads.filter((l) => l.isUpgrade);
+  const shown = tab === "upgrade" ? upgrades : powerChecks;
+  const fresh = (list: typeof data.leads) => list.filter((l) => l.status === "new").length;
+
   return (
     <section className="workspace-section">
-      <h2>Quote requests ({data.leads.length})</h2>
+      <div className="lead-tabs" role="tablist" aria-label="Kind of request">
+        {([
+          ["power", "Power check requests", powerChecks],
+          ["upgrade", "System upgrade requests", upgrades]
+        ] as const).map(([key, label, list]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            className={tab === key ? `lead-tab lead-tab-on lead-tab-${key}` : `lead-tab lead-tab-${key}`}
+            onClick={() => choose(key)}
+          >
+            <span>{label}</span>
+            <span className="lead-tab-counts">
+              {list.length}
+              {fresh(list) ? <span className="nav-count" aria-label={`${fresh(list)} new`}>{fresh(list)} new</span> : null}
+            </span>
+          </button>
+        ))}
+      </div>
       <p className="hint">
-        These come from the public power check. Open one to see the customer's full power needs and send them a
-        recommendation with options, prices and photos.
+        {tab === "upgrade"
+          ? "From people who already have solar and want to extend it, or fix or replace a faulty part. Open one to see their system, what they want and the upgrade check."
+          : "From the public power check, by people who want a new system. Open one to see the customer's full power needs and send them a recommendation with options, prices and photos."}
       </p>
       {error ? <p className="auth-message" role="alert">{error}</p> : null}
-      {data.leads.length === 0 ? <p className="muted">No requests yet.</p> : null}
+      {shown.length === 0 ? <p className="muted">{tab === "upgrade" ? "No upgrade requests yet." : "No power check requests yet."}</p> : null}
       <ul className="record-list">
-        {data.leads.map((l) => (
+        {shown.map((l) => (
           <li key={l.id}>
             <div className="record-card">
               <div>
@@ -52,7 +90,11 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
                   {l.costPerMonthMinor !== null ? ` · ${currency} ${l.costPerMonthMinor.toLocaleString("en-US")}/month` : ""}
                 </span>
                 <span className="record-meta">
-                  {l.isUpgrade ? (
+                  {l.isRepair ? (
+                    <span className="pill pill-bad">
+                      Faulty or worn out: {l.faultyParts.map((p) => ({ battery: "batteries", panels: "panels", inverter: "inverter", controller: "charge controller" })[p]).join(", ")}
+                    </span>
+                  ) : l.isUpgrade ? (
                     <span className="pill pill-warn">Wants to upgrade an existing system</span>
                   ) : l.isRecommendation ? (
                     <span className="pill pill-warn">Needs a system recommendation and quotation</span>

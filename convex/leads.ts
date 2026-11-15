@@ -58,6 +58,9 @@ export const listLeads = query({
         optionTitle: r.optionTitle,
         isRecommendation: r.optionKey === "recommendation",
         isUpgrade: r.inputMode === "existing_system",
+        // Something in the existing system is faulty or worn out.
+        isRepair: r.upgrade?.needs.goals.includes("repair") ?? false,
+        faultyParts: r.upgrade?.needs.faultyParts ?? [],
         upgradeStudyId: r.upgradeStudyId ?? null,
         components: r.components,
         assignedTo: r.assignedToUserId ? names.get(r.assignedToUserId) ?? null : null,

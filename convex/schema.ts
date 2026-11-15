@@ -164,12 +164,17 @@ export const existingSystem = v.object({
 /** What the owner of an existing system wants from an upgrade. */
 export const upgradeNeeds = v.object({
   goals: v.array(
-    v.union(v.literal("battery"), v.literal("panels"), v.literal("inverter"), v.literal("swaps"))
+    v.union(v.literal("battery"), v.literal("panels"), v.literal("inverter"), v.literal("swaps"), v.literal("repair"))
   ),
   dailyKwh: v.optional(v.number()),
   peakLoadW: v.optional(v.number()),
   backupHours: v.optional(v.number()),
-  backupLoadW: v.optional(v.number())
+  backupLoadW: v.optional(v.number()),
+  // "repair": the parts that are faulty or no longer work as well, and the owner's description.
+  faultyParts: v.optional(
+    v.array(v.union(v.literal("battery"), v.literal("panels"), v.literal("inverter"), v.literal("controller")))
+  ),
+  faultNote: v.optional(v.string())
 });
 
 /** One lesson of a Sales Academy module. `body` is plain text with simple headings and bullets. */

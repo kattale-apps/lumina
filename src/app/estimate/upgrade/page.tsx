@@ -178,7 +178,6 @@ function UpgradeCheck() {
 
   return (
     <Shell>
-      <p className="eyebrow">{config.companyName.toUpperCase()}</p>
       <h1>Already have solar? Check your upgrade</h1>
       <p className="muted">
         Tell us what is installed and what you want from it. We work out what your system can take, such as the battery

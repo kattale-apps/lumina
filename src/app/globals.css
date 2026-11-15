@@ -1370,3 +1370,33 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 .auth-home img { border-radius: 6px; mix-blend-mode: multiply; }
 .auth-home:hover { background: #eef7f2; }
 .auth-home:focus-visible { outline: 3px solid #26a269; outline-offset: 2px; }
+
+/* Quote requests: power check and upgrade requests in separate tabs */
+.lead-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.lead-tab {
+  display: grid;
+  gap: 4px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.lead-tab-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--muted); font-size: 20px; font-weight: 800; }
+.lead-tab-counts .nav-count { margin-left: 0; font-size: 11px; }
+.lead-tab-power.lead-tab-on { border-color: #1f8a52; background: #eef8f1; }
+.lead-tab-upgrade.lead-tab-on { border-color: #6d45b0; background: #f4f0fb; }
+.lead-tab:focus-visible { outline: 3px solid #26a269; outline-offset: 2px; }
+
+/* Upgrade check: which part is faulty */
+.upgrade-fault { display: grid; gap: 8px; margin-top: 10px; padding: 14px; border: 1px solid #f3dfb4; border-radius: 12px; background: #fffaf0; }
+.upgrade-fault-q { margin: 0; font-weight: 700; }
+.upgrade-fault label { font-size: 14px; font-weight: 700; }
+.upgrade-fault textarea { min-height: 80px; padding: 10px 14px; border: 1px solid #c9d6cf; border-radius: 10px; background: white; font: inherit; font-size: 16px; resize: vertical; }
+.pill-bad { background: #fdecea; color: #8a1c13; }
