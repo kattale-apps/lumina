@@ -46,7 +46,17 @@ function Certificate({ tenantId }: { tenantId: Id<"tenants"> }) {
       // The QR code opens this certificate on the website, so anyone can check it is genuine.
       const code = c.verifyCode ?? (await link({ tenantId })).code;
       const verifyUrl = `${window.location.origin}/verify/${code}`;
-      const bytes = await buildCertificatePdf({ academyName: data.academyName, ...c, photo, verifyUrl });
+      // The Solar Switch logo, cut out, for the header, seal and tiled background.
+      const asset = async (path: string) => {
+        try {
+          const res = await fetch(path);
+          return res.ok ? new Uint8Array(await res.arrayBuffer()) : null;
+        } catch {
+          return null;
+        }
+      };
+      const [logo, tileLogo] = await Promise.all([asset("/certificate/logo-navy.png"), asset("/certificate/logo-ink.png")]);
+      const bytes = await buildCertificatePdf({ academyName: data.academyName, ...c, photo, verifyUrl, logo, tileLogo });
       await savePdf(bytes, `sales-academy-certificate-${c.number}.pdf`, `${data.academyName} certificate`);
     } catch (e) {
       setError(e instanceof AppUpdateNeeded ? e.message : "We could not create the PDF. Please try again.");
