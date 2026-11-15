@@ -274,6 +274,9 @@ function Estimator() {
         Answer a few questions to see what you use and spend today, and the solar options that could fit.
         It takes about two minutes.
       </p>
+      <p className="hint">
+        Already have solar and want more from it? <Link href="/estimate/upgrade"><u>Check what your system can take</u></Link>.
+      </p>
 
       <form className="panel-form estimate-form" onSubmit={calculate}>
         <section className="step step-1" aria-labelledby="q1">

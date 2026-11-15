@@ -106,6 +106,8 @@ export const getLead = query({
       autonomyDays: lead.autonomyDays ?? null,
       optionTitle: lead.optionTitle,
       isRecommendation: lead.optionKey === "recommendation",
+      isUpgrade: lead.inputMode === "existing_system",
+      upgradeStudyId: lead.upgradeStudyId ?? null,
       components: lead.components,
       dailyKwh: lead.dailyKwh,
       costPerMonthMinor: lead.costPerMonthMinor ?? null,
@@ -364,6 +366,7 @@ export const myRequests = query({
         createdAt: r.createdAt,
         location: r.location,
         dailyKwh: r.dailyKwh,
+        isUpgrade: r.inputMode === "existing_system",
         gridAvailability: r.gridAvailability,
         closed: r.status === "closed",
         // Drafts stay private to staff.

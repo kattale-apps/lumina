@@ -31,8 +31,8 @@ const MAX_ITEMS = 40;
 export const RECOMMENDATION_KEY = "recommendation";
 const MAX_NAME = 60;
 const MAX_APPLIANCE_W = 50_000;
-const MAX_REQUESTS_PER_PHONE_PER_DAY = 3;
-const MAX_REQUESTS_PER_HOUR = 300;
+export const MAX_REQUESTS_PER_PHONE_PER_DAY = 3;
+export const MAX_REQUESTS_PER_HOUR = 300;
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 
@@ -76,7 +76,7 @@ const estimateInput = v.union(
 type EstimateInput = typeof estimateInput.type;
 
 /** The one company that has switched the public power check on, with its settings. */
-async function publicCompany(ctx: QueryCtx) {
+export async function publicCompany(ctx: QueryCtx) {
   const settings = await ctx.db
     .query("publicEstimatorSettings")
     .withIndex("by_enabled", (q) => q.eq("enabled", true))
@@ -387,7 +387,7 @@ export const submitRequest = mutation({
 });
 
 /** 128 random bits as hex. Convex seeds the generator per call, so clients cannot predict it. */
-function newClaimToken() {
+export function newClaimToken() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");

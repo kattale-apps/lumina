@@ -41,7 +41,7 @@ function Request({ r, mine, contactPhone }: { r: Mine["requests"][number]; mine:
 
   return (
     <article className="my-request">
-      <p className="my-request-meta">{when} · {r.location} · {r.dailyKwh} kWh a day</p>
+      <p className="my-request-meta">{when} · {r.location} · {r.isUpgrade ? "upgrade of your solar system" : `${r.dailyKwh} kWh a day`}</p>
       {!r.response ? (
         <div className="my-request-waiting">
           <strong>⏳ A technician is reviewing your needs</strong>

@@ -27,6 +27,9 @@ export default function HomePage() {
               Check my power needs
             </Link>
             <p className="landing-secondary">
+              Already have solar? <Link href="/estimate/upgrade">Check what you can add to it</Link>
+            </p>
+            <p className="landing-secondary">
               Want to see our products and order? <Link href="/sign-up">Create an account</Link>
             </p>
           </div>

@@ -9,6 +9,8 @@ import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { CompanyPage, ConfiguredOnly, errorMessage } from "../../workspace";
 import { shrinkImage } from "@/lib/shrinkImage";
+import { describeNeeds, describeSystem } from "../../../estimate/upgrade/describe";
+import { UpgradeReport } from "../../../estimate/upgrade/UpgradeReport";
 
 type Lead = FunctionReturnType<typeof api.responses.getLead>;
 type EditOption = {
@@ -82,6 +84,8 @@ function Specs({ lead }: { lead: Lead }) {
         </p>
       </section>
 
+      {lead.isUpgrade ? <UpgradeSpecs lead={lead} /> : (
+      <>
       <section className="lead-block">
         <h2>What they need</h2>
         <div className="lead-tiles">
@@ -130,6 +134,46 @@ function Specs({ lead }: { lead: Lead }) {
         </ul>
         <p className="hint">Rule of thumb only: 4.5 sun hours, 75% efficiency, batteries used to 80%. Confirm on site before quoting.</p>
       </section>
+      </>
+      )}
+    </>
+  );
+}
+
+/** A request to upgrade an existing system: what they described, and what the upgrade check makes of it. */
+function UpgradeSpecs({ lead }: { lead: Lead }) {
+  const study = useQuery(api.upgrades.forLead, { leadId: lead.id });
+  return (
+    <>
+      <section className="lead-block">
+        <h2>Their existing system</h2>
+        {study === undefined ? <p className="muted">Loading…</p> : null}
+        {study ? (
+          <ul className="upgrade-summary">
+            {[...describeSystem(study.system), ...describeNeeds(study.needs)].map((line) => <li key={line}>{line}</li>)}
+          </ul>
+        ) : null}
+        <dl className="lead-facts">
+          <div><dt>Grid</dt><dd>{GRID[lead.gridAvailability]}</dd></div>
+          <div>
+            <dt>Asked about</dt>
+            <dd>{lead.components.length ? lead.components.map((c) => `${c.quantity} × ${c.name}`).join(", ") : "A recommendation"}</dd>
+          </div>
+        </dl>
+        <p className="hint">
+          These ratings are the customer&apos;s own and have not been inspected. Check the nameplates on a call or site visit before quoting.
+        </p>
+        {lead.upgradeStudyId ? (
+          <Link className="button button-small" href={`/dashboard/upgrades/${lead.upgradeStudyId}`}>Open the upgrade study</Link>
+        ) : (
+          <p className="hint">Convert this request from the request list to save it as an upgrade study and build a quotation.</p>
+        )}
+      </section>
+      {study ? (
+        <section className="estimate-results">
+          <UpgradeReport report={study.report} />
+        </section>
+      ) : null}
     </>
   );
 }

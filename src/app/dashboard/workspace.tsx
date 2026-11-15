@@ -80,6 +80,7 @@ export function WorkspaceHeader({ role }: { role?: string }) {
     { href: "/dashboard/orders", label: "Orders", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" },
     { href: "/dashboard/customers", label: "Customers", show: crm },
     { href: "/dashboard/assessments", label: "Assessments", show: crm },
+    { href: "/dashboard/upgrades", label: "Upgrade checks", show: crm },
     { href: "/dashboard/quotations", label: "Quotations", show: crm },
     { href: "/dashboard/installations", label: "Installations", show: crm },
     { href: "/dashboard/commissions", label: "Commissions", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" },
@@ -94,6 +95,7 @@ export function WorkspaceHeader({ role }: { role?: string }) {
       label: "Pricing",
       show: role === "super_admin" || role === "inventory_admin"
     },
+    { href: "/dashboard/academy", label: "Academy", show: true },
     { href: "/dashboard/staff", label: "Staff", show: role === "super_admin" },
     { href: "/dashboard/settings", label: "Settings", show: role === "super_admin" }
   ];

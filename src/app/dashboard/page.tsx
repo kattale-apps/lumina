@@ -119,6 +119,12 @@ function Workspace() {
                 </Link>
               </li>
               <li>
+                <Link className="module-card module-link" href="/dashboard/upgrades">
+                  <h3>Upgrade checks</h3>
+                  <span className="module-state">What an existing solar system can take</span>
+                </Link>
+              </li>
+              <li>
                 <Link className="module-card module-link" href="/dashboard/appliances">
                   <h3>Appliance library</h3>
                   <span className="module-state">Typical loads to start from</span>
@@ -127,6 +133,18 @@ function Workspace() {
             </ul>
           </section>
         ) : null}
+
+        <section aria-labelledby="training-heading" className="workspace-section">
+          <h2 id="training-heading">Training</h2>
+          <ul className="module-grid">
+            <li>
+              <Link className="module-card module-link" href="/dashboard/academy">
+                <h3>Solar Switch Sales Academy</h3>
+                <span className="module-state">Four modules, a quiz each, and your certificate</span>
+              </Link>
+            </li>
+          </ul>
+        </section>
 
         <section aria-labelledby="manage-heading" className="workspace-section">
           <h2 id="manage-heading">Company setup</h2>

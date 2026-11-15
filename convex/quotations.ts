@@ -27,6 +27,7 @@ import {
 } from "./lib/quote";
 import { buildQuotePdf, type QuotePdfData } from "./lib/quotePdf";
 import { activeReserved, getBalance } from "./lib/stock";
+import { optionsOf, type UpgradeReport } from "./lib/upgrade";
 import { requireText } from "./lib/validation";
 import { quotationLine } from "./schema";
 import type { Infer } from "convex/values";
@@ -75,14 +76,38 @@ async function getRevision(ctx: Ctx, quotationId: Id<"quotations">, revision: nu
   return rev;
 }
 
+/**
+ * The technical basis of a quotation and whether it still holds. A quotation is
+ * built either on a sizing configuration or on an upgrade study of an existing
+ * system. For an upgrade study the one open item is the technician's recorded
+ * verification of the ratings that were typed in.
+ */
 async function sizingState(ctx: Ctx, quotation: Doc<"quotations">) {
-  const run = await ctx.db.get(quotation.sizingRunId);
-  const assessment = await ctx.db.get(quotation.assessmentId);
+  if (quotation.upgradeStudyId) {
+    const study = await ctx.db.get(quotation.upgradeStudyId);
+    if (!study) throw new ConvexError("The upgrade study for this quotation is missing.");
+    const chosen = new Set(quotation.upgradeOptionKeys ?? []);
+    const options = optionsOf(study.report as UpgradeReport).filter((o) => chosen.has(o.key));
+    const status =
+      options.length === 0 || options.some((o) => o.status === "incompatible")
+        ? "incompatible"
+        : options.some((o) => o.status === "requires_review")
+          ? "requires_review"
+          : "compatible";
+    return {
+      basis: "upgrade" as const,
+      candidate: { status } as { status: string } | undefined,
+      stale: false,
+      openReviews: study.verification ? 0 : 1
+    };
+  }
+  const run = quotation.sizingRunId ? await ctx.db.get(quotation.sizingRunId) : null;
+  const assessment = quotation.assessmentId ? await ctx.db.get(quotation.assessmentId) : null;
   if (!run || !assessment) throw new ConvexError("The sizing for this quotation is missing.");
   const outcome = run.outcome as {
     candidates: { status: string; checks: { id: string; state: string }[] }[];
   };
-  const candidate = outcome.candidates[quotation.candidateIndex];
+  const candidate = outcome.candidates[quotation.candidateIndex ?? -1];
   const resolutions = await ctx.db
     .query("sizingResolutions")
     .withIndex("by_run", (q) => q.eq("runId", run._id))
@@ -93,8 +118,8 @@ async function sizingState(ctx: Ctx, quotation: Doc<"quotations">) {
       !resolutions.some((r) => r.candidateIndex === quotation.candidateIndex && r.checkId === c.id)
   ).length;
   return {
-    run,
-    candidate,
+    basis: "sizing" as const,
+    candidate: candidate as { status: string } | undefined,
     stale: run.assessmentRevision !== assessment.currentRevision,
     openReviews
   };
@@ -184,7 +209,7 @@ async function writeRevision(
 ) {
   validateLineInputs(body.lines);
   const totals = computeTotals(body.lines, body.taxBps);
-  const run = await ctx.db.get(quotation.sizingRunId);
+  const run = quotation.sizingRunId ? await ctx.db.get(quotation.sizingRunId) : null;
   await ctx.db.insert("quotationRevisions", {
     tenantId: quotation.tenantId,
     quotationId: quotation._id,
@@ -304,6 +329,80 @@ export const createQuotation = mutation({
       entityType: "quotations",
       entityId: quotationId,
       summary: "Quotation created from a sizing configuration."
+    });
+    return { quotationId };
+  }
+});
+
+/**
+ * Starts a quotation from options chosen on an upgrade study. It then follows
+ * the normal workflow: illustrative until a technician has verified the
+ * existing system and approved the revision.
+ */
+export const createFromUpgradeStudy = mutation({
+  args: {
+    studyId: v.id("upgradeStudies"),
+    optionKeys: v.array(v.string()),
+    validityDays: v.optional(v.number()),
+    taxBps: v.optional(v.number())
+  },
+  handler: async (ctx, args) => {
+    const study = await ctx.db.get(args.studyId);
+    if (!study) throw new ConvexError("Upgrade study not found.");
+    const { profile, membership } = await requireTenantMembership(ctx, study.tenantId, CRM_WRITERS);
+    if (!canAccessOwned(membership.role, profile, study.ownerUserId)) {
+      throw new ConvexError("Upgrade study not found.");
+    }
+    const keys = [...new Set(args.optionKeys)];
+    if (keys.length === 0) throw new ConvexError("Choose at least one option to quote.");
+    const all = new Map(optionsOf(study.report as UpgradeReport).map((o) => [o.key, o]));
+    const areas = new Set<string>();
+    const inputs: LineInput[] = [];
+    for (const key of keys) {
+      const option = all.get(key);
+      if (!option) throw new ConvexError("That option is not part of this study.");
+      if (option.status === "incompatible") throw new ConvexError(`"${option.title}" has a technical blocker.`);
+      if (areas.has(option.area)) {
+        throw new ConvexError("Choose one option for each part of the system (batteries, panels, inverter, controller).");
+      }
+      areas.add(option.area);
+      if (option.requires && !keys.includes(option.requires)) {
+        const partner = all.get(option.requires);
+        throw new ConvexError(`"${option.title}" only works together with "${partner?.title ?? "its partner option"}". Choose both.`);
+      }
+      inputs.push({ kind: "product", productId: option.productId as Id<"products">, quantity: option.quantity });
+    }
+
+    const taxBps = args.taxBps ?? 0;
+    const validityDays = args.validityDays ?? 14;
+    validateTerms({ taxBps, validityDays });
+    const { lines, currency } = await buildLines(ctx, study.tenantId, inputs);
+
+    const now = Date.now();
+    const quotationId = await ctx.db.insert("quotations", {
+      tenantId: study.tenantId,
+      customerId: study.customerId,
+      siteId: study.siteId,
+      upgradeStudyId: study._id,
+      upgradeOptionKeys: keys,
+      ownerUserId: study.ownerUserId,
+      status: "draft",
+      currentRevision: 1,
+      createdAt: now,
+      createdBy: profile.authSubject,
+      updatedAt: now
+    });
+    const quotation = (await ctx.db.get(quotationId))!;
+    await writeRevision(ctx, quotation, 1, {
+      lines, currency, taxBps, validityDays, createdBy: profile.authSubject, reason: "Created from an upgrade study"
+    });
+    await recordAudit(ctx, profile, {
+      tenantId: study.tenantId,
+      action: "quotation.created",
+      entityType: "quotations",
+      entityId: quotationId,
+      summary: "Quotation created from an upgrade study of an existing system.",
+      metadata: { upgradeStudyId: study._id, optionKeys: keys }
     });
     return { quotationId };
   }
@@ -432,7 +531,9 @@ export const decideTechnical = mutation({
       }
       if (sizing.openReviews > 0) {
         throw new ConvexError(
-          `${sizing.openReviews} sizing check(s) still need a recorded resolution before this can be approved.`
+          sizing.basis === "upgrade"
+            ? "Record that the existing system's ratings were verified, on the upgrade study, before approving."
+            : `${sizing.openReviews} sizing check(s) still need a recorded resolution before this can be approved.`
         );
       }
       next = revision.requiresCommercialApproval ? "pending_commercial_approval" : "ready_for_official_issue";
@@ -688,7 +789,9 @@ async function pdfData(ctx: Ctx, quotation: Doc<"quotations">, revision: Doc<"qu
   const customer = await ctx.db.get(quotation.customerId);
   const site = await ctx.db.get(quotation.siteId);
   const notes = [
-    `Based on assessment revision ${revision.assessmentRevision}; system sizing is indicative until a technician has reviewed it.`
+    quotation.upgradeStudyId
+      ? "Based on an upgrade study of the existing system, using the ratings reported for it; suitability is indicative until a technician has verified them."
+      : `Based on assessment revision ${revision.assessmentRevision}; system sizing is indicative until a technician has reviewed it.`
   ];
   if (revision.customTerms) notes.push(`Terms: ${revision.customTerms}`);
   if (mode === "illustrative") notes.push("Prices, availability and terms are subject to verification and may change.");
@@ -876,7 +979,8 @@ export const getQuotation = query({
         validUntil: quotation.validUntil ?? null,
         customerName: customer?.name ?? "",
         siteName: site?.name ?? "",
-        assessmentId: quotation.assessmentId
+        assessmentId: quotation.assessmentId ?? null,
+        upgradeStudyId: quotation.upgradeStudyId ?? null
       },
       shown: {
         revision: shown.revision,
@@ -915,6 +1019,7 @@ export const getQuotation = query({
         outcome: r.outcome, reason: r.reason, createdAt: r.createdAt
       })),
       sizing: {
+        basis: sizing.basis,
         stale: sizing.stale,
         openReviews: sizing.openReviews,
         candidateStatus: sizing.candidate?.status ?? null
