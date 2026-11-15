@@ -225,10 +225,11 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
   });
 
   // Photo, top left.
+  // The photo (top left) and the QR code (top right) share one size and one top and base line.
+  const size = 104;
+  const top = H - 62;
   if (photo) {
-    const size = 104;
     const x = 66;
-    const top = H - 62;
     page.drawRectangle({ x: x - 4, y: top - size - 4, width: size + 8, height: size + 8, color: GOLD });
     page.drawRectangle({ x: x - 1, y: top - size - 1, width: size + 2, height: size + 2, color: WHITE });
     // Fill the square frame, cropping the longer side evenly, clipped to the frame.
@@ -240,16 +241,19 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
     page.pushOperators(popGraphicsState());
   }
 
-  // Certificate number and QR code, top right.
-  const right = W - 118;
-  spaced(page, "CERTIFICATE NO.", right, H - 100, 8.5, f.helvB, GOLD, 1.5, "center");
-  spaced(page, data.number, right, H - 120, 14, f.timesB, NAVY, 1, "center");
+  // QR code in a matching gold frame, mirroring the photo; the certificate number sits below it.
+  const qrX = W - 66 - size;
+  const right = qrX + size / 2;
+  let below = top - size - 4;
   if (data.verifyUrl) {
-    const qrSize = 68;
-    drawQrCode(page, data.verifyUrl, right - qrSize / 2, H - 208, qrSize, NAVY);
+    page.drawRectangle({ x: qrX - 4, y: top - size - 4, width: size + 8, height: size + 8, color: GOLD });
+    drawQrCode(page, data.verifyUrl, qrX, top - size, size, NAVY);
     const scan = "Scan to verify";
-    page.drawText(scan, { x: right - f.helv.widthOfTextAtSize(scan, 7.5) / 2, y: H - 218, size: 7.5, font: f.helv, color: MUTED });
+    below -= 12;
+    page.drawText(scan, { x: right - f.helv.widthOfTextAtSize(scan, 7.5) / 2, y: below, size: 7.5, font: f.helv, color: MUTED });
   }
+  spaced(page, "CERTIFICATE NO.", right, below - 16, 7.5, f.helvB, GOLD, 1.5, "center");
+  spaced(page, data.number, right, below - 32, 12, f.timesB, NAVY, 1, "center");
 
   // Seal between the date and the issuer.
   seal(page, f, logo, cx, 138, 46);
