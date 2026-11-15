@@ -210,10 +210,17 @@ export default defineSchema({
     email: v.optional(v.string()),
     displayName: v.string(),
     status: v.union(v.literal("active"), v.literal("disabled")),
+    // Filled in by the person on their profile page.
+    phone: v.optional(v.string()),
+    // A face photo, cropped square; also printed on Academy certificates.
+    photoStorageId: v.optional(v.id("_storage")),
+    // Set once the person has saved their own profile, so sign-in never overwrites their name.
+    profileUpdatedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number()
   })
     .index("by_auth_subject", ["authSubject"])
+    .index("by_photo", ["photoStorageId"])
     .index("by_email", ["email"]),
 
   memberships: defineTable({

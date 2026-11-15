@@ -38,7 +38,8 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       if (existing) {
         await ctx.db.patch(existing._id, {
           email,
-          displayName,
+          // A name the person set on their profile page wins over the sign-in form.
+          ...(existing.profileUpdatedAt ? {} : { displayName }),
           updatedAt: Date.now()
         });
       } else {

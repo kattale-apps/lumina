@@ -33,7 +33,16 @@ function Certificate({ tenantId }: { tenantId: Id<"tenants"> }) {
     setError("");
     try {
       const { buildCertificatePdf } = await import("./certificatePdf");
-      const bytes = await buildCertificatePdf({ academyName: data.academyName, ...c });
+      // The face photo goes on the certificate; without one it still prints.
+      let photo: Uint8Array | null = null;
+      if (c.photoUrl) {
+        try {
+          photo = new Uint8Array(await (await fetch(c.photoUrl)).arrayBuffer());
+        } catch {
+          photo = null;
+        }
+      }
+      const bytes = await buildCertificatePdf({ academyName: data.academyName, ...c, photo });
       await savePdf(bytes, `sales-academy-certificate-${c.number}.pdf`, `${data.academyName} certificate`);
     } catch (e) {
       setError(e instanceof AppUpdateNeeded ? e.message : "We could not create the PDF. Please try again.");
@@ -45,12 +54,24 @@ function Certificate({ tenantId }: { tenantId: Id<"tenants"> }) {
   return (
     <section className="certificate-card certificate-earned" aria-labelledby="cert-h">
       <p className="eyebrow">CERTIFIED</p>
-      <h2 id="cert-h">🎓 {c.holderName}</h2>
+      <div className="certificate-holder">
+        {c.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="avatar avatar-lg" src={c.photoUrl} alt="" />
+        ) : null}
+        <h2 id="cert-h">🎓 {c.holderName}</h2>
+      </div>
       <p>
         Completed the {data.academyName} on{" "}
         {new Date(c.issuedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}.
       </p>
       <p className="record-meta">Certificate no. {c.number} · awarded by {c.companyName}</p>
+      {!data.profileComplete ? (
+        <p className="next-step-inline">
+          📷 Your certificate shows your photo and full name.{" "}
+          <Link href="/profile"><u>Set up your profile</u></Link> before downloading it.
+        </p>
+      ) : null}
       {error ? <p className="auth-message" role="alert">{error}</p> : null}
       <button type="button" className="button" disabled={busy} onClick={download}>
         {busy ? "Preparing PDF…" : "Download certificate (PDF)"}

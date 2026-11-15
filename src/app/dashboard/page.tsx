@@ -74,6 +74,12 @@ function Workspace() {
           Ask your Solar Switch administrator to activate your membership and role. This
           page updates automatically once access is granted.
         </p>
+        {!viewer.profile.profileComplete ? (
+          <p>
+            While you wait, <Link href="/profile"><u>set up your profile</u></Link> with your photo and full name, so
+            your administrator can recognise you.
+          </p>
+        ) : null}
         <p>
           Here to order products instead? <Link href="/shop"><u>Go to the customer catalogue</u></Link>.
         </p>

@@ -1,5 +1,7 @@
+import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { findViewerProfile, listActiveMemberships } from "./lib/auth";
+import { findViewerProfile, listActiveMemberships, requireTenantMembership } from "./lib/auth";
+import { profileComplete } from "./profile";
 
 /**
  * What the signed-in user may see. Never throws for the ordinary
@@ -24,7 +26,9 @@ export const viewerContext = query({
       profile: {
         id: profile._id,
         displayName: profile.displayName,
-        email: profile.email
+        email: profile.email,
+        photoUrl: profile.photoStorageId ? await ctx.storage.getUrl(profile.photoStorageId) : null,
+        profileComplete: profileComplete(profile)
       },
       companies: memberships.map(({ membership, tenant }) => ({
         tenantId: tenant._id,
@@ -33,5 +37,47 @@ export const viewerContext = query({
         role: membership.role
       }))
     };
+  }
+});
+
+/**
+ * Everyone the super administrator should know about: members of this company (any status),
+ * this company's customers, and accounts still waiting for access (no company and not a
+ * customer anywhere). People who belong only to another company are not shown.
+ */
+export const listAllUsers = query({
+  args: { tenantId: v.id("tenants") },
+  handler: async (ctx, args) => {
+    await requireTenantMembership(ctx, args.tenantId, ["super_admin"]);
+    const profiles = await ctx.db.query("userProfiles").order("desc").take(2000);
+    const people = [];
+    for (const p of profiles) {
+      const memberships = await ctx.db
+        .query("memberships")
+        .withIndex("by_user", (q) => q.eq("userId", p._id))
+        .collect();
+      const here = memberships.find((m) => m.tenantId === args.tenantId);
+      const accounts = await ctx.db
+        .query("customerAccounts")
+        .withIndex("by_user", (q) => q.eq("userId", p._id))
+        .collect();
+      const customerHere = accounts.find((a) => a.tenantId === args.tenantId);
+      const waiting = memberships.length === 0 && accounts.length === 0;
+      if (!here && !customerHere && !waiting) continue;
+      people.push({
+        userId: p._id,
+        displayName: p.displayName,
+        email: p.email ?? "",
+        phone: p.phone ?? customerHere?.phone ?? "",
+        photoUrl: p.photoStorageId ? await ctx.storage.getUrl(p.photoStorageId) : null,
+        profileComplete: profileComplete(p),
+        accountStatus: p.status,
+        kind: here ? ("staff" as const) : customerHere ? ("customer" as const) : ("waiting" as const),
+        role: here?.role ?? null,
+        membershipStatus: here?.status ?? null,
+        joinedAt: p.createdAt
+      });
+    }
+    return people;
   }
 });

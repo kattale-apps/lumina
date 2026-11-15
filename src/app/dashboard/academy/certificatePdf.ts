@@ -1,4 +1,14 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import {
+  PDFDocument,
+  StandardFonts,
+  clip,
+  endPath,
+  popGraphicsState,
+  pushGraphicsState,
+  rectangle,
+  rgb,
+  type PDFFont
+} from "pdf-lib";
 
 export type CertificateData = {
   academyName: string;
@@ -7,6 +17,8 @@ export type CertificateData = {
   companyName: string;
   issuedAt: number;
   modules: { title: string; scorePercent: number }[];
+  /** The holder's face photo (JPEG or PNG bytes), printed in the top corner. */
+  photo?: Uint8Array | null;
 };
 
 // Standard PDF fonts only cover Latin-1 style characters; replace anything else.
@@ -35,6 +47,32 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
 
   page.drawRectangle({ x: 24, y: 24, width: W - 48, height: H - 48, borderColor: green, borderWidth: 3 });
   page.drawRectangle({ x: 34, y: 34, width: W - 68, height: H - 68, borderColor: green, borderWidth: 0.75 });
+
+  // The holder's photo, framed in the top-right corner, clear of the centred title.
+  if (data.photo && data.photo.length > 8) {
+    const b = data.photo;
+    const isPng = b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
+    const isJpeg = b[0] === 0xff && b[1] === 0xd8;
+    if (isPng || isJpeg) {
+      try {
+        const image = isPng ? await doc.embedPng(b) : await doc.embedJpg(b);
+        const size = 104;
+        const x = W - 62 - size;
+        const top = H - 58;
+        // Fill the square frame, cropping the longer side evenly.
+        const scale = Math.max(size / image.width, size / image.height);
+        const w = image.width * scale;
+        const h = image.height * scale;
+        page.drawRectangle({ x: x - 4, y: top - size - 4, width: size + 8, height: size + 8, color: rgb(1, 1, 1), borderColor: green, borderWidth: 1.5 });
+        // Clip to the frame so a photo that is not square cannot spill over the border.
+        page.pushOperators(pushGraphicsState(), rectangle(x, top - size, size, size), clip(), endPath());
+        page.drawImage(image, { x: x - (w - size) / 2, y: top - size - (h - size) / 2, width: w, height: h });
+        page.pushOperators(popGraphicsState());
+      } catch {
+        // An unreadable photo leaves the certificate without one.
+      }
+    }
+  }
 
   const centre = (text: string, y: number, size: number, font: PDFFont, color = ink) => {
     let t = safe(text);

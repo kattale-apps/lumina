@@ -9,6 +9,7 @@
  * rewrite any module for their company. Correct answers are never sent to a
  * learner before they have passed the quiz.
  */
+import { photoUrlOf, profileComplete } from "./profile";
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
@@ -97,9 +98,15 @@ async function certificateOf(ctx: Ctx, tenantId: Id<"tenants">, userId: Id<"user
     .first();
 }
 
-const presentCertificate = (c: Doc<"academyCertificates">) => ({
+/**
+ * The certificate as it prints today: the number, date and scores are fixed when it is
+ * earned; the name and face photo follow the holder's profile, so setting up a profile
+ * later still produces a proper certificate.
+ */
+const presentCertificate = (c: Doc<"academyCertificates">, holder: Doc<"userProfiles">, photoUrl: string | null) => ({
   number: c.number,
-  holderName: c.holderName,
+  holderName: holder.profileUpdatedAt ? holder.displayName : c.holderName,
+  photoUrl,
   companyName: c.companyName,
   issuedAt: c.issuedAt,
   modules: c.modules
@@ -135,7 +142,8 @@ export const overview = query({
       learnerName: profile.displayName,
       modules: out,
       passedCount: out.filter((m) => m.passed).length,
-      certificate: certificate ? presentCertificate(certificate) : null,
+      certificate: certificate ? presentCertificate(certificate, profile, await photoUrlOf(ctx, profile)) : null,
+      profileComplete: profileComplete(profile),
       canEdit: (EDITORS as readonly string[]).includes(role),
       canSeeTeam: (TEAM_VIEWERS as readonly string[]).includes(role)
     };

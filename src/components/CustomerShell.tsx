@@ -6,11 +6,13 @@ import type { ReactNode } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { ProfilePrompt } from "../app/dashboard/workspace";
 
 const TABS = [
   { href: "/my-requests", label: "My recommendations" },
   { href: "/shop", label: "Shop" },
-  { href: "/estimate", label: "Power check" }
+  { href: "/estimate", label: "Power check" },
+  { href: "/profile", label: "My profile" }
 ];
 
 /** Page frame for signed-in customers: logo and sign-out on one line, then a row of tabs. */
@@ -18,6 +20,7 @@ export function CustomerShell({ children, signedIn }: { children: ReactNode; sig
   const { signOut } = useAuthActions();
   const path = usePathname();
   const inbox = useQuery(api.inbox.myInbox, signedIn ? {} : "skip");
+  const me = useQuery(api.profile.myProfile, signedIn ? {} : "skip");
   return (
     <div className="public-bg">
       <div className="shell">
@@ -43,6 +46,7 @@ export function CustomerShell({ children, signedIn }: { children: ReactNode; sig
             ))}
           </nav>
         ) : null}
+        {signedIn && me && !me.complete && path !== "/profile" ? <ProfilePrompt /> : null}
         <main className="workspace">{children}</main>
       </div>
     </div>

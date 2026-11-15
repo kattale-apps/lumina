@@ -47,6 +47,7 @@ import type * as lib_validation from "../lib/validation.js";
 import type * as margins from "../margins.js";
 import type * as operations from "../operations.js";
 import type * as products from "../products.js";
+import type * as profile from "../profile.js";
 import type * as quotations from "../quotations.js";
 import type * as responses from "../responses.js";
 import type * as settings from "../settings.js";
@@ -104,6 +105,7 @@ declare const fullApi: ApiFromModules<{
   margins: typeof margins;
   operations: typeof operations;
   products: typeof products;
+  profile: typeof profile;
   quotations: typeof quotations;
   responses: typeof responses;
   settings: typeof settings;

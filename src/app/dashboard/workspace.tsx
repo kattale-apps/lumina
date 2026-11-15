@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { Avatar } from "@/components/Avatar";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
@@ -71,6 +72,8 @@ export function SignOutButton() {
 export function WorkspaceHeader({ role }: { role?: string }) {
   const inbox = useQuery(api.inbox.myInbox, role ? {} : "skip");
   const unread: Record<string, number> = { "/dashboard/leads": inbox?.staff ?? 0 };
+  const me = useQuery(api.profile.myProfile, {});
+  const path = usePathname();
   // Inventory administrators have no access to customer data.
   const crm = role !== undefined && role !== "inventory_admin";
   const links = [
@@ -96,6 +99,7 @@ export function WorkspaceHeader({ role }: { role?: string }) {
       show: role === "super_admin" || role === "inventory_admin"
     },
     { href: "/dashboard/academy", label: "Academy", show: true },
+    { href: "/dashboard/users", label: "Users", show: role === "super_admin" },
     { href: "/dashboard/staff", label: "Staff", show: role === "super_admin" },
     { href: "/dashboard/settings", label: "Settings", show: role === "super_admin" }
   ];
@@ -108,7 +112,14 @@ export function WorkspaceHeader({ role }: { role?: string }) {
           <img className="brand-logo" src="/icons/icon-192.png" alt="" width={38} height={38} />
           <span>SOLAR SWITCH</span>
         </Link>
-        <SignOutButton />
+        <div className="topbar-actions">
+          {me ? (
+            <Link href="/profile" className="topbar-avatar" aria-label="My profile">
+              <Avatar name={me.displayName} url={me.photoUrl} size="sm" />
+            </Link>
+          ) : null}
+          <SignOutButton />
+        </div>
       </header>
       {role ? (
         <nav className="workspace-nav" aria-label="Workspace">
@@ -122,7 +133,22 @@ export function WorkspaceHeader({ role }: { role?: string }) {
             ))}
         </nav>
       ) : null}
+      {me && !me.complete && path !== "/profile" ? <ProfilePrompt /> : null}
     </>
+  );
+}
+
+/** Shown on every page until the person has added a photo and their full name. */
+export function ProfilePrompt() {
+  return (
+    <Link href="/profile" className="profile-prompt">
+      <span aria-hidden="true">📷</span>
+      <span>
+        <strong>Set up your profile</strong>
+        <small>Add your photo and full name. Your photo also goes on your Academy certificate.</small>
+      </span>
+      <span aria-hidden="true">›</span>
+    </Link>
   );
 }
 
