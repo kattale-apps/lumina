@@ -151,7 +151,14 @@ function TechnicalDecision({ view }: { view: View }) {
       <h2 id="td">Technical review</h2>
       {view.sizing.openReviews > 0 ? (
         <p className="auth-message">
-          {view.sizing.openReviews} sizing check(s) still need a recorded resolution on the sizing page.
+          {view.sizing.basis === "upgrade" ? (
+            <>
+              The existing system&apos;s ratings have not been verified yet. Record the verification on the{" "}
+              <Link href={`/dashboard/upgrades/${view.quotation.upgradeStudyId}`}><u>upgrade study</u></Link> first.
+            </>
+          ) : (
+            <>{view.sizing.openReviews} sizing check(s) still need a recorded resolution on the sizing page.</>
+          )}
         </p>
       ) : null}
       {view.checklist.map((c) => (
@@ -288,6 +295,12 @@ function Detail({ quotationId, role }: { quotationId: Id<"quotations">; role: st
       {quotation.validUntil ? <p className="record-meta">Valid until {new Date(quotation.validUntil).toLocaleDateString()}</p> : null}
       {view.sizing.stale ? (
         <p className="auth-message">The assessment changed after this was sized, so it cannot be approved or issued.</p>
+      ) : null}
+      {view.quotation.upgradeStudyId ? (
+        <p className="record-meta">
+          Upgrade of an existing system.{" "}
+          <Link href={`/dashboard/upgrades/${view.quotation.upgradeStudyId}`}><u>Open the upgrade study</u></Link>
+        </p>
       ) : null}
 
       <div className="filter-row">

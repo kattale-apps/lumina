@@ -236,7 +236,8 @@ function statusOf(checks: Check[]): CompatibilityStatus {
   return "compatible";
 }
 
-const TOPOLOGY_OK: Record<SystemType, string[]> = {
+/** Inverter types (catalogue "topology" values) that suit each system type. */
+export const TOPOLOGY_OK: Record<SystemType, string[]> = {
   off_grid: ["Off-grid", "Hybrid"],
   hybrid: ["Hybrid"],
   backup_only: ["Hybrid", "Off-grid"],

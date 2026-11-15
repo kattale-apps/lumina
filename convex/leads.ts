@@ -4,6 +4,7 @@ import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
 import { CRM_WRITERS } from "./lib/crm";
 import { computeLoad, LOAD_ENGINE_VERSION } from "./lib/load";
+import { insertStudy } from "./upgrades";
 
 /** Managers and the owner see every request and hand them out; agents see what is assigned to them. */
 export const LEAD_MANAGERS = ["super_admin", "sales_manager"] as const;
@@ -56,6 +57,8 @@ export const listLeads = query({
         costPerMonthMinor: r.costPerMonthMinor ?? null,
         optionTitle: r.optionTitle,
         isRecommendation: r.optionKey === "recommendation",
+        isUpgrade: r.inputMode === "existing_system",
+        upgradeStudyId: r.upgradeStudyId ?? null,
         components: r.components,
         assignedTo: r.assignedToUserId ? names.get(r.assignedToUserId) ?? null : null,
         assignedToMe: r.assignedToUserId === profile._id,
@@ -151,6 +154,7 @@ export const convertLead = mutation({
     if (!manager && lead.assignedToUserId !== profile._id) throw new ConvexError("Request not found.");
     if (lead.status === "converted") throw new ConvexError("This request was already converted.");
     if (lead.status === "closed") throw new ConvexError("This request is closed.");
+    if (lead.upgrade) throw new ConvexError("This request is about an existing system: convert it to an upgrade study.");
 
     const ownerUserId = lead.assignedToUserId ?? profile._id;
     const now = Date.now();
@@ -223,5 +227,76 @@ export const convertLead = mutation({
       summary: `Quote request from ${lead.name} converted to a customer and assessment.`
     });
     return { customerId, assessmentId };
+  }
+});
+
+/**
+ * Converts a request to upgrade an existing system into a customer, site and
+ * upgrade study. There is no appliance list to build an assessment from.
+ */
+export const convertUpgradeLead = mutation({
+  args: { leadId: v.id("quoteRequests") },
+  handler: async (ctx, args) => {
+    const lead = await ctx.db.get(args.leadId);
+    if (!lead) throw new ConvexError("Request not found.");
+    const { profile, membership } = await requireTenantMembership(ctx, lead.tenantId, LEAD_ROLES);
+    const manager = (LEAD_MANAGERS as readonly string[]).includes(membership.role);
+    if (!manager && lead.assignedToUserId !== profile._id) throw new ConvexError("Request not found.");
+    if (lead.status === "converted") throw new ConvexError("This request was already converted.");
+    if (lead.status === "closed") throw new ConvexError("This request is closed.");
+    if (!lead.upgrade) throw new ConvexError("This request is not about an existing system.");
+
+    const ownerUserId = lead.assignedToUserId ?? profile._id;
+    const now = Date.now();
+    const customerId = await ctx.db.insert("customers", {
+      tenantId: lead.tenantId,
+      name: lead.name,
+      phone: lead.phone,
+      email: lead.email,
+      type: "residential",
+      notes: "From the public upgrade check.",
+      status: "active",
+      ownerUserId,
+      createdAt: now,
+      createdBy: profile.authSubject,
+      updatedAt: now
+    });
+    const siteId = await ctx.db.insert("customerSites", {
+      tenantId: lead.tenantId,
+      customerId,
+      name: "Home",
+      address: lead.location,
+      region: lead.location,
+      gpsConsent: false,
+      gridAvailability: lead.gridAvailability,
+      status: "active",
+      createdAt: now,
+      createdBy: profile.authSubject,
+      updatedAt: now
+    });
+    const upgradeStudyId = await insertStudy(ctx, profile, {
+      tenantId: lead.tenantId,
+      customerId,
+      siteId,
+      ownerUserId,
+      system: lead.upgrade.system,
+      needs: lead.upgrade.needs,
+      sourceRequestId: lead._id
+    });
+    await ctx.db.patch(lead._id, {
+      status: "converted",
+      assignedToUserId: ownerUserId,
+      customerId,
+      upgradeStudyId,
+      updatedAt: now
+    });
+    await recordAudit(ctx, profile, {
+      tenantId: lead.tenantId,
+      action: "lead.converted",
+      entityType: "quoteRequests",
+      entityId: lead._id,
+      summary: `Upgrade request from ${lead.name} converted to a customer and upgrade study.`
+    });
+    return { customerId, upgradeStudyId };
   }
 });

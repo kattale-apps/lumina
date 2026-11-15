@@ -15,6 +15,7 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
   const assignees = useQuery(api.leads.listAssignees, data?.canAssign ? { tenantId } : "skip");
   const assign = useMutation(api.leads.assignLead);
   const convert = useMutation(api.leads.convertLead);
+  const convertUpgrade = useMutation(api.leads.convertUpgradeLead);
   const close = useMutation(api.leads.closeLead);
   const [error, setError] = useState<string | null>(null);
   const inbox = useQuery(api.inbox.myInbox, {});
@@ -47,18 +48,24 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
               <div>
                 <span className="record-title">{l.name} · {l.phone}</span>
                 <span className="record-meta">
-                  {l.location} · {GRID_LABELS[l.gridAvailability]} · {l.dailyKwh} kWh/day
+                  {l.location} · {GRID_LABELS[l.gridAvailability]} · {l.isUpgrade ? "has solar already" : `${l.dailyKwh} kWh/day`}
                   {l.costPerMonthMinor !== null ? ` · ${currency} ${l.costPerMonthMinor.toLocaleString("en-US")}/month` : ""}
                 </span>
                 <span className="record-meta">
-                  {l.isRecommendation ? (
+                  {l.isUpgrade ? (
+                    <span className="pill pill-warn">Wants to upgrade an existing system</span>
+                  ) : l.isRecommendation ? (
                     <span className="pill pill-warn">Needs a system recommendation and quotation</span>
                   ) : (
                     <>Chose: {l.optionTitle}</>
                   )}
                 </span>
                 <span className="record-meta">
-                  {l.components.length ? l.components.map((c) => `${c.quantity} × ${c.name}`).join(", ") : "No catalogue option yet: design from the load details."}
+                  {l.components.length
+                    ? l.components.map((c) => `${c.quantity} × ${c.name}`).join(", ")
+                    : l.isUpgrade
+                      ? "No option chosen: recommend from the upgrade check."
+                      : "No catalogue option yet: design from the load details."}
                 </span>
                 <span className="pill-row">
                   <span className={l.status === "new" ? "pill pill-warn" : "pill pill-info"}>{l.status}</span>
@@ -82,6 +89,9 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
                 {l.status === "converted" && l.assessmentId ? (
                   <Link className="button button-small" href={`/dashboard/assessments/${l.assessmentId}`}>Open assessment</Link>
                 ) : null}
+                {l.status === "converted" && l.upgradeStudyId ? (
+                  <Link className="button button-small" href={`/dashboard/upgrades/${l.upgradeStudyId}`}>Open upgrade study</Link>
+                ) : null}
                 {data.canAssign && (l.status === "new" || l.status === "assigned") ? (
                   <select
                     aria-label={`Assign ${l.name}`}
@@ -99,7 +109,7 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
                 ) : null}
                 {data.canAct && (l.status === "new" || l.status === "assigned") ? (
                   <>
-                    <button className="button button-small button-secondary" type="button" onClick={() => run(() => convert({ leadId: l.id }))}>
+                    <button className="button button-small button-secondary" type="button" onClick={() => run(() => (l.isUpgrade ? convertUpgrade({ leadId: l.id }) : convert({ leadId: l.id })))}>
                       Convert
                     </button>
                     <button className="button button-small button-secondary" type="button" onClick={() => run(() => close({ leadId: l.id }))}>

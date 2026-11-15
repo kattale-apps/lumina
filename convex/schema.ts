@@ -109,6 +109,86 @@ export const quotationLine = v.object({
   warrantyMonths: v.optional(v.number())
 });
 
+/** A solar system that is already installed, as nameplate ratings typed in by an agent or the owner. */
+export const existingSystem = v.object({
+  systemType: v.union(
+    v.literal("off_grid"),
+    v.literal("hybrid"),
+    v.literal("grid_tied"),
+    v.literal("backup_only")
+  ),
+  // Nominal battery bank voltage, e.g. 12, 24 or 48.
+  systemVoltage: v.optional(v.number()),
+  inverter: v.optional(
+    v.object({
+      ratedW: v.number(),
+      surgeW: v.optional(v.number()),
+      // True when the panels plug straight into the inverter.
+      hasSolarInput: v.boolean(),
+      maxPvPowerW: v.optional(v.number()),
+      maxPvVoltage: v.optional(v.number()),
+      mpptMinVoltage: v.optional(v.number()),
+      maxPvCurrentA: v.optional(v.number()),
+      maxChargeA: v.optional(v.number())
+    })
+  ),
+  controller: v.optional(
+    v.object({
+      technology: v.union(v.literal("MPPT"), v.literal("PWM")),
+      maxChargeA: v.number(),
+      maxPvVoltage: v.optional(v.number()),
+      maxPvPowerW: v.optional(v.number())
+    })
+  ),
+  panels: v.optional(
+    v.object({
+      count: v.number(),
+      wp: v.number(),
+      voc: v.optional(v.number()),
+      vmp: v.optional(v.number()),
+      isc: v.optional(v.number()),
+      perString: v.optional(v.number())
+    })
+  ),
+  batteries: v.optional(
+    v.object({
+      count: v.number(),
+      nominalV: v.number(),
+      ah: v.number(),
+      chemistry: v.union(v.literal("lithium"), v.literal("lead_acid"), v.literal("unknown")),
+      ageYears: v.optional(v.number())
+    })
+  )
+});
+
+/** What the owner of an existing system wants from an upgrade. */
+export const upgradeNeeds = v.object({
+  goals: v.array(
+    v.union(v.literal("battery"), v.literal("panels"), v.literal("inverter"), v.literal("swaps"))
+  ),
+  dailyKwh: v.optional(v.number()),
+  peakLoadW: v.optional(v.number()),
+  backupHours: v.optional(v.number()),
+  backupLoadW: v.optional(v.number())
+});
+
+/** One lesson of a Sales Academy module. `body` is plain text with simple headings and bullets. */
+export const academyLesson = v.object({
+  key: v.string(),
+  title: v.string(),
+  body: v.string(),
+  videoUrl: v.optional(v.string())
+});
+
+/** One quiz question. `correctIndex` never leaves the server for learners. */
+export const academyQuestion = v.object({
+  key: v.string(),
+  prompt: v.string(),
+  options: v.array(v.string()),
+  correctIndex: v.number(),
+  explanation: v.optional(v.string())
+});
+
 export default defineSchema({
   ...authTables,
 
@@ -417,9 +497,13 @@ export default defineSchema({
     tenantId: v.id("tenants"),
     customerId: v.id("customers"),
     siteId: v.id("customerSites"),
-    assessmentId: v.id("assessments"),
-    sizingRunId: v.id("sizingRuns"),
-    candidateIndex: v.number(),
+    // The technical basis is either a sizing configuration (these three) or an upgrade study.
+    assessmentId: v.optional(v.id("assessments")),
+    sizingRunId: v.optional(v.id("sizingRuns")),
+    candidateIndex: v.optional(v.number()),
+    upgradeStudyId: v.optional(v.id("upgradeStudies")),
+    // The upgrade options the quotation was built from, by key.
+    upgradeOptionKeys: v.optional(v.array(v.string())),
     ownerUserId: v.id("userProfiles"),
     status: quotationStatus,
     currentRevision: v.number(),
@@ -522,6 +606,94 @@ export default defineSchema({
     .index("by_tenant_status", ["tenantId", "status"])
     .index("by_assessment", ["assessmentId"]),
 
+  // An upgrade study of a customer's existing system. Append-only: a change is a new study.
+  upgradeStudies: defineTable({
+    tenantId: v.id("tenants"),
+    customerId: v.id("customers"),
+    siteId: v.id("customerSites"),
+    ownerUserId: v.id("userProfiles"),
+    system: existingSystem,
+    needs: upgradeNeeds,
+    assumptions: v.object({
+      peakSunHours: v.number(),
+      solarResourceSource: v.string(),
+      performanceRatio: v.number(),
+      defaultDod: v.number(),
+      dischargeEfficiency: v.number(),
+      roundTripEfficiency: v.number(),
+      inverterEfficiency: v.number(),
+      inverterHeadroom: v.number(),
+      minCellTempC: v.number(),
+      maxCellTempC: v.number(),
+      gridTiedOffset: v.number()
+    }),
+    engineVersion: v.string(),
+    report: v.any(),
+    // Specification values of every product offered, as they were when the study ran.
+    productSnapshots: v.any(),
+    sourceRequestId: v.optional(v.id("quoteRequests")),
+    // A technician's record that the reported ratings were checked against the real equipment.
+    verification: v.optional(
+      v.object({
+        note: v.string(),
+        verifiedAt: v.number(),
+        verifiedByUserId: v.id("userProfiles"),
+        verifierName: v.string()
+      })
+    ),
+    createdAt: v.number(),
+    createdBy: v.string(),
+    actorUserId: v.id("userProfiles")
+  })
+    .index("by_tenant_time", ["tenantId", "createdAt"])
+    .index("by_customer", ["customerId", "createdAt"]),
+
+  // Sales Academy: a company's edited copy of one module. A module with no row uses the built-in text.
+  academyModules: defineTable({
+    tenantId: v.id("tenants"),
+    key: v.string(),
+    title: v.string(),
+    summary: v.string(),
+    lessons: v.array(academyLesson),
+    questions: v.array(academyQuestion),
+    passPercent: v.number(),
+    // Raised on every content change, so an attempt records what it was taken against.
+    version: v.number(),
+    updatedAt: v.number(),
+    updatedBy: v.string()
+  }).index("by_tenant_key", ["tenantId", "key"]),
+
+  // One quiz attempt. Append-only.
+  academyAttempts: defineTable({
+    tenantId: v.id("tenants"),
+    userId: v.id("userProfiles"),
+    moduleKey: v.string(),
+    moduleVersion: v.number(),
+    answers: v.array(v.number()),
+    correct: v.number(),
+    total: v.number(),
+    scorePercent: v.number(),
+    passed: v.boolean(),
+    createdAt: v.number()
+  })
+    .index("by_user_module", ["tenantId", "userId", "moduleKey"])
+    .index("by_tenant", ["tenantId"]),
+
+  // Issued once, when a staff member has passed every module.
+  academyCertificates: defineTable({
+    tenantId: v.id("tenants"),
+    userId: v.id("userProfiles"),
+    number: v.string(),
+    holderName: v.string(),
+    companyName: v.string(),
+    modules: v.array(
+      v.object({ key: v.string(), title: v.string(), scorePercent: v.number(), passedAt: v.number() })
+    ),
+    issuedAt: v.number()
+  })
+    .index("by_tenant_user", ["tenantId", "userId"])
+    .index("by_tenant", ["tenantId"]),
+
   numberSequences: defineTable({
     tenantId: v.id("tenants"),
     key: v.string(),
@@ -569,7 +741,7 @@ export default defineSchema({
     email: v.optional(v.string()),
     location: v.string(),
     gridAvailability: v.union(v.literal("none"), v.literal("unreliable"), v.literal("reliable")),
-    inputMode: v.union(v.literal("bill"), v.literal("appliances")),
+    inputMode: v.union(v.literal("bill"), v.literal("appliances"), v.literal("existing_system")),
     dailyKwh: v.number(),
     costPerMonthMinor: v.optional(v.number()),
     systemType: v.union(
@@ -603,6 +775,9 @@ export default defineSchema({
     assignedToUserId: v.optional(v.id("userProfiles")),
     customerId: v.optional(v.id("customers")),
     assessmentId: v.optional(v.id("assessments")),
+    // Set for "existing_system" requests: the system the person described and what they want from it.
+    upgrade: v.optional(v.object({ system: existingSystem, needs: upgradeNeeds })),
+    upgradeStudyId: v.optional(v.id("upgradeStudies")),
     // Where the power is needed (home, business, industry), when the person said.
     category: v.optional(
       v.union(v.literal("residential"), v.literal("commercial_small"), v.literal("commercial_medium"), v.literal("industrial"))

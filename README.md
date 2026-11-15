@@ -33,6 +33,8 @@ Customer assessment → deterministic solar sizing → compatible product select
 - [Solar calculations and validation](docs/SOLAR_CALCULATIONS.md)
 - [Quotation and approval workflow](docs/QUOTATION_WORKFLOW.md)
 - [Development roadmap](docs/DEVELOPMENT_ROADMAP.md)
+- [Sales Academy](docs/SALES_ACADEMY.md)
+- [Upgrade checks for existing systems](docs/EXISTING_SYSTEM_UPGRADES.md)
 - [Phase 0 local setup](docs/PHASE_0_SETUP.md)
 - [Application rules](apprules.md)
 

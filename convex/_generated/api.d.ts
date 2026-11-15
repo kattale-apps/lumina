@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as academy from "../academy.js";
 import type * as admin from "../admin.js";
 import type * as appliances from "../appliances.js";
 import type * as assessments from "../assessments.js";
@@ -20,6 +21,8 @@ import type * as files from "../files.js";
 import type * as http from "../http.js";
 import type * as inbox from "../inbox.js";
 import type * as leads from "../leads.js";
+import type * as lib_academy from "../lib/academy.js";
+import type * as lib_academyContent from "../lib/academyContent.js";
 import type * as lib_applianceDefaults from "../lib/applianceDefaults.js";
 import type * as lib_applianceGuide from "../lib/applianceGuide.js";
 import type * as lib_audit from "../lib/audit.js";
@@ -39,6 +42,7 @@ import type * as lib_specFields from "../lib/specFields.js";
 import type * as lib_specValues from "../lib/specValues.js";
 import type * as lib_stock from "../lib/stock.js";
 import type * as lib_tariff from "../lib/tariff.js";
+import type * as lib_upgrade from "../lib/upgrade.js";
 import type * as lib_validation from "../lib/validation.js";
 import type * as margins from "../margins.js";
 import type * as operations from "../operations.js";
@@ -51,6 +55,7 @@ import type * as sizing from "../sizing.js";
 import type * as staff from "../staff.js";
 import type * as stock from "../stock.js";
 import type * as sync from "../sync.js";
+import type * as upgrades from "../upgrades.js";
 import type * as users from "../users.js";
 
 import type {
@@ -60,6 +65,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  academy: typeof academy;
   admin: typeof admin;
   appliances: typeof appliances;
   assessments: typeof assessments;
@@ -72,6 +78,8 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   inbox: typeof inbox;
   leads: typeof leads;
+  "lib/academy": typeof lib_academy;
+  "lib/academyContent": typeof lib_academyContent;
   "lib/applianceDefaults": typeof lib_applianceDefaults;
   "lib/applianceGuide": typeof lib_applianceGuide;
   "lib/audit": typeof lib_audit;
@@ -91,6 +99,7 @@ declare const fullApi: ApiFromModules<{
   "lib/specValues": typeof lib_specValues;
   "lib/stock": typeof lib_stock;
   "lib/tariff": typeof lib_tariff;
+  "lib/upgrade": typeof lib_upgrade;
   "lib/validation": typeof lib_validation;
   margins: typeof margins;
   operations: typeof operations;
@@ -103,6 +112,7 @@ declare const fullApi: ApiFromModules<{
   staff: typeof staff;
   stock: typeof stock;
   sync: typeof sync;
+  upgrades: typeof upgrades;
   users: typeof users;
 }>;
 
