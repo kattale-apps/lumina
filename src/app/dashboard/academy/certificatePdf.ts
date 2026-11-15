@@ -9,6 +9,7 @@ import {
   rgb,
   type PDFFont
 } from "pdf-lib";
+import { drawQrCode } from "../../../lib/qrPdf";
 
 export type CertificateData = {
   academyName: string;
@@ -19,6 +20,8 @@ export type CertificateData = {
   modules: { title: string; scorePercent: number }[];
   /** The holder's face photo (JPEG or PNG bytes), printed in the top corner. */
   photo?: Uint8Array | null;
+  /** Link to the public verification page; printed as a QR code. */
+  verifyUrl?: string | null;
 };
 
 // Standard PDF fonts only cover Latin-1 style characters; replace anything else.
@@ -101,6 +104,14 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
   const footY = 92;
   page.drawText(safe(`Awarded by ${data.companyName}`), { x: 70, y: footY, size: 12, font: sansBold, color: ink });
   page.drawText(safe(`Date: ${issued}`), { x: 70, y: footY - 18, size: 11, font: sans, color: ink });
+  // Scan to see this certificate on the Solar Switch website.
+  if (data.verifyUrl) {
+    const qrSize = 74;
+    const qrX = W - 70 - qrSize;
+    drawQrCode(page, data.verifyUrl, qrX, footY + 22, qrSize, ink);
+    const scan = "Scan to verify";
+    page.drawText(scan, { x: qrX + (qrSize - sans.widthOfTextAtSize(scan, 8)) / 2, y: footY + 12, size: 8, font: sans, color: muted });
+  }
   const num = `Certificate no. ${data.number}`;
   page.drawText(num, { x: W - 70 - sansBold.widthOfTextAtSize(num, 12), y: footY, size: 12, font: sansBold, color: ink });
   centre(

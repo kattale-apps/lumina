@@ -121,3 +121,31 @@ describe("certificate", () => {
     expect(overview.profileComplete).toBe(true);
   });
 });
+
+describe("certificate verification by QR code", () => {
+  test("a certificate gets an unguessable code that shows it publicly, and nothing else", async () => {
+    const { t, tenantId, asTech, tech, asOwner } = await setup();
+    await t.run((ctx) =>
+      ctx.db.insert("academyCertificates", {
+        tenantId, userId: tech.profileId, number: "SSA-2026-1", holderName: "tech", companyName: "Acme Solar",
+        modules: [{ key: "m1", title: "Solar and power basics", scorePercent: 100, passedAt: Date.now() }], issuedAt: Date.now()
+      })
+    );
+    // An older certificate without a code gets one on first download, and keeps it.
+    const { code } = await asTech.mutation(api.academy.certificateLink, { tenantId });
+    expect(code).toMatch(/^[A-HJ-NP-Z2-9]{12}$/);
+    expect((await asTech.mutation(api.academy.certificateLink, { tenantId })).code).toBe(code);
+    expect((await asTech.query(api.academy.overview, { tenantId })).certificate!.verifyCode).toBe(code);
+
+    // Anyone can check it without signing in.
+    await asTech.mutation(api.profile.updateProfile, { displayName: "Tom Okello", phone: "" });
+    const shown = await t.query(api.academy.verifyCertificate, { code: code.toLowerCase() });
+    expect(shown).toMatchObject({ number: "SSA-2026-1", holderName: "Tom Okello", companyName: "Acme Solar", holderActive: true });
+    expect(shown!.modules).toEqual([{ title: "Solar and power basics", scorePercent: 100 }]);
+    // The certificate number is not a key, and codes cannot be guessed by shape.
+    expect(await t.query(api.academy.verifyCertificate, { code: "SSA-2026-1" })).toBeNull();
+    expect(await t.query(api.academy.verifyCertificate, { code: "ABCDEFGHJKMN" })).toBeNull();
+    // Someone without a certificate has no link to make.
+    await expect(asOwner.mutation(api.academy.certificateLink, { tenantId })).rejects.toThrow(/do not have a certificate/);
+  });
+});

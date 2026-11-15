@@ -105,6 +105,7 @@ async function certificateOf(ctx: Ctx, tenantId: Id<"tenants">, userId: Id<"user
  */
 const presentCertificate = (c: Doc<"academyCertificates">, holder: Doc<"userProfiles">, photoUrl: string | null) => ({
   number: c.number,
+  verifyCode: c.verifyCode ?? null,
   holderName: holder.profileUpdatedAt ? holder.displayName : c.holderName,
   photoUrl,
   companyName: c.companyName,
@@ -246,7 +247,8 @@ export const submitQuiz = mutation({
           holderName: profile.displayName,
           companyName: tenant.name,
           modules: passedModules,
-          issuedAt: now
+          issuedAt: now,
+          verifyCode: newVerifyCode()
         });
         await recordAudit(ctx, profile, {
           tenantId: args.tenantId,
@@ -432,5 +434,55 @@ export const restoreModule = mutation({
       metadata: { key: args.key, discardedVersion: existing.version }
     });
     return { changed: true };
+  }
+});
+
+// ------------------------------------------------------------------ verification
+
+/** 12 characters from an alphabet without look-alikes (no 0/O, 1/I/L). About 60 bits of randomness. */
+const VERIFY_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+function newVerifyCode() {
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => VERIFY_ALPHABET[b % VERIFY_ALPHABET.length]).join("");
+}
+
+/**
+ * The verification code for the signed-in person's certificate, for the QR code on the PDF.
+ * Certificates issued before codes existed get one the first time they are downloaded.
+ */
+export const certificateLink = mutation({
+  args: { tenantId: v.id("tenants") },
+  handler: async (ctx, args) => {
+    const { profile } = await requireTenantMembership(ctx, args.tenantId);
+    const certificate = await certificateOf(ctx, args.tenantId, profile._id);
+    if (!certificate) throw new ConvexError("You do not have a certificate yet.");
+    if (certificate.verifyCode) return { code: certificate.verifyCode };
+    const code = newVerifyCode();
+    await ctx.db.patch(certificate._id, { verifyCode: code });
+    return { code };
+  }
+});
+
+/** Public: what anyone scanning a certificate's QR code sees. Nothing else is reachable by the code. */
+export const verifyCertificate = query({
+  args: { code: v.string() },
+  handler: async (ctx, args) => {
+    const code = args.code.trim().toUpperCase();
+    if (!/^[A-Z0-9]{12}$/.test(code)) return null;
+    const certificate = await ctx.db
+      .query("academyCertificates")
+      .withIndex("by_verify_code", (q) => q.eq("verifyCode", code))
+      .unique();
+    if (!certificate) return null;
+    const holder = await ctx.db.get(certificate.userId);
+    if (!holder) return null;
+    return {
+      academyName: ACADEMY_NAME,
+      ...presentCertificate(certificate, holder, await photoUrlOf(ctx, holder)),
+      modules: certificate.modules.map((m) => ({ title: m.title, scorePercent: m.scorePercent })),
+      // A certificate stays a true record of training even if the account is later closed.
+      holderActive: holder.status === "active"
+    };
   }
 });

@@ -701,10 +701,13 @@ export default defineSchema({
     modules: v.array(
       v.object({ key: v.string(), title: v.string(), scorePercent: v.number(), passedAt: v.number() })
     ),
-    issuedAt: v.number()
+    issuedAt: v.number(),
+    // Random code in the certificate's QR link, so certificates cannot be found by guessing numbers.
+    verifyCode: v.optional(v.string())
   })
     .index("by_tenant_user", ["tenantId", "userId"])
-    .index("by_tenant", ["tenantId"]),
+    .index("by_tenant", ["tenantId"])
+    .index("by_verify_code", ["verifyCode"]),
 
   numberSequences: defineTable({
     tenantId: v.id("tenants"),

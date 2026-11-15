@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { AppUpdateNeeded, savePdf } from "../../../lib/savePdf";
@@ -10,6 +10,7 @@ import { CompanyPage, ConfiguredOnly, ROLE_LABELS } from "../workspace";
 
 function Certificate({ tenantId }: { tenantId: Id<"tenants"> }) {
   const data = useQuery(api.academy.overview, { tenantId });
+  const link = useMutation(api.academy.certificateLink);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   if (!data) return null;
@@ -42,7 +43,10 @@ function Certificate({ tenantId }: { tenantId: Id<"tenants"> }) {
           photo = null;
         }
       }
-      const bytes = await buildCertificatePdf({ academyName: data.academyName, ...c, photo });
+      // The QR code opens this certificate on the website, so anyone can check it is genuine.
+      const code = c.verifyCode ?? (await link({ tenantId })).code;
+      const verifyUrl = `${window.location.origin}/verify/${code}`;
+      const bytes = await buildCertificatePdf({ academyName: data.academyName, ...c, photo, verifyUrl });
       await savePdf(bytes, `sales-academy-certificate-${c.number}.pdf`, `${data.academyName} certificate`);
     } catch (e) {
       setError(e instanceof AppUpdateNeeded ? e.message : "We could not create the PDF. Please try again.");
