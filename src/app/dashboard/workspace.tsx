@@ -35,7 +35,7 @@ export function errorMessage(error: unknown) {
   return "Something went wrong. Check your connection and try again.";
 }
 
-export function SignOutButton() {
+export function SignOutButton({ className = "button button-secondary" }: { className?: string }) {
   const { signOut } = useAuthActions();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -43,7 +43,7 @@ export function SignOutButton() {
   return (
     <button
       type="button"
-      className="button button-secondary"
+      className={className}
       disabled={busy}
       onClick={async () => {
         setBusy(true);
@@ -74,35 +74,47 @@ export function WorkspaceHeader({ role }: { role?: string }) {
   const unread: Record<string, number> = { "/dashboard/leads": inbox?.staff ?? 0 };
   const me = useQuery(api.profile.myProfile, {});
   const path = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Opening a page from the menu closes it.
+  useEffect(() => setMenuOpen(false), [path]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
   // Inventory administrators have no access to customer data.
   const crm = role !== undefined && role !== "inventory_admin";
   const links = [
-    { href: "/dashboard", label: "Home", show: true },
-    { href: "/dashboard/field", label: "Field work", show: crm },
-    { href: "/dashboard/leads", label: "Quote requests", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" || role === "technician" },
-    { href: "/dashboard/orders", label: "Orders", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" },
-    { href: "/dashboard/customers", label: "Customers", show: crm },
-    { href: "/dashboard/assessments", label: "Assessments", show: crm },
-    { href: "/dashboard/upgrades", label: "Upgrade checks", show: crm },
-    { href: "/dashboard/quotations", label: "Quotations", show: crm },
-    { href: "/dashboard/installations", label: "Installations", show: crm },
-    { href: "/dashboard/commissions", label: "Commissions", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" },
-    { href: "/dashboard/overview", label: "Overview", show: role === "super_admin" || role === "sales_manager" },
-    { href: "/dashboard/appliances", label: "Appliances", show: crm },
-    { href: "/dashboard/warehouses", label: "Warehouses", show: true },
-    { href: "/dashboard/catalogue", label: "Catalogue", show: true },
-    { href: "/dashboard/products", label: "Products", show: true },
-    { href: "/dashboard/stock", label: "Stock", show: true },
-    {
-      href: "/dashboard/pricing",
-      label: "Pricing",
-      show: role === "super_admin" || role === "inventory_admin"
-    },
-    { href: "/dashboard/academy", label: "Academy", show: true },
-    { href: "/dashboard/users", label: "Users", show: role === "super_admin" },
-    { href: "/dashboard/staff", label: "Staff", show: role === "super_admin" },
-    { href: "/dashboard/settings", label: "Settings", show: role === "super_admin" }
+    { group: "Sales", href: "/dashboard", label: "Home", show: true },
+    { group: "Sales", href: "/dashboard/field", label: "Field work", show: crm },
+    { group: "Sales", href: "/dashboard/leads", label: "Quote requests", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" || role === "technician" },
+    { group: "Sales", href: "/dashboard/orders", label: "Orders", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" },
+    { group: "Sales", href: "/dashboard/customers", label: "Customers", show: crm },
+    { group: "Sales", href: "/dashboard/assessments", label: "Assessments", show: crm },
+    { group: "Sales", href: "/dashboard/upgrades", label: "Upgrade checks", show: crm },
+    { group: "Sales", href: "/dashboard/quotations", label: "Quotations", show: crm },
+    { group: "Sales", href: "/dashboard/installations", label: "Installations", show: crm },
+    { group: "Sales", href: "/dashboard/commissions", label: "Commissions", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" },
+    { group: "Sales", href: "/dashboard/overview", label: "Overview", show: role === "super_admin" || role === "sales_manager" },
+    { group: "Stock & catalogue", href: "/dashboard/appliances", label: "Appliances", show: crm },
+    { group: "Stock & catalogue", href: "/dashboard/warehouses", label: "Warehouses", show: true },
+    { group: "Stock & catalogue", href: "/dashboard/catalogue", label: "Catalogue", show: true },
+    { group: "Stock & catalogue", href: "/dashboard/products", label: "Products", show: true },
+    { group: "Stock & catalogue", href: "/dashboard/stock", label: "Stock", show: true },
+    { group: "Stock & catalogue", href: "/dashboard/pricing", label: "Pricing", show: role === "super_admin" || role === "inventory_admin" },
+    { group: "Team", href: "/dashboard/academy", label: "Academy", show: true },
+    { group: "Team", href: "/dashboard/users", label: "Users", show: role === "super_admin" },
+    { group: "Team", href: "/dashboard/staff", label: "Staff", show: role === "super_admin" },
+    { group: "Team", href: "/dashboard/settings", label: "Settings", show: role === "super_admin" }
   ];
+  const visible = links.filter((link) => link.show);
+  const groups = [...new Set(visible.map((link) => link.group))];
+  const totalUnread = Object.values(unread).reduce((a, b) => a + b, 0);
+  // The page you are on, including pages under it (a request opened from Quote requests).
+  const current = visible
+    .filter((link) => path === link.href || (link.href !== "/dashboard" && path?.startsWith(link.href + "/")))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   return (
     <>
@@ -118,20 +130,55 @@ export function WorkspaceHeader({ role }: { role?: string }) {
               <Avatar name={me.displayName} url={me.photoUrl} size="sm" />
             </Link>
           ) : null}
-          <SignOutButton />
+          {role ? (
+            <button
+              type="button"
+              className={menuOpen ? "menu-button menu-button-open" : "menu-button"}
+              aria-expanded={menuOpen}
+              aria-controls="workspace-menu"
+              onClick={() => setMenuOpen(!menuOpen)}
+            >
+              <span className="menu-icon" aria-hidden="true">{menuOpen ? "✕" : "☰"}</span>
+              <span>Menu</span>
+              {totalUnread && !menuOpen ? <span className="menu-dot" aria-label={`${totalUnread} new`}>{totalUnread}</span> : null}
+            </button>
+          ) : (
+            <SignOutButton />
+          )}
         </div>
       </header>
-      {role ? (
-        <nav className="workspace-nav" aria-label="Workspace">
-          {links
-            .filter((link) => link.show)
-            .map((link) => (
-              <Link key={link.href} href={link.href}>
-                {link.label}
-                {unread[link.href] ? <span className="nav-count" aria-label={`${unread[link.href]} new`}>{unread[link.href]}</span> : null}
-              </Link>
+      {role && menuOpen ? (
+        <>
+          <button type="button" className="menu-backdrop" aria-label="Close the menu" onClick={() => setMenuOpen(false)} />
+          <nav id="workspace-menu" className="workspace-menu" aria-label="Workspace">
+            {groups.map((group) => (
+              <div key={group} className="menu-group">
+                <p className="menu-group-title">{group}</p>
+                {visible
+                  .filter((link) => link.group === group)
+                  .map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className={current === link.href ? "menu-link menu-link-on" : "menu-link"}
+                      aria-current={current === link.href ? "page" : undefined}
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <span>{link.label}</span>
+                      {unread[link.href] ? <span className="nav-count" aria-label={`${unread[link.href]} new`}>{unread[link.href]}</span> : null}
+                    </Link>
+                  ))}
+              </div>
             ))}
-        </nav>
+            <div className="menu-group">
+              <p className="menu-group-title">Me</p>
+              <Link href="/profile" className={path === "/profile" ? "menu-link menu-link-on" : "menu-link"} onClick={() => setMenuOpen(false)}>
+                <span>My profile</span>
+              </Link>
+              <SignOutButton className="menu-link menu-signout" />
+            </div>
+          </nav>
+        </>
       ) : null}
       {me && !me.complete && path !== "/profile" ? <ProfilePrompt /> : null}
     </>

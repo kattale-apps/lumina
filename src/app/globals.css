@@ -1400,3 +1400,99 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 .upgrade-fault label { font-size: 14px; font-weight: 700; }
 .upgrade-fault textarea { min-height: 80px; padding: 10px 14px; border: 1px solid #c9d6cf; border-radius: 10px; background: white; font: inherit; font-size: 16px; resize: vertical; }
 .pill-bad { background: #fdecea; color: #8a1c13; }
+
+/* Staff menu behind a three-line button */
+.menu-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.menu-button-open { border-color: var(--ink); background: var(--ink); color: white; }
+.menu-icon { font-size: 20px; line-height: 1; }
+.menu-dot {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #d93025;
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+}
+.menu-button:focus-visible { outline: 3px solid #26a269; outline-offset: 2px; }
+.menu-backdrop { position: fixed; inset: 0; z-index: 30; border: 0; background: rgba(16, 37, 31, .25); cursor: default; }
+.workspace-menu {
+  position: relative;
+  z-index: 31;
+  display: grid;
+  gap: 14px;
+  margin: 8px 0 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(16, 37, 31, .14);
+}
+@media (min-width: 720px) { .workspace-menu { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: start; } }
+.menu-group { display: grid; gap: 2px; }
+.menu-group-title { margin: 0 0 4px; padding: 0 10px; color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.menu-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.menu-link:hover { background: #eef7f2; }
+.menu-link-on { background: #e5f0ec; color: #0f5a3a; font-weight: 800; box-shadow: inset 4px 0 0 #1f8a52; }
+.menu-link:focus-visible { outline: 3px solid #26a269; outline-offset: -3px; }
+.menu-signout { width: 100%; color: #a1271b; }
+
+/* Home page: two equal choices */
+.landing-choice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 84px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  color: white;
+  text-align: left;
+}
+.landing-choice strong { display: block; font-size: 19px; line-height: 1.25; }
+.landing-choice small { display: block; margin-top: 3px; font-size: 14px; line-height: 1.4; opacity: .9; }
+.landing-choice-icon { font-size: 30px; line-height: 1; }
+.landing-choice-new { background: var(--ink); }
+.landing-choice-existing { background: #1f6b4a; }
+.landing-choice:focus-visible { outline: 3px solid #26a269; outline-offset: 3px; }
+@media (min-width: 640px) {
+  .landing-actions .landing-choice { width: min(520px, 100%); }
+}

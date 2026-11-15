@@ -23,12 +23,20 @@ export default function HomePage() {
             It takes about two minutes.
           </p>
           <div className="landing-actions">
-            <Link className="button button-large landing-cta" href="/estimate">
-              Check my power needs
+            <Link className="landing-choice landing-choice-new" href="/estimate">
+              <span className="landing-choice-icon" aria-hidden="true">☀️</span>
+              <span>
+                <strong>Check my power needs</strong>
+                <small>New to solar? See what you use and the systems that fit.</small>
+              </span>
             </Link>
-            <p className="landing-secondary">
-              Already have solar? <Link href="/estimate/upgrade">Check what you can add to it</Link>
-            </p>
+            <Link className="landing-choice landing-choice-existing" href="/estimate/upgrade">
+              <span className="landing-choice-icon" aria-hidden="true">🔧</span>
+              <span>
+                <strong>Upgrade or fix my system</strong>
+                <small>Already have solar? Add more, or replace a faulty part.</small>
+              </span>
+            </Link>
             <p className="landing-secondary">
               Want to see our products and order? <Link href="/sign-up">Create an account</Link>
             </p>
