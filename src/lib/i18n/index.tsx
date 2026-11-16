@@ -108,12 +108,16 @@ export function Rich({ text, link }: { text: string; link?: (label: string) => R
   );
 }
 
-/** A compact language chooser: a globe and the current language. */
+/**
+ * A compact language chooser for crowded phone headers: a globe and a short code (EN, LG…).
+ * The real list (full language names) is a native select laid invisibly over it.
+ */
 export function LanguagePicker({ className = "" }: { className?: string }) {
   const { lang, setLang, t } = useLanguage();
   return (
-    <label className={`language-picker ${className}`}>
+    <label className={`language-picker ${className}`} title={languageLabel(lang)}>
       <span aria-hidden="true">🌐</span>
+      <span className="language-code" aria-hidden="true">{lang.toUpperCase()}</span>
       <span className="visually-hidden">{t("lang.choose")}</span>
       <select value={lang} onChange={(e) => isLang(e.target.value) && setLang(e.target.value)}>
         {LANGUAGES.map((l) => (

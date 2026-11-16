@@ -107,6 +107,7 @@ export function WorkspaceHeader({ role }: { role?: string }) {
     { group: "Team", href: "/dashboard/academy", label: "Academy", show: true },
     { group: "Team", href: "/dashboard/users", label: "Users", show: role === "super_admin" },
     { group: "Team", href: "/dashboard/staff", label: "Staff", show: role === "super_admin" },
+    { group: "Team", href: "/dashboard/translations", label: "Translations", show: role === "super_admin" },
     { group: "Team", href: "/dashboard/settings", label: "Settings", show: role === "super_admin" }
   ];
   const visible = links.filter((link) => link.show);
