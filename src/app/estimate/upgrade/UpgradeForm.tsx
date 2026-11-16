@@ -387,8 +387,10 @@ export function UpgradeForm({
               <Num id="up-bat-n" required label={t("upgradeForm.batteryCount")} value={f.batteryCount} onChange={(v) => set("batteryCount", v)} />
               <div className="upgrade-field">
                 <label htmlFor="up-bat-v">{t("upgradeForm.batteryEachV")} <span className="upgrade-unit">(V)</span></label>
-                <Chips label={t("upgradeForm.commonBatteryVoltages")} options={["12", "24", "48", "51.2"]} value={f.batteryV} onChange={(v) => set("batteryV", v)} />
-                <input id="up-bat-v" inputMode="decimal" autoComplete="off" placeholder={t("upgradeForm.orType")} value={f.batteryV} onChange={(e) => set("batteryV", e.target.value)} />
+                <div className="upgrade-control">
+                  <input id="up-bat-v" inputMode="decimal" autoComplete="off" placeholder={t("upgradeForm.orType")} value={f.batteryV} onChange={(e) => set("batteryV", e.target.value)} />
+                  <Chips label={t("upgradeForm.commonBatteryVoltages")} options={["12", "24", "48", "51.2"]} value={f.batteryV} onChange={(v) => set("batteryV", v)} />
+                </div>
               </div>
               <Num id="up-bat-ah" required label={t("upgradeForm.capacityEach")} unit="Ah" value={f.batteryAh} onChange={(v) => set("batteryAh", v)} placeholder="e.g. 200" />
               <Num id="up-bat-age" label={t("upgradeForm.age")} unit={t("upgradeForm.years")} value={f.batteryAge} onChange={(v) => set("batteryAge", v)} />
