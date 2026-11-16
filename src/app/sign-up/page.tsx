@@ -5,6 +5,7 @@ import { RememberLogin } from "@/components/RememberLogin";
 import { useSavedLogin } from "@/lib/savedLogin";
 import Link from "next/link";
 import { AuthHome } from "@/components/AuthHome";
+import { DraftNotice, LanguagePicker, Rich, useT } from "@/lib/i18n";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -23,6 +24,7 @@ function nextPath() {
 }
 
 function SignUpForm() {
+  const t = useT();
   const { signIn } = useAuthActions();
   const { isAuthenticated } = useConvexAuth();
   const register = useMutation(api.shop.registerCustomer);
@@ -43,7 +45,7 @@ function SignUpForm() {
         setMessage(
           e instanceof ConvexError && typeof e.data === "string"
             ? e.data
-            : "We could not finish creating your account. Try signing in."
+            : t("signup.finishFailed")
         );
         setBusy(false);
       });
@@ -65,26 +67,26 @@ function SignUpForm() {
       await login.afterSuccess({ email, password: form.password });
     } catch {
       pending.current = false;
-      setMessage("We could not create the account. This email may already be registered. Try signing in instead.");
+      setMessage(t("signup.failed"));
       setBusy(false);
     }
   }
 
   return (
     <form className="auth-form" onSubmit={submit}>
-      <label htmlFor="su-name">Your name</label>
+      <label htmlFor="su-name">{t("signup.name")}</label>
       <input id="su-name" required maxLength={100} autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-      <label htmlFor="su-phone">Phone</label>
+      <label htmlFor="su-phone">{t("signup.phone")}</label>
       <input id="su-phone" required type="tel" maxLength={20} autoComplete="tel" placeholder="+256 700 000000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-      <label htmlFor="su-email">Email</label>
+      <label htmlFor="su-email">{t("auth.email")}</label>
       <input id="su-email" required type="email" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-      <label htmlFor="su-password">Password (at least 8 characters)</label>
+      <label htmlFor="su-password">{t("signup.passwordRule")}</label>
       <PasswordInput id="su-password" autoComplete="new-password" value={form.password} onChange={(password) => setForm({ ...form, password })} />
       {login.supported ? <RememberLogin checked={login.remember} onChange={login.setRemember} /> : null}
       {message ? <p className="auth-message" role="alert">{message}</p> : null}
-      <button type="submit" disabled={busy}>{busy ? "Please wait…" : "Create my account"}</button>
+      <button type="submit" disabled={busy}>{busy ? t("common.pleaseWait") : t("signup.submit")}</button>
       <p className="auth-note">
-        Already have an account? <Link href="/sign-in"><u>Sign in</u></Link>
+        <Rich text={t("signup.haveAccount")} link={(label) => <Link href="/sign-in"><u>{label}</u></Link>} />
       </p>
     </form>
   );
@@ -92,22 +94,38 @@ function SignUpForm() {
 
 export default function SignUpPage() {
   if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
+    return <SignUpUnavailable />;
+  }
+  return <SignUpScreen />;
+}
+
+function SignUpUnavailable() {
+  const t = useT();
+  {
     return (
       <main className="auth-shell">
         <section className="auth-card">
-          <h1>Sign-up is not available yet</h1>
-          <p>Please try again later.</p>
+          <h1>{t("signup.unavailable")}</h1>
+          <p>{t("common.tryLater")}</p>
         </section>
       </main>
     );
   }
+}
+
+function SignUpScreen() {
+  const t = useT();
   return (
     <main className="auth-shell">
       <section className="auth-card">
-        <AuthHome />
-        <p className="eyebrow">SOLAR SWITCH CUSTOMERS</p>
-        <h1>Create your account</h1>
-        <p>Sign up to see our full product catalogue and place orders.</p>
+        <div className="auth-top">
+          <AuthHome />
+          <LanguagePicker />
+        </div>
+        <DraftNotice />
+        <p className="eyebrow">{t("auth.customers")}</p>
+        <h1>{t("signup.title")}</h1>
+        <p>{t("signup.intro")}</p>
         <SignUpForm />
       </section>
     </main>

@@ -4,6 +4,7 @@ import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
 import type { ReactNode } from "react";
 import { AppInbox } from "./AppInbox";
+import { LanguageProvider } from "@/lib/i18n";
 
 /**
  * No "Leave this page? Changes may not be saved" box anywhere in the app. The Convex client
@@ -28,7 +29,7 @@ export function ConvexClientProvider({
   return (
     <ConvexAuthProvider client={convex}>
       <AppInbox />
-      {children}
+      <LanguageProvider>{children}</LanguageProvider>
     </ConvexAuthProvider>
   );
 }

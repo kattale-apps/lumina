@@ -10,6 +10,8 @@
  * learner before they have passed the quiz.
  */
 import { photoUrlOf, profileComplete } from "./profile";
+import { academyTranslation } from "./i18n";
+import { translateModule } from "./lib/academyI18n";
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
@@ -67,6 +69,13 @@ async function loadModules(ctx: Ctx, tenantId: Id<"tenants">): Promise<LoadedMod
   });
 }
 
+/** A module as a learner reads it in their language; marking always uses the English module. */
+async function inLanguage(ctx: Ctx, tenantId: Id<"tenants">, module: LoadedModule, lang: string | undefined) {
+  if (!lang || lang === "en") return { ...module, translated: false };
+  const { translation } = await academyTranslation(ctx, tenantId, module, lang);
+  return translateModule(module, translation);
+}
+
 async function loadModule(ctx: Ctx, tenantId: Id<"tenants">, key: string) {
   if (!isModuleKey(key)) throw new ConvexError("Module not found.");
   return (await loadModules(ctx, tenantId)).find((m) => m.key === key)!;
@@ -117,12 +126,13 @@ const presentCertificate = (c: Doc<"academyCertificates">, holder: Doc<"userProf
 
 /** The course as one member of staff sees it: the four modules and their own progress. */
 export const overview = query({
-  args: { tenantId: v.id("tenants") },
+  args: { tenantId: v.id("tenants"), lang: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const { profile, membership } = await requireTenantMembership(ctx, args.tenantId);
     const modules = await loadModules(ctx, args.tenantId);
     const out = [];
-    for (const m of modules) {
+    for (const english of modules) {
+      const m = await inLanguage(ctx, args.tenantId, english, args.lang);
       const s = standing(await attemptsFor(ctx, args.tenantId, profile._id, m.key));
       out.push({
         key: m.key,
@@ -153,10 +163,10 @@ export const overview = query({
 
 /** One module's lessons and quiz. The quiz carries no answers. */
 export const getModule = query({
-  args: { tenantId: v.id("tenants"), key: v.string() },
+  args: { tenantId: v.id("tenants"), key: v.string(), lang: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const { profile } = await requireTenantMembership(ctx, args.tenantId);
-    const m = await loadModule(ctx, args.tenantId, args.key);
+    const m = await inLanguage(ctx, args.tenantId, await loadModule(ctx, args.tenantId, args.key), args.lang);
     const s = standing(await attemptsFor(ctx, args.tenantId, profile._id, m.key));
     const index = MODULE_KEYS.indexOf(m.key as (typeof MODULE_KEYS)[number]);
     return {
@@ -168,6 +178,7 @@ export const getModule = query({
       summary: m.summary,
       passPercent: m.passPercent,
       version: m.version,
+      translated: m.translated,
       lessons: m.lessons.map((l) => ({ key: l.key, title: l.title, body: l.body, videoUrl: l.videoUrl ?? null })),
       questions: m.questions.map((q) => ({ key: q.key, prompt: q.prompt, options: q.options })),
       attempts: s.attempts,
@@ -188,7 +199,9 @@ export const submitQuiz = mutation({
     key: v.string(),
     // The module version the learner was shown, so an edit made meanwhile is noticed.
     version: v.number(),
-    answers: v.array(v.object({ questionKey: v.string(), optionIndex: v.number() }))
+    answers: v.array(v.object({ questionKey: v.string(), optionIndex: v.number() })),
+    // Explanations come back in this language; marking is on the English module.
+    lang: v.optional(v.string())
   },
   handler: async (ctx, args) => {
     const { profile, tenant } = await requireTenantMembership(ctx, args.tenantId);
@@ -266,7 +279,7 @@ export const submitQuiz = mutation({
       total: marked.total,
       scorePercent: marked.scorePercent,
       passPercent: m.passPercent,
-      results: m.questions.map((q, i) => ({
+      results: (await inLanguage(ctx, args.tenantId, m, args.lang)).questions.map((q, i) => ({
         questionKey: q.key,
         correct: marked.results[i],
         // Answers and explanations are released only once the quiz is passed.

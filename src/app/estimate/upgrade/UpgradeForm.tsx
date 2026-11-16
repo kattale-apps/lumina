@@ -1,7 +1,8 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
-import { FAULTY_PART_LABEL, type ExistingSystem, type Goal, type UpgradeNeeds } from "./describe";
+import { type ExistingSystem, type Goal, type UpgradeNeeds } from "./describe";
+import { translateEnglish, useT, type Translate } from "@/lib/i18n";
 
 type SystemType = ExistingSystem["systemType"];
 type Chemistry = "lithium" | "lead_acid" | "unknown";
@@ -92,84 +93,87 @@ export function blankUpgradeForm(): UpgradeFormState {
 class FormProblem extends Error {}
 
 /** A required number. Commas and spaces are accepted, e.g. "3,000". */
+let formT: Translate = translateEnglish;
 function need(raw: string, label: string) {
   const n = Number(raw.replace(/[,\s]/g, ""));
-  if (!raw.trim() || !Number.isFinite(n) || n <= 0) throw new FormProblem(`${label}: enter a number above 0.`);
+  if (!raw.trim() || !Number.isFinite(n) || n <= 0) throw new FormProblem(formT("upgradeForm.err.number", { label }));
   return n;
 }
 /** An optional number: empty means "not known", which the check treats as needing a technician. */
 function maybe(raw: string, label: string, allowZero = false) {
   if (!raw.trim()) return undefined;
   const n = Number(raw.replace(/[,\s]/g, ""));
-  if (!Number.isFinite(n) || n < 0 || (!allowZero && n === 0)) throw new FormProblem(`${label}: enter a number, or leave it empty.`);
+  if (!Number.isFinite(n) || n < 0 || (!allowZero && n === 0)) throw new FormProblem(formT("upgradeForm.err.maybe", { label }));
   return n;
 }
 
 /** Turns the form into what the server expects, or says what is still missing. */
 export function toPayload(
-  f: UpgradeFormState
+  f: UpgradeFormState,
+  t: Translate = translateEnglish
 ): { ok: true; system: ExistingSystem; needs: UpgradeNeeds } | { ok: false; error: string } {
+  formT = t;
   try {
     const batteryless = f.systemType === "grid_tied" && !f.hasBatteries && !f.hasController;
     const system: ExistingSystem = { systemType: f.systemType };
-    if (!batteryless) system.systemVoltage = need(f.systemVoltage, "System voltage");
+    if (!batteryless) system.systemVoltage = need(f.systemVoltage, t("upgradeForm.field.systemVoltage"));
 
     if (f.hasInverter) {
       system.inverter = {
-        ratedW: need(f.inverterW, "Inverter power"),
-        surgeW: maybe(f.inverterSurgeW, "Inverter surge power"),
+        ratedW: need(f.inverterW, t("upgradeForm.field.inverterPower")),
+        surgeW: maybe(f.inverterSurgeW, t("upgradeForm.field.inverterSurge")),
         hasSolarInput: f.inverterHasSolar,
-        maxPvPowerW: f.inverterHasSolar ? maybe(f.inverterPvPowerW, "Inverter solar input power") : undefined,
-        maxPvVoltage: f.inverterHasSolar ? maybe(f.inverterPvVoltage, "Inverter maximum solar voltage") : undefined,
-        mpptMinVoltage: f.inverterHasSolar ? maybe(f.inverterMpptMin, "Inverter MPPT minimum voltage") : undefined,
-        maxPvCurrentA: f.inverterHasSolar ? maybe(f.inverterPvCurrentA, "Inverter solar input current") : undefined,
-        maxChargeA: maybe(f.inverterChargeA, "Inverter charge current")
+        maxPvPowerW: f.inverterHasSolar ? maybe(f.inverterPvPowerW, t("upgradeForm.field.inverterPvPower")) : undefined,
+        maxPvVoltage: f.inverterHasSolar ? maybe(f.inverterPvVoltage, t("upgradeForm.field.inverterPvVoltage")) : undefined,
+        mpptMinVoltage: f.inverterHasSolar ? maybe(f.inverterMpptMin, t("upgradeForm.field.inverterMppt")) : undefined,
+        maxPvCurrentA: f.inverterHasSolar ? maybe(f.inverterPvCurrentA, t("upgradeForm.field.inverterPvCurrent")) : undefined,
+        maxChargeA: maybe(f.inverterChargeA, t("upgradeForm.field.inverterCharge"))
       };
     }
     if (f.hasController) {
       system.controller = {
         technology: f.controllerTech,
-        maxChargeA: need(f.controllerA, "Charge controller current"),
-        maxPvVoltage: maybe(f.controllerPvVoltage, "Charge controller maximum solar voltage"),
-        maxPvPowerW: maybe(f.controllerPvPowerW, "Charge controller solar power")
+        maxChargeA: need(f.controllerA, t("upgradeForm.field.controllerCurrent")),
+        maxPvVoltage: maybe(f.controllerPvVoltage, t("upgradeForm.field.controllerPvVoltage")),
+        maxPvPowerW: maybe(f.controllerPvPowerW, t("upgradeForm.field.controllerPvPower"))
       };
     }
     if (f.hasPanels) {
       system.panels = {
-        count: need(f.panelCount, "Number of panels"),
-        wp: need(f.panelWp, "Panel power"),
-        perString: maybe(f.panelPerString, "Panels per string"),
-        voc: maybe(f.panelVoc, "Panel Voc"),
-        vmp: maybe(f.panelVmp, "Panel Vmp"),
-        isc: maybe(f.panelIsc, "Panel Isc")
+        count: need(f.panelCount, t("upgradeForm.field.panelCount")),
+        wp: need(f.panelWp, t("upgradeForm.field.panelPower")),
+        perString: maybe(f.panelPerString, t("upgradeForm.field.panelsPerString")),
+        voc: maybe(f.panelVoc, t("upgradeForm.field.panelVoc")),
+        vmp: maybe(f.panelVmp, t("upgradeForm.field.panelVmp")),
+        isc: maybe(f.panelIsc, t("upgradeForm.field.panelIsc"))
       };
     }
     if (f.hasBatteries) {
       system.batteries = {
-        count: need(f.batteryCount, "Number of batteries"),
-        nominalV: need(f.batteryV, "Battery voltage"),
-        ah: need(f.batteryAh, "Battery capacity"),
+        count: need(f.batteryCount, t("upgradeForm.field.batteryCount")),
+        nominalV: need(f.batteryV, t("upgradeForm.field.batteryVoltage")),
+        ah: need(f.batteryAh, t("upgradeForm.field.batteryCapacity")),
         chemistry: f.batteryChemistry,
-        ageYears: maybe(f.batteryAge, "Battery age", true)
+        ageYears: maybe(f.batteryAge, t("upgradeForm.field.batteryAge"), true)
       };
     }
     if (!system.inverter && !system.controller && !system.panels && !system.batteries) {
-      throw new FormProblem("Describe at least one part of the system: the inverter, panels, batteries or charge controller.");
+      throw new FormProblem(t("upgradeForm.err.nothing"));
     }
 
-    if (f.goals.length === 0) throw new FormProblem("Choose what you want to improve.");
+    if (f.goals.length === 0) throw new FormProblem(t("upgradeForm.err.goal"));
     const needs: UpgradeNeeds = { goals: f.goals };
     if (f.goals.includes("battery")) {
-      const hours = maybe(f.backupHours, "Backup hours");
-      const load = maybe(f.backupLoadW, "Power to run during backup");
+      const hours = maybe(f.backupHours, t("upgradeForm.field.backupHours"));
+      const load = maybe(f.backupLoadW, t("upgradeForm.field.backupLoad"));
       if ((hours === undefined) !== (load === undefined)) {
-        throw new FormProblem("Give both the backup hours and the power to run during backup, or leave both empty.");
+        throw new FormProblem(t("upgradeForm.err.backupPair"));
       }
       needs.backupHours = hours;
       needs.backupLoadW = load;
     }
-    if (f.goals.includes("panels")) needs.dailyKwh = maybe(f.dailyKwh, "Energy wanted from solar");
-    if (f.goals.includes("inverter")) needs.peakLoadW = maybe(f.peakLoadW, "Most power at once");
+    if (f.goals.includes("panels")) needs.dailyKwh = maybe(f.dailyKwh, t("upgradeForm.field.dailyKwh"));
+    if (f.goals.includes("inverter")) needs.peakLoadW = maybe(f.peakLoadW, t("upgradeForm.field.peakLoad"));
     if (f.goals.includes("repair")) {
       // Only parts that are part of the system can be faulty.
       const present: Record<FaultyPart, boolean> = {
@@ -179,10 +183,10 @@ export function toPayload(
         controller: f.hasController
       };
       const parts = f.faultyParts.filter((p) => present[p]);
-      if (parts.length === 0) throw new FormProblem("Tick the part that is faulty or no longer works as well as it should.");
+      if (parts.length === 0) throw new FormProblem(t("upgradeForm.err.faultPart"));
       needs.faultyParts = parts;
       const note = f.faultNote.trim();
-      if (note.length > 500) throw new FormProblem("Keep the description of the problem to 500 characters.");
+      if (note.length > 500) throw new FormProblem(t("upgradeForm.err.faultLength"));
       if (note) needs.faultNote = note;
     }
     return { ok: true, system: clean(system), needs: clean(needs) };
@@ -197,27 +201,9 @@ function clean<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-const FAULTY_HINT: Record<FaultyPart, string> = {
-  inverter: "Beeps, trips, switches off or will not power the load.",
-  battery: "Do not last as long as before or no longer hold charge.",
-  panels: "Cracked, burnt, or making much less power than before.",
-  controller: "Stopped charging, or charging much less than before."
-};
-
-const SYSTEM_TYPES: { value: SystemType; label: string; hint: string }[] = [
-  { value: "hybrid", label: "Hybrid", hint: "Solar and batteries, with grid power as well." },
-  { value: "off_grid", label: "Off-grid", hint: "Solar and batteries, no grid connection." },
-  { value: "backup_only", label: "Backup only", hint: "Inverter and batteries charged from the grid. No panels yet." },
-  { value: "grid_tied", label: "Grid-tied", hint: "Solar that feeds the building. No batteries." }
-];
-
-const GOALS: { value: Goal; label: string; hint: string }[] = [
-  { value: "battery", label: "Longer backup", hint: "Add batteries or get a bigger bank." },
-  { value: "panels", label: "More solar", hint: "Add panels to make more power." },
-  { value: "inverter", label: "Run more at once", hint: "A bigger inverter or charge controller." },
-  { value: "swaps", label: "Cheaper or better parts", hint: "See what could replace what is there." },
-  { value: "repair", label: "Fix a faulty or worn-out part", hint: "Something is broken or no longer works as well." }
-];
+const FAULTY_PARTS: FaultyPart[] = ["inverter", "battery", "panels", "controller"];
+const SYSTEM_TYPES: SystemType[] = ["hybrid", "off_grid", "backup_only", "grid_tied"];
+const GOALS: Goal[] = ["battery", "panels", "inverter", "swaps", "repair"];
 
 function Num({
   id, label, unit, value, onChange, hint, placeholder, required
@@ -231,12 +217,13 @@ function Num({
   placeholder?: string;
   required?: boolean;
 }) {
+  const t = useT();
   return (
     <div className="upgrade-field">
       <label htmlFor={id}>
         {label}
         {unit ? <span className="upgrade-unit"> ({unit})</span> : null}
-        {required ? null : <span className="step-optional">Optional</span>}
+        {required ? null : <span className="step-optional">{t("common.optional")}</span>}
       </label>
       <input id={id} inputMode="decimal" autoComplete="off" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
       {hint ? <p className="hint">{hint}</p> : null}
@@ -268,6 +255,7 @@ export function UpgradeForm({
   setState: Dispatch<SetStateAction<UpgradeFormState>>;
   audience: "public" | "staff";
 }) {
+  const t = useT();
   const set = <K extends keyof UpgradeFormState>(key: K, value: UpgradeFormState[K]) => setState((s) => ({ ...s, [key]: value }));
   const you = audience === "public";
   const f = state;
@@ -289,137 +277,128 @@ export function UpgradeForm({
   return (
     <>
       <section className="step step-1" aria-labelledby="up-q1">
-        <h2 id="up-q1"><span className="step-num">1</span> What kind of system is it?</h2>
+        <h2 id="up-q1"><span className="step-num">1</span> {t("upgradeForm.q1")}</h2>
         <div className="choice-row" role="radiogroup" aria-labelledby="up-q1">
-          {SYSTEM_TYPES.map((t) => (
-            <button type="button" key={t.value} role="radio" aria-checked={f.systemType === t.value} className={`choice ${f.systemType === t.value ? "choice-on" : ""}`} onClick={() => chooseType(t.value)}>
-              <strong>{t.label}</strong>
-              <span>{t.hint}</span>
+          {SYSTEM_TYPES.map((type) => (
+            <button type="button" key={type} role="radio" aria-checked={f.systemType === type} className={`choice ${f.systemType === type ? "choice-on" : ""}`} onClick={() => chooseType(type)}>
+              <strong>{t(`upgradeForm.type.${type}`)}</strong>
+              <span>{t(`upgradeForm.type.${type}.hint`)}</span>
             </button>
           ))}
         </div>
         {needsVoltage ? (
           <div className="upgrade-field">
-            <label htmlFor="up-voltage">System voltage <span className="upgrade-unit">(V)</span></label>
-            <Chips label="Common system voltages" options={["12", "24", "48"]} value={f.systemVoltage} onChange={(v) => set("systemVoltage", v)} />
-            <input id="up-voltage" inputMode="decimal" autoComplete="off" placeholder="Or type it" value={f.systemVoltage} onChange={(e) => set("systemVoltage", e.target.value)} />
-            <p className="hint">
-              The battery bank voltage. It is printed on the inverter or charge controller, for example &quot;48 V DC&quot;.
-              Four 12 V batteries in a row make 48 V.
-            </p>
+            <label htmlFor="up-voltage">{t("upgradeForm.systemVoltage")} <span className="upgrade-unit">(V)</span></label>
+            <Chips label={t("upgradeForm.commonSystemVoltages")} options={["12", "24", "48"]} value={f.systemVoltage} onChange={(v) => set("systemVoltage", v)} />
+            <input id="up-voltage" inputMode="decimal" autoComplete="off" placeholder={t("upgradeForm.orType")} value={f.systemVoltage} onChange={(e) => set("systemVoltage", e.target.value)} />
+            <p className="hint">{t("upgradeForm.voltageHint")}</p>
           </div>
         ) : null}
       </section>
 
       <section className="step step-2" aria-labelledby="up-q2">
-        <h2 id="up-q2"><span className="step-num">2</span> The inverter</h2>
+        <h2 id="up-q2"><span className="step-num">2</span> {t("upgradeForm.q2")}</h2>
         <label className="check-row" htmlFor="up-has-inv">
           <input id="up-has-inv" type="checkbox" checked={f.hasInverter} onChange={(e) => set("hasInverter", e.target.checked)} />
-          There is an inverter
+          {t("upgradeForm.hasInverter")}
         </label>
         {f.hasInverter ? (
           <>
-            <Num id="up-inv-w" required label="Power" unit="W" value={f.inverterW} onChange={(v) => set("inverterW", v)} placeholder="e.g. 3000"
-              hint="Use the watt (W) figure on the label. If it only shows kVA, a 3 kVA inverter is often 2400 to 3000 W." />
+            <Num id="up-inv-w" required label={t("upgradeForm.power")} unit="W" value={f.inverterW} onChange={(v) => set("inverterW", v)} placeholder="e.g. 3000"
+              hint={t("upgradeForm.inverterPowerHint")} />
             <label className="check-row" htmlFor="up-inv-solar">
               <input id="up-inv-solar" type="checkbox" checked={f.inverterHasSolar} onChange={(e) => set("inverterHasSolar", e.target.checked)} />
-              The solar panels plug straight into this inverter
+              {t("upgradeForm.inverterSolar")}
             </label>
             <details className="upgrade-more">
-              <summary>More from the inverter label</summary>
+              <summary>{t("upgradeForm.moreInverter")}</summary>
               {f.inverterHasSolar ? (
                 <div className="upgrade-grid">
-                  <Num id="up-inv-pvw" label="Max solar input power" unit="W" value={f.inverterPvPowerW} onChange={(v) => set("inverterPvPowerW", v)} />
-                  <Num id="up-inv-pvv" label="Max solar input voltage" unit="V" value={f.inverterPvVoltage} onChange={(v) => set("inverterPvVoltage", v)} />
-                  <Num id="up-inv-mppt" label="MPPT minimum voltage" unit="V" value={f.inverterMpptMin} onChange={(v) => set("inverterMpptMin", v)} />
-                  <Num id="up-inv-pva" label="Max solar input current" unit="A" value={f.inverterPvCurrentA} onChange={(v) => set("inverterPvCurrentA", v)} />
+                  <Num id="up-inv-pvw" label={t("upgradeForm.maxPvPower")} unit="W" value={f.inverterPvPowerW} onChange={(v) => set("inverterPvPowerW", v)} />
+                  <Num id="up-inv-pvv" label={t("upgradeForm.maxPvVoltage")} unit="V" value={f.inverterPvVoltage} onChange={(v) => set("inverterPvVoltage", v)} />
+                  <Num id="up-inv-mppt" label={t("upgradeForm.mpptMin")} unit="V" value={f.inverterMpptMin} onChange={(v) => set("inverterMpptMin", v)} />
+                  <Num id="up-inv-pva" label={t("upgradeForm.maxPvCurrent")} unit="A" value={f.inverterPvCurrentA} onChange={(v) => set("inverterPvCurrentA", v)} />
                 </div>
               ) : null}
               <div className="upgrade-grid">
-                <Num id="up-inv-charge" label="Max battery charge current" unit="A" value={f.inverterChargeA} onChange={(v) => set("inverterChargeA", v)} />
-                <Num id="up-inv-surge" label="Surge power" unit="W" value={f.inverterSurgeW} onChange={(v) => set("inverterSurgeW", v)} />
+                <Num id="up-inv-charge" label={t("upgradeForm.maxCharge")} unit="A" value={f.inverterChargeA} onChange={(v) => set("inverterChargeA", v)} />
+                <Num id="up-inv-surge" label={t("upgradeForm.surge")} unit="W" value={f.inverterSurgeW} onChange={(v) => set("inverterSurgeW", v)} />
               </div>
-              <p className="hint">
-                Leave empty anything {you ? "you" : "the customer"} cannot find. It is then marked for a technician to confirm instead of being guessed.
-              </p>
+              <p className="hint">{you ? t("upgradeForm.leaveEmptyYou") : t("upgradeForm.leaveEmptyCustomer")}</p>
             </details>
           </>
         ) : null}
 
         <label className="check-row" htmlFor="up-has-ctl">
           <input id="up-has-ctl" type="checkbox" checked={f.hasController} onChange={(e) => set("hasController", e.target.checked)} />
-          There is a separate solar charge controller
+          {t("upgradeForm.hasController")}
         </label>
         {f.hasController ? (
           <>
-            <div className="segmented" role="radiogroup" aria-label="Charge controller type">
-              {(["MPPT", "PWM"] as const).map((t) => (
-                <button key={t} type="button" role="radio" aria-checked={f.controllerTech === t} className={f.controllerTech === t ? "segmented-on" : ""} onClick={() => set("controllerTech", t)}>
-                  {t}
+            <div className="segmented" role="radiogroup" aria-label={t("upgradeForm.controllerType")}>
+              {(["MPPT", "PWM"] as const).map((tech) => (
+                <button key={tech} type="button" role="radio" aria-checked={f.controllerTech === tech} className={f.controllerTech === tech ? "segmented-on" : ""} onClick={() => set("controllerTech", tech)}>
+                  {tech}
                 </button>
               ))}
             </div>
             <div className="upgrade-grid">
-              <Num id="up-ctl-a" required label="Rated current" unit="A" value={f.controllerA} onChange={(v) => set("controllerA", v)} placeholder="e.g. 60" />
-              <Num id="up-ctl-v" label="Max solar voltage" unit="V" value={f.controllerPvVoltage} onChange={(v) => set("controllerPvVoltage", v)} placeholder="e.g. 150" />
-              <Num id="up-ctl-w" label="Max solar power" unit="W" value={f.controllerPvPowerW} onChange={(v) => set("controllerPvPowerW", v)} />
+              <Num id="up-ctl-a" required label={t("upgradeForm.ratedCurrent")} unit="A" value={f.controllerA} onChange={(v) => set("controllerA", v)} placeholder="e.g. 60" />
+              <Num id="up-ctl-v" label={t("upgradeForm.maxSolarVoltage")} unit="V" value={f.controllerPvVoltage} onChange={(v) => set("controllerPvVoltage", v)} placeholder="e.g. 150" />
+              <Num id="up-ctl-w" label={t("upgradeForm.maxSolarPower")} unit="W" value={f.controllerPvPowerW} onChange={(v) => set("controllerPvPowerW", v)} />
             </div>
           </>
         ) : null}
       </section>
 
       <section className="step step-3" aria-labelledby="up-q3">
-        <h2 id="up-q3"><span className="step-num">3</span> Panels and batteries</h2>
+        <h2 id="up-q3"><span className="step-num">3</span> {t("upgradeForm.q3")}</h2>
         <label className="check-row" htmlFor="up-has-pv">
           <input id="up-has-pv" type="checkbox" checked={f.hasPanels} onChange={(e) => set("hasPanels", e.target.checked)} />
-          There are solar panels
+          {t("upgradeForm.hasPanels")}
         </label>
         {f.hasPanels ? (
           <>
             <div className="upgrade-grid">
-              <Num id="up-pv-n" required label="How many panels" value={f.panelCount} onChange={(v) => set("panelCount", v)} />
-              <Num id="up-pv-w" required label="Power of each" unit="W" value={f.panelWp} onChange={(v) => set("panelWp", v)} placeholder="e.g. 330" />
-              <Num id="up-pv-s" label="Panels in each string" value={f.panelPerString} onChange={(v) => set("panelPerString", v)}
-                hint="How many are wired one after another in a row before reaching the controller." />
+              <Num id="up-pv-n" required label={t("upgradeForm.panelCount")} value={f.panelCount} onChange={(v) => set("panelCount", v)} />
+              <Num id="up-pv-w" required label={t("upgradeForm.panelEach")} unit="W" value={f.panelWp} onChange={(v) => set("panelWp", v)} placeholder="e.g. 330" />
+              <Num id="up-pv-s" label={t("upgradeForm.perString")} value={f.panelPerString} onChange={(v) => set("panelPerString", v)}
+                hint={t("upgradeForm.perStringHint")} />
             </div>
             <details className="upgrade-more">
-              <summary>From the label on the back of a panel</summary>
+              <summary>{t("upgradeForm.panelLabel")}</summary>
               <div className="upgrade-grid">
-                <Num id="up-pv-voc" label="Open-circuit voltage, Voc" unit="V" value={f.panelVoc} onChange={(v) => set("panelVoc", v)} />
-                <Num id="up-pv-vmp" label="Voltage at max power, Vmp" unit="V" value={f.panelVmp} onChange={(v) => set("panelVmp", v)} />
-                <Num id="up-pv-isc" label="Short-circuit current, Isc" unit="A" value={f.panelIsc} onChange={(v) => set("panelIsc", v)} />
+                <Num id="up-pv-voc" label={t("upgradeForm.voc")} unit="V" value={f.panelVoc} onChange={(v) => set("panelVoc", v)} />
+                <Num id="up-pv-vmp" label={t("upgradeForm.vmp")} unit="V" value={f.panelVmp} onChange={(v) => set("panelVmp", v)} />
+                <Num id="up-pv-isc" label={t("upgradeForm.isc")} unit="A" value={f.panelIsc} onChange={(v) => set("panelIsc", v)} />
               </div>
-              <p className="hint">These let the check match new panels to the old strings. Without them, the match is left for a technician.</p>
+              <p className="hint">{t("upgradeForm.panelLabelHint")}</p>
             </details>
           </>
         ) : null}
 
         <label className="check-row" htmlFor="up-has-bat">
           <input id="up-has-bat" type="checkbox" checked={f.hasBatteries} onChange={(e) => set("hasBatteries", e.target.checked)} />
-          There are batteries
+          {t("upgradeForm.hasBatteries")}
         </label>
         {f.hasBatteries ? (
           <>
             <div className="upgrade-grid">
-              <Num id="up-bat-n" required label="How many batteries" value={f.batteryCount} onChange={(v) => set("batteryCount", v)} />
+              <Num id="up-bat-n" required label={t("upgradeForm.batteryCount")} value={f.batteryCount} onChange={(v) => set("batteryCount", v)} />
               <div className="upgrade-field">
-                <label htmlFor="up-bat-v">Voltage of each <span className="upgrade-unit">(V)</span></label>
-                <Chips label="Common battery voltages" options={["12", "24", "48", "51.2"]} value={f.batteryV} onChange={(v) => set("batteryV", v)} />
-                <input id="up-bat-v" inputMode="decimal" autoComplete="off" placeholder="Or type it" value={f.batteryV} onChange={(e) => set("batteryV", e.target.value)} />
+                <label htmlFor="up-bat-v">{t("upgradeForm.batteryEachV")} <span className="upgrade-unit">(V)</span></label>
+                <Chips label={t("upgradeForm.commonBatteryVoltages")} options={["12", "24", "48", "51.2"]} value={f.batteryV} onChange={(v) => set("batteryV", v)} />
+                <input id="up-bat-v" inputMode="decimal" autoComplete="off" placeholder={t("upgradeForm.orType")} value={f.batteryV} onChange={(e) => set("batteryV", e.target.value)} />
               </div>
-              <Num id="up-bat-ah" required label="Capacity of each" unit="Ah" value={f.batteryAh} onChange={(v) => set("batteryAh", v)} placeholder="e.g. 200" />
-              <Num id="up-bat-age" label="Age" unit="years" value={f.batteryAge} onChange={(v) => set("batteryAge", v)} />
+              <Num id="up-bat-ah" required label={t("upgradeForm.capacityEach")} unit="Ah" value={f.batteryAh} onChange={(v) => set("batteryAh", v)} placeholder="e.g. 200" />
+              <Num id="up-bat-age" label={t("upgradeForm.age")} unit={t("upgradeForm.years")} value={f.batteryAge} onChange={(v) => set("batteryAge", v)} />
             </div>
-            <p className="field-label" id="up-chem">Battery type</p>
+            <p className="field-label" id="up-chem">{t("upgradeForm.batteryType")}</p>
             <div className="choice-row" role="radiogroup" aria-labelledby="up-chem">
-              {([
-                ["lithium", "Lithium", "LiFePO4 or other lithium, usually with a display or BMS."],
-                ["lead_acid", "Lead-acid", "AGM, gel, tubular or flooded. Heavy, like a large car battery."],
-                ["unknown", "Not sure", "A technician will check."]
-              ] as const).map(([value, label, hint]) => (
+              {(["lithium", "lead_acid", "unknown"] as const).map((value) => (
                 <button type="button" key={value} role="radio" aria-checked={f.batteryChemistry === value} className={`choice ${f.batteryChemistry === value ? "choice-on" : ""}`} onClick={() => set("batteryChemistry", value)}>
-                  <strong>{label}</strong>
-                  <span>{hint}</span>
+                  <strong>{t(`upgradeForm.chem.${value}`)}</strong>
+                  <span>{t(`upgradeForm.chem.${value}.hint`)}</span>
                 </button>
               ))}
             </div>
@@ -428,31 +407,31 @@ export function UpgradeForm({
       </section>
 
       <section className="step step-4" aria-labelledby="up-q4">
-        <h2 id="up-q4"><span className="step-num">4</span> What {you ? "do you" : "does the customer"} want to improve?</h2>
+        <h2 id="up-q4"><span className="step-num">4</span> {you ? t("upgradeForm.q4You") : t("upgradeForm.q4Customer")}</h2>
         <div className="choice-row" role="group" aria-labelledby="up-q4">
           {GOALS.map((g) => (
-            <button type="button" key={g.value} aria-pressed={f.goals.includes(g.value)} className={`choice ${f.goals.includes(g.value) ? "choice-on" : ""}`} onClick={() => toggleGoal(g.value)}>
-              <strong>{f.goals.includes(g.value) ? "✓ " : ""}{g.label}</strong>
-              <span>{g.hint}</span>
+            <button type="button" key={g} aria-pressed={f.goals.includes(g)} className={`choice ${f.goals.includes(g) ? "choice-on" : ""}`} onClick={() => toggleGoal(g)}>
+              <strong>{f.goals.includes(g) ? "✓ " : ""}{t(`upgradeForm.goal.${g}`)}</strong>
+              <span>{t(`upgradeForm.goal.${g}.hint`)}</span>
             </button>
           ))}
         </div>
         {f.goals.includes("battery") ? (
           <div className="upgrade-grid">
-            <Num id="up-need-h" label="Hours of backup wanted" unit="h" value={f.backupHours} onChange={(v) => set("backupHours", v)} placeholder="e.g. 8" />
-            <Num id="up-need-w" label="Power to run during backup" unit="W" value={f.backupLoadW} onChange={(v) => set("backupLoadW", v)} placeholder="e.g. 500"
-              hint="Lights, a TV and a fridge together are roughly 300 to 500 W." />
+            <Num id="up-need-h" label={t("upgradeForm.backupHours")} unit="h" value={f.backupHours} onChange={(v) => set("backupHours", v)} placeholder="e.g. 8" />
+            <Num id="up-need-w" label={t("upgradeForm.backupLoad")} unit="W" value={f.backupLoadW} onChange={(v) => set("backupLoadW", v)} placeholder="e.g. 500"
+              hint={t("upgradeForm.backupLoadHint")} />
           </div>
         ) : null}
         {f.goals.includes("panels") ? (
-          <Num id="up-need-kwh" label="Energy wanted from solar each day" unit="kWh" value={f.dailyKwh} onChange={(v) => set("dailyKwh", v)} placeholder="e.g. 8"
-            hint="One Yaka unit is 1 kWh. 150 units a month is about 5 kWh a day. Leave empty to see how many panels fit." />
+          <Num id="up-need-kwh" label={t("upgradeForm.dailyKwh")} unit="kWh" value={f.dailyKwh} onChange={(v) => set("dailyKwh", v)} placeholder="e.g. 8"
+            hint={t("upgradeForm.dailyKwhHint")} />
         ) : null}
         {f.goals.includes("repair") ? (
           <div className="upgrade-fault">
-            <p className="upgrade-fault-q">{you ? "Which part is giving trouble?" : "Which part is faulty?"} <span className="hint">Tick all that apply.</span></p>
+            <p className="upgrade-fault-q">{you ? t("upgradeForm.faultQYou") : t("upgradeForm.faultQCustomer")} <span className="hint">{t("upgradeForm.tickAll")}</span></p>
             <div className="choice-row">
-              {(Object.keys(FAULTY_PART_LABEL) as FaultyPart[]).map((part) => {
+              {FAULTY_PARTS.map((part) => {
                 const present = { inverter: f.hasInverter, battery: f.hasBatteries, panels: f.hasPanels, controller: f.hasController }[part];
                 if (!present) return null;
                 const on = f.faultyParts.includes(part);
@@ -464,27 +443,27 @@ export function UpgradeForm({
                     className={`choice ${on ? "choice-on" : ""}`}
                     onClick={() => set("faultyParts", on ? f.faultyParts.filter((p) => p !== part) : [...f.faultyParts, part])}
                   >
-                    <strong>{on ? "✓ " : ""}{FAULTY_PART_LABEL[part]}</strong>
-                    <span>{FAULTY_HINT[part]}</span>
+                    <strong>{on ? "✓ " : ""}{t(`upgradeForm.fault.${part}`)}</strong>
+                    <span>{t(`upgradeForm.faultHint.${part}`)}</span>
                   </button>
                 );
               })}
             </div>
-            <label htmlFor="up-fault-note">{you ? "What is wrong?" : "What is wrong with it?"} <span className="step-optional">Optional</span></label>
+            <label htmlFor="up-fault-note">{you ? t("upgradeForm.whatWrongYou") : t("upgradeForm.whatWrongCustomer")} <span className="step-optional">{t("common.optional")}</span></label>
             <textarea
               id="up-fault-note"
               rows={3}
               maxLength={500}
-              placeholder="e.g. The batteries no longer last the night, or the inverter beeps and switches off."
+              placeholder={t("upgradeForm.faultPlaceholder")}
               value={f.faultNote}
               onChange={(e) => set("faultNote", e.target.value)}
             />
-            <p className="hint">A technician tests the part before anything is replaced, so you only pay for what has really failed.</p>
+            <p className="hint">{t("upgradeForm.faultTestNote")}</p>
           </div>
         ) : null}
         {f.goals.includes("inverter") ? (
-          <Num id="up-need-peak" label="Most power running at the same time" unit="W" value={f.peakLoadW} onChange={(v) => set("peakLoadW", v)} placeholder="e.g. 3500"
-            hint="Add up the appliances that may be on together. Leave empty to see like-for-like replacements." />
+          <Num id="up-need-peak" label={t("upgradeForm.peak")} unit="W" value={f.peakLoadW} onChange={(v) => set("peakLoadW", v)} placeholder="e.g. 3500"
+            hint={t("upgradeForm.peakHint")} />
         ) : null}
       </section>
     </>

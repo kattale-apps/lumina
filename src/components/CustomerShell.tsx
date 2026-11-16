@@ -7,16 +7,18 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { ProfilePrompt } from "../app/dashboard/workspace";
+import { DraftNotice, LanguagePicker, useT, type MessageKey } from "@/lib/i18n";
 
-const TABS = [
-  { href: "/my-requests", label: "My recommendations" },
-  { href: "/shop", label: "Shop" },
-  { href: "/estimate", label: "Power check" },
-  { href: "/profile", label: "My profile" }
+const TABS: { href: string; label: MessageKey }[] = [
+  { href: "/my-requests", label: "customer.tabRecommendations" },
+  { href: "/shop", label: "customer.tabShop" },
+  { href: "/estimate", label: "customer.tabPowerCheck" },
+  { href: "/profile", label: "customer.tabProfile" }
 ];
 
 /** Page frame for signed-in customers: logo and sign-out on one line, then a row of tabs. */
 export function CustomerShell({ children, signedIn }: { children: ReactNode; signedIn?: boolean }) {
+  const t = useT();
   const { signOut } = useAuthActions();
   const path = usePathname();
   const inbox = useQuery(api.inbox.myInbox, signedIn ? {} : "skip");
@@ -25,23 +27,27 @@ export function CustomerShell({ children, signedIn }: { children: ReactNode; sig
     <div className="public-bg">
       <div className="shell">
         <header className="topbar">
-          <Link className="brand" href="/" aria-label="Solar Switch home">
+          <Link className="brand" href="/" aria-label={t("common.brandHome")}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img className="brand-logo" src="/icons/icon-192.png" alt="" width={38} height={38} />
             <span>SOLAR SWITCH</span>
           </Link>
-          {signedIn ? (
-            <button className="button button-small button-secondary" type="button" onClick={() => void signOut()}>Sign out</button>
-          ) : (
-            <Link className="button button-small button-secondary" href="/sign-in">Sign in</Link>
-          )}
+          <div className="topbar-actions">
+            <LanguagePicker />
+            {signedIn ? (
+              <button className="button button-small button-secondary" type="button" onClick={() => void signOut()}>{t("common.signOut")}</button>
+            ) : (
+              <Link className="button button-small button-secondary" href="/sign-in">{t("common.signIn")}</Link>
+            )}
+          </div>
         </header>
+        <DraftNotice />
         {signedIn ? (
           <nav className="customer-nav" aria-label="Customer">
-            {TABS.map((t) => (
-              <Link key={t.href} href={t.href} className={path === t.href ? "customer-tab customer-tab-on" : "customer-tab"} aria-current={path === t.href ? "page" : undefined}>
-                {t.label}
-                {t.href === "/my-requests" && inbox?.customer ? <span className="nav-count" aria-label={`${inbox.customer} new`}>{inbox.customer}</span> : null}
+            {TABS.map((tab) => (
+              <Link key={tab.href} href={tab.href} className={path === tab.href ? "customer-tab customer-tab-on" : "customer-tab"} aria-current={path === tab.href ? "page" : undefined}>
+                {t(tab.label)}
+                {tab.href === "/my-requests" && inbox?.customer ? <span className="nav-count" aria-label={t("customer.newCount", { count: inbox.customer })}>{inbox.customer}</span> : null}
               </Link>
             ))}
           </nav>

@@ -10,34 +10,35 @@ import { AppUpdateNeeded, savePdf } from "../../../lib/savePdf";
 import { describeNeeds, describeSystem, type ExistingSystem, type UpgradeNeeds } from "./describe";
 import { blankUpgradeForm, toPayload, UpgradeForm } from "./UpgradeForm";
 import { toggleOption, UpgradeReport, type Report } from "./UpgradeReport";
+import { DraftNotice, LanguagePicker, Rich, useT } from "@/lib/i18n";
 
 type Grid = "none" | "unreliable" | "reliable";
-const GRID_CHOICES: { value: Grid; label: string }[] = [
-  { value: "reliable", label: "Mostly reliable" },
-  { value: "unreliable", label: "Often goes off" },
-  { value: "none", label: "No grid power" }
-];
+const GRID_CHOICES: Grid[] = ["reliable", "unreliable", "none"];
 
-function message(error: unknown) {
+function message(error: unknown, fallback: string) {
   if (error instanceof ConvexError && typeof error.data === "string") return error.data;
-  return "Something went wrong. Check your connection and try again.";
+  return fallback;
 }
 
 export default function UpgradeCheckPage() {
-  if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
-    return (
-      <main className="auth-shell">
-        <section className="auth-card">
-          <h1>Upgrade check unavailable</h1>
-          <p>This page is not connected yet. Please try again later.</p>
-        </section>
-      </main>
-    );
-  }
+  if (!process.env.NEXT_PUBLIC_CONVEX_URL) return <Unavailable />;
   return <UpgradeCheck />;
 }
 
+function Unavailable() {
+  const t = useT();
+  return (
+    <main className="auth-shell">
+      <section className="auth-card">
+        <h1>{t("upgrade.unavailable")}</h1>
+        <p>{t("upgrade.unavailableHint")}</p>
+      </section>
+    </main>
+  );
+}
+
 function UpgradeCheck() {
+  const t = useT();
   const convex = useConvex();
   const config = useQuery(api.upgrades.publicConfig, {});
   const customer = useQuery(api.shop.myAccount, {});
@@ -58,19 +59,19 @@ function UpgradeCheck() {
   const signedInCustomer = customer?.signedIn === true;
   const hasCustomerAccount = signedInCustomer && customer.account !== null;
 
-  if (config === undefined) return <Shell><p className="muted">Loading…</p></Shell>;
+  if (config === undefined) return <Shell><p className="muted">{t("common.loading")}</p></Shell>;
   if (!config.enabled) {
     return (
       <Shell>
-        <h1>The upgrade check is not open yet</h1>
-        <p className="muted">Please check back soon, or contact us directly.</p>
+        <h1>{t("upgrade.notOpen")}</h1>
+        <p className="muted">{t("estimate.notOpenHint")}</p>
       </Shell>
     );
   }
 
   async function calculate(event: FormEvent) {
     event.preventDefault();
-    const payload = toPayload(form);
+    const payload = toPayload(form, t);
     if (!payload.ok) {
       setError(payload.error);
       return;
@@ -85,7 +86,7 @@ function UpgradeCheck() {
       setTimeout(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch (e) {
       setChecked(null);
-      setError(message(e));
+      setError(message(e, t("common.genericError")));
     } finally {
       setBusy(false);
     }
@@ -106,7 +107,7 @@ function UpgradeCheck() {
       });
       await savePdf(bytes, `solar-upgrade-report-${new Date().toISOString().slice(0, 10)}.pdf`, "Solar upgrade report");
     } catch (e) {
-      setError(e instanceof AppUpdateNeeded ? e.message : "We could not create the PDF. Please try again.");
+      setError(e instanceof AppUpdateNeeded ? e.message : t("estimate.errPdf"));
     } finally {
       setPdfBusy(false);
     }
@@ -116,7 +117,7 @@ function UpgradeCheck() {
     event.preventDefault();
     if (!checked) return;
     if (!grid) {
-      setError("Tell us how reliable your grid power is.");
+      setError(t("upgrade.errGrid"));
       return;
     }
     setBusy(true);
@@ -137,7 +138,7 @@ function UpgradeCheck() {
       if (sent.claimToken) rememberPendingRequest(sent.claimToken);
       setDone({ hasAccount: sent.hasAccount });
     } catch (e) {
-      setError(message(e));
+      setError(message(e, t("common.genericError")));
     } finally {
       setBusy(false);
     }
@@ -146,30 +147,28 @@ function UpgradeCheck() {
   if (done) {
     return (
       <Shell>
-        <h1>Thank you, {(hasCustomerAccount ? customer.account!.name : contact.name).split(" ")[0]}</h1>
+        <h1>{t("estimate.thanks", { name: (hasCustomerAccount ? customer.account!.name : contact.name).split(" ")[0] })}</h1>
         <p>
-          We have the details of your system. A technician will review them and prepare a recommendation with prices.
-          We may call you on <strong>{hasCustomerAccount ? customer.account!.phone : contact.phone}</strong>, and we will
-          need to see the equipment before anything is final.
+          <Rich text={t("upgrade.thanksText", { phone: hasCustomerAccount ? customer.account!.phone : contact.phone })} />
         </p>
         {done.hasAccount ? (
           <div className="next-step next-step-ok">
-            <strong>✅ It will appear in your account</strong>
-            <p>Open My recommendations to see it as soon as it is ready.</p>
-            <Link className="button" href="/my-requests">Go to My recommendations</Link>
+            <strong>{t("estimate.inAccountTitle")}</strong>
+            <p>{t("estimate.inAccountText")}</p>
+            <Link className="button" href="/my-requests">{t("estimate.goToRecommendations")}</Link>
           </div>
         ) : (
           <div className="next-step">
-            <strong>📲 Sign up to get your recommendation in the app</strong>
-            <p>Create a free account on this phone to receive your recommendation with options and prices.</p>
-            <Link className="button" href="/sign-up?next=/my-requests">Create my free account</Link>
+            <strong>{t("estimate.signUpTitle")}</strong>
+            <p>{t("upgrade.signUpText")}</p>
+            <Link className="button" href="/sign-up?next=/my-requests">{t("estimate.signUpButton")}</Link>
             <p className="hint">
-              Already have an account? <Link href="/sign-in"><u>Sign in</u></Link> on this phone and your request is added to it.
+              <Rich text={t("estimate.signInInstead")} link={(label) => <Link href="/sign-in"><u>{label}</u></Link>} />
             </p>
           </div>
         )}
-        {config.contactPhone ? <p className="muted">Questions? Call {config.contactPhone}.</p> : null}
-        <Link className="button button-secondary" href="/">Back to home</Link>
+        {config.contactPhone ? <p className="muted">{t("common.questionsCall", { phone: config.contactPhone })}</p> : null}
+        <Link className="button button-secondary" href="/">{t("estimate.backHome")}</Link>
       </Shell>
     );
   }
@@ -178,24 +177,21 @@ function UpgradeCheck() {
 
   return (
     <Shell>
-      <h1>Already have solar? Check your upgrade</h1>
-      <p className="muted">
-        Tell us what is installed and what you want from it. We work out what your system can take, such as the battery
-        voltage it needs and how many more panels fit, and which parts could be added or swapped.
-      </p>
+      <h1>{t("upgrade.title")}</h1>
+      <p className="muted">{t("upgrade.intro")}</p>
       <p className="hint">
-        Starting from nothing instead? <Link href="/estimate"><u>Use the power check</u></Link>.
+        <Rich text={t("upgrade.fromNothing")} link={(label) => <Link href="/estimate"><u>{label}</u></Link>} />
       </p>
 
       <form className="panel-form estimate-form" onSubmit={calculate}>
         <UpgradeForm state={form} setState={setForm} audience="public" />
         {error && !checked ? <p className="auth-message" role="alert">{error}</p> : null}
-        <button className="button" type="submit" disabled={busy}>{busy && !asking ? "Working it out…" : "Check my system"}</button>
+        <button className="button" type="submit" disabled={busy}>{busy && !asking ? t("estimate.working") : t("upgrade.check")}</button>
       </form>
 
       {checked ? (
         <section id="results" className="estimate-results" aria-live="polite">
-          <h2>Your upgrade report</h2>
+          <h2>{t("upgrade.reportTitle")}</h2>
           <UpgradeReport
             report={checked.report}
             selected={selected}
@@ -206,23 +202,20 @@ function UpgradeCheck() {
             <>
               <div className="result-block result-report report-download">
                 <button type="button" className="button button-secondary" disabled={pdfBusy} onClick={downloadReport}>
-                  {pdfBusy ? "Preparing PDF…" : "Download this report (PDF)"}
+                  {pdfBusy ? t("estimate.preparingPdf") : t("upgrade.downloadPdf")}
                 </button>
-                <p className="hint">Prices are shared when you request a quote.</p>
+                <p className="hint">{t("upgrade.pricesOnRequest")}</p>
               </div>
 
               <div className={`recommend-card ${asking ? "option-on" : ""}`}>
-                <h3>{selected.length > 0 ? `Request a quote for the ${selected.length} option${selected.length === 1 ? "" : "s"} you chose` : "Not sure which to choose?"}</h3>
-                <p>
-                  Send us these details and a technician will confirm what fits your system and prepare a quotation.
-                  It is free and there is no obligation.
-                </p>
+                <h3>{selected.length === 1 ? t("upgrade.requestChosenOne") : selected.length > 1 ? t("upgrade.requestChosen", { count: selected.length }) : t("upgrade.notSure")}</h3>
+                <p>{t("upgrade.sendText")}</p>
                 <button
                   type="button"
                   className="button"
                   onClick={() => { setAsking(true); setError(null); setTimeout(() => document.getElementById("request")?.scrollIntoView({ behavior: "smooth" }), 50); }}
                 >
-                  {selected.length > 0 ? "Request a quote" : "Ask a technician to recommend"}
+                  {selected.length > 0 ? t("upgrade.requestQuote") : t("upgrade.askTechnician")}
                 </button>
               </div>
             </>
@@ -230,36 +223,36 @@ function UpgradeCheck() {
 
           {asking && usable ? (
             <form id="request" className="panel-form" onSubmit={request}>
-              <h2>Request your quote</h2>
-              <p className="hint">We will contact you with a quotation that includes prices. No payment is needed now.</p>
-              <p className="field-label" id="rq-grid">How reliable is your grid power?</p>
+              <h2>{t("estimate.formTitleQuote")}</h2>
+              <p className="hint">{t("estimate.formHintQuote")}</p>
+              <p className="field-label" id="rq-grid">{t("upgrade.gridQuestion")}</p>
               <div className="quick-row" role="radiogroup" aria-labelledby="rq-grid">
                 {GRID_CHOICES.map((g) => (
-                  <button key={g.value} type="button" role="radio" aria-checked={grid === g.value} className={grid === g.value ? "chip chip-on" : "chip"} onClick={() => setGrid(g.value)}>
-                    {g.label}
+                  <button key={g} type="button" role="radio" aria-checked={grid === g} className={grid === g ? "chip chip-on" : "chip"} onClick={() => setGrid(g)}>
+                    {t(`estimate.grid.${g}`)}
                   </button>
                 ))}
               </div>
               {customer === undefined ? (
-                <p className="hint">Checking your account…</p>
+                <p className="hint">{t("estimate.checkingAccount")}</p>
               ) : signedInCustomer && !hasCustomerAccount ? (
-                <p className="hint">Your sign-in is active, but your customer account setup is incomplete. Please <Link href="/shop"><u>finish setting up your customer account</u></Link> before requesting a quotation.</p>
+                <p className="hint"><Rich text={t("estimate.accountIncomplete")} link={(label) => <Link href="/shop"><u>{label}</u></Link>} /></p>
               ) : hasCustomerAccount ? (
                 <div className="signed-in-request">
-                  <strong>Requesting as {customer.account!.name}</strong>
+                  <strong>{t("estimate.requestingAs", { name: customer.account!.name })}</strong>
                   {customer.email ? <p className="hint">{customer.email}</p> : null}
-                  <label htmlFor="rq-loc">Where is the system? (town / area)</label>
+                  <label htmlFor="rq-loc">{t("upgrade.location")}</label>
                   <input id="rq-loc" required maxLength={200} autoComplete="address-level2" value={contact.location} onChange={(e) => setContact({ ...contact, location: e.target.value })} />
                 </div>
               ) : (
                 <>
-                  <label htmlFor="rq-name">Your name</label>
+                  <label htmlFor="rq-name">{t("estimate.yourName")}</label>
                   <input id="rq-name" required maxLength={100} autoComplete="name" value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} />
-                  <label htmlFor="rq-phone">Phone</label>
+                  <label htmlFor="rq-phone">{t("estimate.phone")}</label>
                   <input id="rq-phone" required type="tel" maxLength={20} autoComplete="tel" placeholder="+256 700 000000" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} />
-                  <label htmlFor="rq-email">Email (optional)</label>
+                  <label htmlFor="rq-email">{t("estimate.emailOptional")}</label>
                   <input id="rq-email" type="email" maxLength={120} autoComplete="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} />
-                  <label htmlFor="rq-loc">Where is the system? (town / area)</label>
+                  <label htmlFor="rq-loc">{t("upgrade.location")}</label>
                   <input id="rq-loc" required maxLength={200} autoComplete="address-level2" value={contact.location} onChange={(e) => setContact({ ...contact, location: e.target.value })} />
                 </>
               )}
@@ -268,7 +261,7 @@ function UpgradeCheck() {
                 <input id="rq-site" tabIndex={-1} autoComplete="off" value={contact.website} onChange={(e) => setContact({ ...contact, website: e.target.value })} />
               </div>
               {error ? <p className="auth-message" role="alert">{error}</p> : null}
-              <button className="button" type="submit" disabled={busy || customer === undefined || (signedInCustomer && !hasCustomerAccount)}>{busy ? "Sending…" : "Send my request"}</button>
+              <button className="button" type="submit" disabled={busy || customer === undefined || (signedInCustomer && !hasCustomerAccount)}>{busy ? t("estimate.sending") : t("estimate.send")}</button>
             </form>
           ) : error && checked ? (
             <p className="auth-message" role="alert">{error}</p>
@@ -280,17 +273,22 @@ function UpgradeCheck() {
 }
 
 function Shell({ children }: { children: ReactNode }) {
+  const t = useT();
   return (
     <div className="public-bg">
       <div className="shell">
         <header className="topbar">
-          <Link className="brand" href="/" aria-label="Solar Switch home">
+          <Link className="brand" href="/" aria-label={t("common.brandHome")}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img className="brand-logo" src="/icons/icon-192.png" alt="" width={38} height={38} />
             <span>SOLAR SWITCH</span>
           </Link>
-          <Link className="button button-small button-secondary" href="/sign-in">Staff sign in</Link>
+          <div className="topbar-actions">
+            <LanguagePicker />
+            <Link className="button button-small button-secondary" href="/sign-in">{t("estimate.staffSignIn")}</Link>
+          </div>
         </header>
+        <DraftNotice />
         <main className="workspace">{children}</main>
       </div>
     </div>

@@ -2,6 +2,8 @@
 
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "../../../../convex/_generated/api";
+import { useT, type MessageKey } from "@/lib/i18n";
+import { en } from "@/lib/i18n/en";
 
 export type Report = FunctionReturnType<typeof api.upgrades.simulate>;
 export type ReportOption = Report["sections"][number]["options"][number];
@@ -9,7 +11,7 @@ export type ReportOption = Report["sections"][number]["options"][number];
 export const UNVERIFIED_BANNER = "UNVERIFIED — FOR ILLUSTRATION ONLY";
 
 const STATE_ICON = { pass: "✓", fail: "✗", review: "!" } as const;
-const STATE_WORD = { pass: "OK", fail: "Problem", review: "Needs a technician" } as const;
+const STATE_WORD = { pass: "upgradeReport.stateOk", fail: "upgradeReport.stateProblem", review: "upgradeReport.stateReview" } as const;
 
 export function money(minor: number, exponent: number, currency: string) {
   return `${currency} ${(minor / 10 ** exponent).toLocaleString("en-US", { maximumFractionDigits: exponent })}`;
@@ -58,15 +60,16 @@ function OptionCard({
   selected: boolean;
   onToggle?: () => void;
 }) {
+  const t = useT();
   const open = option.checks.filter((c) => c.state === "review").length;
   return (
     <article className={`option-card upgrade-option ${selected ? "option-on" : ""}`}>
       <h4>{option.title}</h4>
       <p className="pill-row">
         <span className={option.status === "compatible" ? "pill pill-ok" : "pill pill-warn"}>
-          {option.status === "compatible" ? "Fits the ratings given" : `${open} point${open === 1 ? "" : "s"} for a technician to confirm`}
+          {option.status === "compatible" ? t("upgradeReport.fits") : open === 1 ? t("upgradeReport.pointsOne") : t("upgradeReport.points", { count: open })}
         </span>
-        {option.tags.map((t) => <span key={t} className="pill pill-info">{t}</span>)}
+        {option.tags.map((tag) => <span key={tag} className="pill pill-info">{tag}</span>)}
       </p>
       <p>{option.summary}</p>
       {option.sku || option.brand || option.model ? (
@@ -75,23 +78,23 @@ function OptionCard({
       {option.totalMinor !== null && option.unitListMinor !== null ? (
         <p className="upgrade-price">
           <strong>{money(option.totalMinor, report.exponent, report.currency)}</strong>
-          <span className="record-meta"> list price · {option.quantity} × {money(option.unitListMinor, report.exponent, report.currency)}</span>
+          <span className="record-meta">{t("upgradeReport.listPrice", { quantity: option.quantity, unit: money(option.unitListMinor, report.exponent, report.currency) })}</span>
         </p>
       ) : null}
       <details className="upgrade-checks">
-        <summary>Checks ({option.checks.length})</summary>
+        <summary>{t("upgradeReport.checks", { count: option.checks.length })}</summary>
         <ul>
           {option.checks.map((c) => (
             <li key={c.id} className={`upgrade-check upgrade-check-${c.state}`}>
               <span aria-hidden="true">{STATE_ICON[c.state as keyof typeof STATE_ICON]}</span>
-              <span><strong>{c.label}: {STATE_WORD[c.state as keyof typeof STATE_WORD]}.</strong> {c.detail}</span>
+              <span><strong>{c.label}: {t(STATE_WORD[c.state as keyof typeof STATE_WORD])}.</strong> {c.detail}</span>
             </li>
           ))}
         </ul>
       </details>
       {onToggle ? (
         <button type="button" className={selected ? "button" : "button button-secondary"} aria-pressed={selected} onClick={onToggle}>
-          {selected ? "✓ Chosen" : "Choose this"}
+          {selected ? t("upgradeReport.chosen") : t("upgradeReport.choose")}
         </button>
       ) : null}
     </article>
@@ -109,10 +112,11 @@ export function UpgradeReport({
   selected?: string[];
   onToggle?: (key: string) => void;
 }) {
+  const t = useT();
   if (report.blockers.length > 0) {
     return (
       <div className="result-block">
-        <h3>The details do not add up yet</h3>
+        <h3>{t("upgradeReport.notAddUp")}</h3>
         {report.blockers.map((b) => <p key={b} className="auth-message" role="alert">{b}</p>)}
       </div>
     );
@@ -123,24 +127,23 @@ export function UpgradeReport({
   return (
     <>
       <p className="estimate-banner">
-        {UNVERIFIED_BANNER}. This is worked out from the ratings typed in. A technician must check the real equipment
-        before anything here is final.
+        {t("upgradeReport.banner")}
       </p>
 
       <div className="result-block result-use">
-        <h3>The system today</h3>
+        <h3>{t("upgradeReport.today")}</h3>
         <div className="projection-grid">
           {c.systemVoltage !== null ? (
-            <div className="tile tile-peak"><span className="tile-label">System voltage</span><span className="tile-value">{c.systemVoltage} V</span><span className="tile-sub">battery bank</span></div>
+            <div className="tile tile-peak"><span className="tile-label">{t("upgradeReport.systemVoltage")}</span><span className="tile-value">{c.systemVoltage} V</span><span className="tile-sub">{t("upgradeReport.batteryBank")}</span></div>
           ) : null}
           {c.arrayWp > 0 ? (
-            <div className="tile tile-energy"><span className="tile-label">Solar</span><span className="tile-value">{c.arrayWp.toLocaleString("en-US")} Wp</span><span className="tile-sub">about {kwh(c.solarWhPerDay)} a day</span></div>
+            <div className="tile tile-energy"><span className="tile-label">{t("upgradeReport.solar")}</span><span className="tile-value">{c.arrayWp.toLocaleString("en-US")} Wp</span><span className="tile-sub">{t("upgradeReport.solarPerDay", { kwh: kwh(c.solarWhPerDay) })}</span></div>
           ) : null}
           {c.batteryNominalWh > 0 ? (
-            <div className="tile tile-day"><span className="tile-label">Battery</span><span className="tile-value">{kwh(c.batteryUsableWh)}</span><span className="tile-sub">usable of {kwh(c.batteryNominalWh)}{c.backupHours !== null ? ` · about ${c.backupHours} h backup` : ""}</span></div>
+            <div className="tile tile-day"><span className="tile-label">{t("upgradeReport.battery")}</span><span className="tile-value">{kwh(c.batteryUsableWh)}</span><span className="tile-sub">{t("upgradeReport.usableOf", { kwh: kwh(c.batteryNominalWh) })}{c.backupHours !== null ? t("upgradeReport.backupHours", { hours: c.backupHours }) : ""}</span></div>
           ) : null}
           {c.inverterW !== null ? (
-            <div className="tile tile-month"><span className="tile-label">Inverter</span><span className="tile-value">{watts(c.inverterW)}</span><span className="tile-sub">continuous</span></div>
+            <div className="tile tile-month"><span className="tile-label">{t("upgradeReport.inverter")}</span><span className="tile-value">{watts(c.inverterW)}</span><span className="tile-sub">{t("upgradeReport.continuous")}</span></div>
           ) : null}
         </div>
         {report.findings.length > 0 ? (
@@ -154,18 +157,22 @@ export function UpgradeReport({
           </ul>
         ) : null}
         <p className="hint">
-          Solar figures assume {report.assumptions.peakSunHours} useful sun hours a day and {Math.round(report.assumptions.performanceRatio * 100)}% system
-          performance, a cautious figure for Uganda. Cold-morning and hot-day voltages use {report.assumptions.minCellTempC} °C and {report.assumptions.maxCellTempC} °C cells.
+          {t("upgradeReport.assumptions", {
+            sun: report.assumptions.peakSunHours,
+            percent: Math.round(report.assumptions.performanceRatio * 100),
+            cold: report.assumptions.minCellTempC,
+            hot: report.assumptions.maxCellTempC
+          })}
         </p>
       </div>
 
       {report.sections.map((s) => (
         <div key={s.area} className="result-block upgrade-section">
-          <h3>{s.title}</h3>
+          <h3>{(`upgradeReport.area.${s.area}` as MessageKey) in en ? t(`upgradeReport.area.${s.area}` as MessageKey) : s.title}</h3>
           {s.messages.map((m) => <p key={m}>{m}</p>)}
           {s.requirements.length > 0 ? (
             <div className="upgrade-requirements">
-              <strong>What anything added here must match</strong>
+              <strong>{t("upgradeReport.mustMatch")}</strong>
               <ul>{s.requirements.map((r) => <li key={r}>{r}</li>)}</ul>
             </div>
           ) : null}
@@ -176,18 +183,18 @@ export function UpgradeReport({
               ))}
             </div>
           ) : (
-            <p className="muted">No product in the catalogue fits here yet. A technician can recommend one.</p>
+            <p className="muted">{t("upgradeReport.noProduct")}</p>
           )}
           {s.rejected.length > 0 ? (
             <details className="upgrade-checks">
-              <summary>Why some products were left out ({s.rejected.length})</summary>
+              <summary>{t("upgradeReport.leftOut", { count: s.rejected.length })}</summary>
               <ul>{s.rejected.map((r) => <li key={r}>{r}</li>)}</ul>
             </details>
           ) : null}
         </div>
       ))}
       {empty && report.sections.length > 0 ? (
-        <p className="muted">None of the catalogue products fit the system as described. Send the details and a technician will advise.</p>
+        <p className="muted">{t("upgradeReport.noneFit")}</p>
       ) : null}
     </>
   );

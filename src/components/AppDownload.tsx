@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Rich, useT } from "@/lib/i18n";
 
 const APK = "/download/solar-switch.apk";
 const SIZE = "7.7 MB";
@@ -12,6 +13,7 @@ type Device = "android" | "iphone" | "other" | "app";
  * iPhone visitors are told the website works for them instead.
  */
 export function AppDownload() {
+  const t = useT();
   const [device, setDevice] = useState<Device | null>(null);
 
   useEffect(() => {
@@ -27,7 +29,7 @@ export function AppDownload() {
   if (device === "iphone") {
     return (
       <p className="app-download-note">
-        📱 Our app is for Android phones. On iPhone, keep using this website: it does everything the app does.
+        {t("app.iphone")}
       </p>
     );
   }
@@ -35,18 +37,18 @@ export function AppDownload() {
   return (
     <div className="app-download">
       <a className="button button-secondary app-download-button" href={APK} download="Solar-Switch.apk">
-        <span aria-hidden="true">📲</span> Get the Android app
+        <span aria-hidden="true">📲</span> {t("app.get")}
       </a>
-      <p className="app-download-meta">Free · {SIZE} · Android phones</p>
+      <p className="app-download-meta">{t("app.meta", { size: SIZE })}</p>
       <details className="app-download-help">
-        <summary>How to install</summary>
+        <summary>{t("app.howTo")}</summary>
         <ol>
-          <li>Tap <strong>Get the Android app</strong> and wait for the download to finish.</li>
-          <li>Open the downloaded file (Solar-Switch.apk) from the notification or your Downloads.</li>
-          <li>If your phone asks, allow installing apps from your browser, then go back.</li>
-          <li>Tap <strong>Install</strong>, then <strong>Open</strong>.</li>
+          <li><Rich text={t("app.step1")} /></li>
+          <li>{t("app.step2")}</li>
+          <li>{t("app.step3")}</li>
+          <li><Rich text={t("app.step4")} /></li>
         </ol>
-        {device === "other" ? <p>On a computer? Open this page on your Android phone to download the app.</p> : null}
+        {device === "other" ? <p>{t("app.computer")}</p> : null}
       </details>
     </div>
   );

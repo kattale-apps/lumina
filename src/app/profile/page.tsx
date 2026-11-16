@@ -11,9 +11,10 @@ import { CustomerShell } from "@/components/CustomerShell";
 import { Avatar } from "@/components/Avatar";
 import { WorkspaceHeader } from "../dashboard/workspace";
 import { squarePhoto } from "@/lib/squarePhoto";
+import { useT } from "@/lib/i18n";
 
-function message(e: unknown) {
-  return e instanceof ConvexError && typeof e.data === "string" ? e.data : "Something went wrong. Check your connection and try again.";
+function message(e: unknown, fallback: string) {
+  return e instanceof ConvexError && typeof e.data === "string" ? e.data : fallback;
 }
 
 function Frame({ children }: { children: ReactNode }) {
@@ -32,6 +33,7 @@ function Frame({ children }: { children: ReactNode }) {
 }
 
 function PhotoPicker({ name, photoUrl }: { name: string; photoUrl: string | null }) {
+  const t = useT();
   const uploadUrl = useMutation(api.profile.generatePhotoUploadUrl);
   const setPhoto = useAction(api.profile.setPhoto);
   const removePhoto = useMutation(api.profile.removePhoto);
@@ -48,15 +50,15 @@ function PhotoPicker({ name, photoUrl }: { name: string; photoUrl: string | null
       try {
         blob = await squarePhoto(file);
       } catch {
-        throw new Error("We could not read that photo. Try another one.");
+        throw new Error(t("profile.photoUnreadable"));
       }
       const url = await uploadUrl({});
       const res = await fetch(url, { method: "POST", headers: { "Content-Type": blob.type }, body: blob });
-      if (!res.ok) throw new Error("The photo did not upload. Check your connection.");
+      if (!res.ok) throw new Error(t("profile.photoUploadFailed"));
       const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
       await setPhoto({ storageId });
     } catch (e) {
-      setError(e instanceof ConvexError ? message(e) : e instanceof Error ? e.message : message(e));
+      setError(e instanceof ConvexError ? message(e, t("common.genericError")) : e instanceof Error ? e.message : t("common.genericError"));
     } finally {
       setBusy(false);
     }
@@ -85,17 +87,14 @@ function PhotoPicker({ name, photoUrl }: { name: string; photoUrl: string | null
     <section className="profile-photo">
       <Avatar name={name} url={photoUrl} size="xl" />
       <div className="profile-photo-actions">
-        <p className="hint">
-          A clear photo of your face: look at the camera, in good light, no sunglasses, just you. It appears on your
-          Academy certificate.
-        </p>
-        {busy ? <p className="muted">Uploading your photo…</p> : null}
+        <p className="hint">{t("profile.photoHint")}</p>
+        {busy ? <p className="muted">{t("profile.uploading")}</p> : null}
         <div className="profile-photo-buttons">
-          {picker(photoUrl ? "📷 Retake selfie" : "📷 Take a selfie", true)}
-          {picker("🖼️ Choose from gallery", false)}
+          {picker(photoUrl ? t("profile.retakeSelfie") : t("profile.takeSelfie"), true)}
+          {picker(t("profile.gallery"), false)}
         </div>
         {photoUrl && !busy ? (
-          <button type="button" className="link-danger" onClick={() => void removePhoto({})}>Remove photo</button>
+          <button type="button" className="link-danger" onClick={() => void removePhoto({})}>{t("profile.removePhoto")}</button>
         ) : null}
         {error ? <p className="auth-message" role="alert">{error}</p> : null}
       </div>
@@ -104,6 +103,7 @@ function PhotoPicker({ name, photoUrl }: { name: string; photoUrl: string | null
 }
 
 function ProfileForm() {
+  const t = useT();
   const profile = useQuery(api.profile.myProfile, {});
   const save = useMutation(api.profile.updateProfile);
   const [name, setName] = useState("");
@@ -121,7 +121,7 @@ function ProfileForm() {
     }
   }, [profile, loaded]);
 
-  if (profile === undefined) return <p className="muted">Loading your profile…</p>;
+  if (profile === undefined) return <p className="muted">{t("profile.loading")}</p>;
   if (profile === null) return null;
 
   async function submit(event: FormEvent) {
@@ -130,9 +130,9 @@ function ProfileForm() {
     setNotice(null);
     try {
       await save({ displayName: name, phone });
-      setNotice({ ok: true, text: "Profile saved." });
+      setNotice({ ok: true, text: t("profile.saved") });
     } catch (e) {
-      setNotice({ ok: false, text: message(e) });
+      setNotice({ ok: false, text: message(e, t("common.genericError")) });
     } finally {
       setBusy(false);
     }
@@ -140,29 +140,30 @@ function ProfileForm() {
 
   return (
     <>
-      <h1>My profile</h1>
+      <h1>{t("profile.title")}</h1>
       {profile.complete ? (
-        <p className="form-success">✅ Your profile is set up.</p>
+        <p className="form-success">{t("profile.done")}</p>
       ) : (
-        <p className="next-step-inline">Add your photo and full name to finish setting up your account.</p>
+        <p className="next-step-inline">{t("profile.todo")}</p>
       )}
       <PhotoPicker name={profile.saved ? profile.displayName : name || profile.displayName} photoUrl={profile.photoUrl} />
       <form className="panel-form profile-form" onSubmit={submit}>
-        <label htmlFor="pf-name">Full name</label>
-        <input id="pf-name" required minLength={2} maxLength={80} autoComplete="name" placeholder="e.g. Amina Nakato" value={name} onChange={(e) => setName(e.target.value)} />
-        <p className="hint">Written exactly as it should appear on your certificate.</p>
-        <label htmlFor="pf-phone">Phone</label>
+        <label htmlFor="pf-name">{t("profile.fullName")}</label>
+        <input id="pf-name" required minLength={2} maxLength={80} autoComplete="name" placeholder={t("profile.fullNamePlaceholder")} value={name} onChange={(e) => setName(e.target.value)} />
+        <p className="hint">{t("profile.fullNameHint")}</p>
+        <label htmlFor="pf-phone">{t("profile.phone")}</label>
         <input id="pf-phone" type="tel" maxLength={20} autoComplete="tel" placeholder="+256 700 000000" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        <label htmlFor="pf-email">Email</label>
+        <label htmlFor="pf-email">{t("profile.email")}</label>
         <input id="pf-email" value={profile.email ?? ""} readOnly disabled />
         {notice ? <p className={notice.ok ? "form-success" : "auth-message"} role="status">{notice.text}</p> : null}
-        <button className="button" type="submit" disabled={busy}>{busy ? "Saving…" : "Save my profile"}</button>
+        <button className="button" type="submit" disabled={busy}>{busy ? t("profile.saving") : t("profile.save")}</button>
       </form>
     </>
   );
 }
 
 function Gate() {
+  const t = useT();
   const router = useRouter();
   const { isLoading, isAuthenticated } = useConvexAuth();
   useEffect(() => {
@@ -171,7 +172,7 @@ function Gate() {
   if (isLoading || !isAuthenticated) {
     return (
       <main className="auth-shell">
-        <section className="auth-card"><p className="muted">Loading…</p></section>
+        <section className="auth-card"><p className="muted">{t("common.loading")}</p></section>
       </main>
     );
   }
@@ -179,19 +180,22 @@ function Gate() {
     <Frame>
       <div className="profile-page">
         <ProfileForm />
-        <p className="hint"><Link href="/dashboard"><u>Back</u></Link></p>
+        <p className="hint"><Link href="/dashboard"><u>{t("common.back")}</u></Link></p>
       </div>
     </Frame>
   );
 }
 
 export default function ProfilePage() {
-  if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
-    return (
-      <main className="auth-shell">
-        <section className="auth-card"><h1>Unavailable</h1><p>Please try again later.</p></section>
-      </main>
-    );
-  }
+  if (!process.env.NEXT_PUBLIC_CONVEX_URL) return <Unavailable />;
   return <Gate />;
+}
+
+function Unavailable() {
+  const t = useT();
+  return (
+    <main className="auth-shell">
+      <section className="auth-card"><h1>{t("common.unavailable")}</h1><p>{t("common.tryLater")}</p></section>
+    </main>
+  );
 }

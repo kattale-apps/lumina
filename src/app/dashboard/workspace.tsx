@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
+import { useT } from "@/lib/i18n";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
@@ -187,12 +188,13 @@ export function WorkspaceHeader({ role }: { role?: string }) {
 
 /** Shown on every page until the person has added a photo and their full name. */
 export function ProfilePrompt() {
+  const t = useT();
   return (
     <Link href="/profile" className="profile-prompt">
       <span aria-hidden="true">📷</span>
       <span>
-        <strong>Set up your profile</strong>
-        <small>Add your photo and full name. Your photo also goes on your Academy certificate.</small>
+        <strong>{t("profilePrompt.title")}</strong>
+        <small>{t("profilePrompt.hint")}</small>
       </span>
       <span aria-hidden="true">›</span>
     </Link>

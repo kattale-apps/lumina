@@ -9,6 +9,7 @@ import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { CompanyPage, ConfiguredOnly, errorMessage } from "../../workspace";
 import { LessonBody, LessonVideo } from "../content";
+import { DraftNotice, LanguagePicker, Rich, useLanguage } from "@/lib/i18n";
 
 type Module = FunctionReturnType<typeof api.academy.getModule>;
 type Result = FunctionReturnType<typeof api.academy.submitQuiz>;
@@ -24,6 +25,7 @@ function shuffled<T>(items: T[]): T[] {
 }
 
 function Quiz({ tenantId, module: m }: { tenantId: Id<"tenants">; module: Module }) {
+  const { t, lang } = useLanguage();
   const submit = useMutation(api.academy.submitQuiz);
   const [attempt, setAttempt] = useState(0);
   const [chosen, setChosen] = useState<Record<string, number>>({});
@@ -36,14 +38,14 @@ function Quiz({ tenantId, module: m }: { tenantId: Id<"tenants">; module: Module
     () => Object.fromEntries(m.questions.map((q) => [q.key, shuffled(q.options.map((text, index) => ({ text, index })))])),
     // A new attempt or an edited module gets a new order.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [m.key, m.version, attempt]
+    [m.key, m.version, attempt, lang, m.translated]
   );
   const answered = m.questions.filter((q) => chosen[q.key] !== undefined).length;
 
   async function send(event: FormEvent) {
     event.preventDefault();
     if (answered < m.questions.length) {
-      setError(`Answer every question first: ${m.questions.length - answered} to go.`);
+      setError(t("academy.answerAll", { left: m.questions.length - answered }));
       return;
     }
     setBusy(true);
@@ -53,7 +55,8 @@ function Quiz({ tenantId, module: m }: { tenantId: Id<"tenants">; module: Module
         tenantId,
         key: m.key,
         version: m.version,
-        answers: m.questions.map((q) => ({ questionKey: q.key, optionIndex: chosen[q.key] }))
+        answers: m.questions.map((q) => ({ questionKey: q.key, optionIndex: chosen[q.key] })),
+        lang
       });
       setResult(marked);
       setTimeout(() => document.getElementById("quiz-result")?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -76,10 +79,10 @@ function Quiz({ tenantId, module: m }: { tenantId: Id<"tenants">; module: Module
 
   return (
     <form id="quiz" className="panel-form quiz" onSubmit={send}>
-      <h2>Module {m.number} quiz</h2>
+      <h2>{t("academy.quizTitle", { number: m.number })}</h2>
       <p className="hint">
-        {m.questions.length} questions. You need {m.passPercent}% to pass, and you can try again if you do not.
-        {m.passed ? " You have already passed this module; another attempt will not change that." : ""}
+        {t("academy.quizHint", { count: m.questions.length, pass: m.passPercent })}
+        {m.passed ? ` ${t("academy.alreadyPassed")}` : ""}
       </p>
 
       {m.questions.map((q, i) => {
@@ -98,12 +101,12 @@ function Quiz({ tenantId, module: m }: { tenantId: Id<"tenants">; module: Module
                   onChange={() => setChosen((c) => ({ ...c, [q.key]: o.index }))}
                 />
                 <span>{o.text}</span>
-                {r && r.correctIndex === o.index ? <span className="pill pill-ok">Correct answer</span> : null}
+                {r && r.correctIndex === o.index ? <span className="pill pill-ok">{t("academy.correctAnswer")}</span> : null}
               </label>
             ))}
             {r ? (
               <p className={r.correct ? "form-success" : "auth-message"} role="status">
-                {r.correct ? "✓ Correct." : "✗ Not correct."}
+                {r.correct ? t("academy.correct") : t("academy.notCorrect")}
                 {r.explanation ? ` ${r.explanation}` : ""}
               </p>
             ) : null}
@@ -115,34 +118,32 @@ function Quiz({ tenantId, module: m }: { tenantId: Id<"tenants">; module: Module
 
       {result ? (
         <div id="quiz-result" className={result.passed ? "quiz-result quiz-result-pass" : "quiz-result"} aria-live="polite">
-          <h3>{result.passed ? "🎉 You passed" : "Not passed yet"}</h3>
+          <h3>{result.passed ? t("academy.youPassed") : t("academy.notPassed")}</h3>
           <p>
-            You answered <strong>{result.correct} of {result.total}</strong> correctly ({result.scorePercent}%).
-            The pass mark is {result.passPercent}%.
+            <Rich text={t("academy.score", { correct: result.correct, total: result.total, percent: result.scorePercent, pass: result.passPercent })} />
           </p>
           {!result.passed ? (
-            <p className="hint">The questions you missed are marked above. Read those lessons again, then try once more.</p>
+            <p className="hint">{t("academy.missed")}</p>
           ) : null}
           {result.certificateNumber ? (
             <p>
-              <strong>You have completed the whole course.</strong> Your certificate, no. {result.certificateNumber},
-              is ready on the Academy page.
+              <Rich text={t("academy.courseDone", { number: result.certificateNumber })} />
             </p>
           ) : null}
           <div className="response-actions">
-            {!result.passed ? <button type="button" className="button" onClick={retry}>Try again</button> : null}
+            {!result.passed ? <button type="button" className="button" onClick={retry}>{t("academy.tryAgain")}</button> : null}
             {result.passed && m.nextKey && !result.certificateNumber ? (
-              <Link className="button" href={`/dashboard/academy/${m.nextKey}`}>Next module</Link>
+              <Link className="button" href={`/dashboard/academy/${m.nextKey}`}>{t("academy.nextModule")}</Link>
             ) : null}
             <Link className={result.certificateNumber ? "button" : "button button-secondary"} href="/dashboard/academy">
-              {result.certificateNumber ? "Get my certificate" : "Back to the Academy"}
+              {result.certificateNumber ? t("academy.getCertificate") : t("academy.backToAcademy")}
             </Link>
-            {result.passed ? <button type="button" className="button button-secondary" onClick={retry}>Take it again</button> : null}
+            {result.passed ? <button type="button" className="button button-secondary" onClick={retry}>{t("academy.takeAgain")}</button> : null}
           </div>
         </div>
       ) : (
         <button className="button" type="submit" disabled={busy}>
-          {busy ? "Marking…" : `Submit my answers (${answered} of ${m.questions.length} answered)`}
+          {busy ? t("academy.marking") : t("academy.submit", { answered, count: m.questions.length })}
         </button>
       )}
     </form>
@@ -150,30 +151,36 @@ function Quiz({ tenantId, module: m }: { tenantId: Id<"tenants">; module: Module
 }
 
 function ModuleView({ tenantId }: { tenantId: Id<"tenants"> }) {
+  const { t, lang } = useLanguage();
   const params = useParams<{ key: string }>();
   const known = ["m1", "m2", "m3", "m4"].includes(params.key);
-  const m = useQuery(api.academy.getModule, known ? { tenantId, key: params.key } : "skip");
+  const m = useQuery(api.academy.getModule, known ? { tenantId, key: params.key, lang } : "skip");
 
   if (!known) {
     return (
       <>
-        <p className="muted">That module does not exist.</p>
-        <Link className="button button-secondary" href="/dashboard/academy">Back to the Academy</Link>
+        <p className="muted">{t("academy.noModule")}</p>
+        <Link className="button button-secondary" href="/dashboard/academy">{t("academy.backToAcademy")}</Link>
       </>
     );
   }
-  if (!m) return <p className="muted">Loading the module…</p>;
+  if (!m) return <p className="muted">{t("academy.loadingModule")}</p>;
 
   return (
     <article className="academy-module">
-      <p><Link className="back-link" href="/dashboard/academy">← {m.academyName}</Link></p>
-      <p className="eyebrow">MODULE {m.number} OF 4</p>
+      <div className="academy-module-top">
+        <Link className="back-link" href="/dashboard/academy">← {m.academyName}</Link>
+        <LanguagePicker />
+      </div>
+      <DraftNotice />
+      {lang !== "en" && !m.translated ? <p className="next-step-inline">{t("academy.notTranslated")}</p> : null}
+      <p className="eyebrow">{t("academy.moduleOf", { number: m.number })}</p>
       <h2 className="academy-module-title">{m.title}</h2>
       <p className="muted">{m.summary}</p>
       <p className="pill-row">
-        {m.passed ? <span className="pill pill-ok">Passed · {m.bestPercent}%</span> : null}
-        <span className="pill pill-info">{m.lessons.length} lessons</span>
-        <a className="pill pill-info" href="#quiz">Go to the quiz ↓</a>
+        {m.passed ? <span className="pill pill-ok">{t("academy.passed", { percent: m.bestPercent ?? 0 })}</span> : null}
+        <span className="pill pill-info">{t("academy.lessons", { count: m.lessons.length })}</span>
+        <a className="pill pill-info" href="#quiz">{t("academy.goToQuiz")}</a>
       </p>
 
       {m.lessons.map((l, i) => (

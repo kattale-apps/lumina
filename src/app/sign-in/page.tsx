@@ -9,8 +9,10 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "convex/react";
+import { DraftNotice, LanguagePicker, Rich, useT } from "@/lib/i18n";
 
 function SignInForm() {
+  const t = useT();
   const { signIn } = useAuthActions();
   const { isAuthenticated } = useConvexAuth();
   const router = useRouter();
@@ -49,8 +51,8 @@ function SignInForm() {
     } catch {
       setMessage(
         mode === "signIn"
-          ? "Sign-in failed. Check your email and password."
-          : "Account registration failed. Check the details and try again."
+          ? t("auth.signInFailed")
+          : t("auth.registerFailed")
       );
       setBusy(false);
     }
@@ -69,7 +71,7 @@ function SignInForm() {
       setEmail(saved.email);
       setPassword("");
       setUseOther(true);
-      setMessage("Your saved login did not work. Type your password again.");
+      setMessage(t("auth.savedFailed"));
       setBusy(false);
     }
   }
@@ -80,18 +82,18 @@ function SignInForm() {
     return (
       <div className="auth-form">
         <div className="saved-login">
-          <span className="saved-login-label">Saved on this phone</span>
+          <span className="saved-login-label">{t("auth.savedOnPhone")}</span>
           <strong>{login.saved.email}</strong>
         </div>
         {message ? <p className="auth-message" role="alert">{message}</p> : null}
         <button type="submit" disabled={busy} onClick={signInSaved}>
-          {busy ? "Please wait…" : "Sign in"}
+          {busy ? t("common.pleaseWait") : t("common.signIn")}
         </button>
         <button className="auth-mode" type="button" onClick={() => setUseOther(true)}>
-          Use a different account
+          {t("auth.useOther")}
         </button>
         <button className="auth-mode auth-mode-quiet" type="button" onClick={() => login.forget()}>
-          Remove saved login from this phone
+          {t("auth.forgetSaved")}
         </button>
       </div>
     );
@@ -99,7 +101,7 @@ function SignInForm() {
 
   return (
     <form className="auth-form" onSubmit={submit}>
-      <label htmlFor="email">Email</label>
+      <label htmlFor="email">{t("auth.email")}</label>
       <input
         id="email"
         type="email"
@@ -108,7 +110,7 @@ function SignInForm() {
         value={email}
         onChange={(event) => setEmail(event.target.value)}
       />
-      <label htmlFor="password">Password</label>
+      <label htmlFor="password">{t("auth.password")}</label>
       <PasswordInput
         id="password"
         autoComplete={mode === "signIn" ? "current-password" : "new-password"}
@@ -118,7 +120,7 @@ function SignInForm() {
       {login.supported ? <RememberLogin checked={login.remember} onChange={login.setRemember} /> : null}
       {message ? <p className="auth-message" role="alert">{message}</p> : null}
       <button type="submit" disabled={busy}>
-        {busy ? "Please wait…" : mode === "signIn" ? "Sign in" : "Create account"}
+        {busy ? t("common.pleaseWait") : mode === "signIn" ? t("common.signIn") : t("auth.createAccount")}
       </button>
       <button
         className="auth-mode"
@@ -128,17 +130,16 @@ function SignInForm() {
           setMessage("");
         }}
       >
-        {mode === "signIn" ? "New staff member? Register a staff login" : "Already registered? Sign in"}
+        {mode === "signIn" ? t("auth.staffRegister") : t("auth.alreadyRegistered")}
       </button>
       {mode === "signIn" ? (
         <p className="auth-note">
-          Customer? <Link href="/sign-up"><u>Create a customer account</u></Link> to see the catalogue and order.
+          <Rich text={t("auth.customerNote")} link={(label) => <Link href="/sign-up"><u>{label}</u></Link>} />
         </p>
       ) : null}
       {mode === "signUp" ? (
         <p className="auth-note">
-          Creating an account does not grant access to a company workspace. A Solar Switch
-          administrator must activate your company membership and role.
+          {t("auth.staffNote")}
         </p>
       ) : null}
     </form>
@@ -147,24 +148,39 @@ function SignInForm() {
 
 export default function SignInPage() {
   if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
+    return <SignInUnavailable />;
+  }
+  return <SignInScreen />;
+}
+
+function SignInUnavailable() {
+  const t = useT();
+  {
     return (
       <main className="auth-shell">
         <section className="auth-card">
-          <p className="eyebrow">SOLAR SWITCH WORKSPACE</p>
-          <h1>Authentication is not configured yet</h1>
-          <p>Add the Convex deployment URL to the application environment before signing in.</p>
+          <p className="eyebrow">{t("auth.workspace")}</p>
+          <h1>{t("auth.notConfigured")}</h1>
+          <p>{t("auth.notConfiguredHint")}</p>
         </section>
       </main>
     );
   }
+}
 
+function SignInScreen() {
+  const t = useT();
   return (
     <main className="auth-shell">
       <section className="auth-card">
-        <AuthHome />
-        <p className="eyebrow">SOLAR SWITCH WORKSPACE</p>
-        <h1>Welcome back</h1>
-        <p>Sign in as staff or as a customer.</p>
+        <div className="auth-top">
+          <AuthHome />
+          <LanguagePicker />
+        </div>
+        <DraftNotice />
+        <p className="eyebrow">{t("auth.workspace")}</p>
+        <h1>{t("auth.welcome")}</h1>
+        <p>{t("auth.welcomeHint")}</p>
         <SignInForm />
       </section>
     </main>

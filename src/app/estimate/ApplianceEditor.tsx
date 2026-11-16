@@ -9,6 +9,29 @@ import {
   searchGuide,
   type GuideAppliance
 } from "../../../convex/lib/applianceGuide";
+import { Rich, useT, type MessageKey } from "@/lib/i18n";
+import { en } from "@/lib/i18n/en";
+
+/** Translation keys for guide text; anything not in the list shows as it is. */
+const known = (key: string): key is MessageKey => key in en;
+export const categoryKey = (category: string) =>
+  `category.${category.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}`;
+function useGuideText() {
+  const t = useT();
+  return {
+    t,
+    name: (g: { key: string; name: string }) => (known(`appliance.${g.key}`) ? t(`appliance.${g.key}` as MessageKey) : g.name),
+    category: (c: string) => (known(categoryKey(c)) ? t(categoryKey(c) as MessageKey) : c),
+    sizeLabel: (g: GuideAppliance) => {
+      const k = `appliance.${g.key}.sizeLabel`;
+      return known(k) ? t(k as MessageKey) : g.sizeLabel ?? t("appliances.size");
+    },
+    dutyNote: (g: GuideAppliance) => {
+      const k = `appliance.${g.key}.dutyNote`;
+      return known(k) ? t(k as MessageKey) : g.dutyNote ?? "";
+    }
+  };
+}
 
 /** One appliance the customer has added. Numbers stay as text while they type. */
 export type ApplianceRow = {
@@ -85,6 +108,7 @@ function Stepper({
   unit?: string;
   decimals?: boolean;
 }) {
+  const t = useT();
   const n = Number(value);
   const bump = (d: number) => {
     const base = Number.isFinite(n) ? n : min;
@@ -95,7 +119,7 @@ function Stepper({
     <div className="stepper-field">
       <label htmlFor={id}>{label}</label>
       <div className="stepper">
-        <button type="button" aria-label={`Less ${label.toLowerCase()}`} onClick={() => bump(-step)} disabled={Number.isFinite(n) && n <= min}>−</button>
+        <button type="button" aria-label={t("appliances.less", { label })} onClick={() => bump(-step)} disabled={Number.isFinite(n) && n <= min}>−</button>
         <input
           id={id}
           type="number"
@@ -108,7 +132,7 @@ function Stepper({
           onFocus={(e) => e.target.select()}
         />
         {unit ? <span className="stepper-unit">{unit}</span> : null}
-        <button type="button" aria-label={`More ${label.toLowerCase()}`} onClick={() => bump(step)} disabled={Number.isFinite(n) && n >= max}>+</button>
+        <button type="button" aria-label={t("appliances.more", { label })} onClick={() => bump(step)} disabled={Number.isFinite(n) && n >= max}>+</button>
       </div>
     </div>
   );
@@ -124,6 +148,8 @@ function RowCard({
   onRemove: () => void;
 }) {
   const uid = useId();
+  const text = useGuideText();
+  const t = text.t;
   const guide = guideByKey(row.guideKey);
   const size = guide?.sizes.find((s) => s.label === row.size);
   const typical = size?.powerW;
@@ -137,21 +163,21 @@ function RowCard({
         {custom ? (
           <input
             className="appliance-name-input"
-            aria-label="Appliance name"
+            aria-label={t("appliances.name")}
             maxLength={60}
             value={row.name}
             onChange={(e) => onChange({ name: e.target.value })}
           />
         ) : (
-          <h3><span aria-hidden="true">{row.emoji}</span> {row.name}</h3>
+          <h3><span aria-hidden="true">{row.emoji}</span> {guide ? text.name(guide) : row.name}</h3>
         )}
-        <span className="appliance-kwh" aria-live="polite">{fmtKwh(kwh)} a day</span>
-        <button type="button" className="appliance-remove" aria-label={`Remove ${row.name || "appliance"}`} onClick={onRemove}>×</button>
+        <span className="appliance-kwh" aria-live="polite">{t("appliances.perDay", { kwh: fmtKwh(kwh) })}</span>
+        <button type="button" className="appliance-remove" aria-label={t("appliances.remove", { name: (guide ? text.name(guide) : row.name) || t("appliances.removeGeneric") })} onClick={onRemove}>×</button>
       </div>
 
       {guide && guide.sizes.length > 1 ? (
         <div className="appliance-size">
-          <span className="field-label" id={`${uid}-size`}>{guide.sizeLabel ?? "Size"}</span>
+          <span className="field-label" id={`${uid}-size`}>{text.sizeLabel(guide)}</span>
           <div className="size-row" role="radiogroup" aria-labelledby={`${uid}-size`}>
             {guide.sizes.map((s) => (
               <button
@@ -171,23 +197,23 @@ function RowCard({
       ) : null}
 
       <div className="appliance-fields">
-        <Stepper id={`${uid}-w`} label="Power" unit="W" value={row.powerW} onChange={(v) => onChange({ powerW: v })} step={powerN >= 500 ? 100 : powerN >= 100 ? 10 : 1} min={1} max={50000} />
-        <Stepper id={`${uid}-q`} label="How many" value={row.quantity} onChange={(v) => onChange({ quantity: v })} step={1} min={1} max={100} />
-        <Stepper id={`${uid}-h`} label="Hours a day" value={row.hours} onChange={(v) => onChange({ hours: v })} step={Number(row.hours) <= 1 ? 0.25 : 1} min={0.25} max={24} decimals />
+        <Stepper id={`${uid}-w`} label={t("appliances.power")} unit="W" value={row.powerW} onChange={(v) => onChange({ powerW: v })} step={powerN >= 500 ? 100 : powerN >= 100 ? 10 : 1} min={1} max={50000} />
+        <Stepper id={`${uid}-q`} label={t("appliances.howMany")} value={row.quantity} onChange={(v) => onChange({ quantity: v })} step={1} min={1} max={100} />
+        <Stepper id={`${uid}-h`} label={t("appliances.hours")} value={row.hours} onChange={(v) => onChange({ hours: v })} step={Number(row.hours) <= 1 ? 0.25 : 1} min={0.25} max={24} decimals />
       </div>
 
       <p className="hint">
         {typical !== undefined && powerN !== typical ? (
           <>
-            Typical for this size is {typical} W.{" "}
-            <button type="button" className="link-button" onClick={() => onChange({ powerW: String(typical) })}>Use {typical} W</button>{" "}
+            {t("appliances.typicalForSize", { watts: typical })}{" "}
+            <button type="button" className="link-button" onClick={() => onChange({ powerW: String(typical) })}>{t("appliances.useTypical", { watts: typical })}</button>{" "}
           </>
         ) : custom ? (
-          <>Enter the watts (W) printed on the label or charger. </>
+          <>{t("appliances.customWatts")} </>
         ) : (
-          <>{typical ?? row.powerW} W is typical. If the label shows a different number, type it in. </>
+          <>{t("appliances.typical", { watts: typical ?? row.powerW })} </>
         )}
-        {guide?.dutyNote ?? ""}
+        {guide ? text.dutyNote(guide) : ""}
       </p>
     </li>
   );
@@ -202,6 +228,8 @@ export function ApplianceEditor({
   setRows: (update: (prev: ApplianceRow[]) => ApplianceRow[]) => void;
   library: LibraryItem[];
 }) {
+  const text = useGuideText();
+  const t = text.t;
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState("popular");
   const [open, setOpen] = useState(false);
@@ -255,8 +283,9 @@ export function ApplianceEditor({
   const tabs = useMemo(() => {
     const cats: string[] = [];
     for (const g of APPLIANCE_GUIDE) if (!cats.includes(g.category)) cats.push(g.category);
-    return [{ key: "popular", label: "Popular", emoji: "⭐" }, ...cats.map((c) => ({ key: c, label: c, emoji: emojiFor(c) }))];
-  }, []);
+    return [{ key: "popular", label: t("appliances.popular"), emoji: "⭐" }, ...cats.map((c) => ({ key: c, label: text.category(c), emoji: emojiFor(c) }))];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t]);
   const tabItems = tab === "popular" ? APPLIANCE_GUIDE.filter((g) => g.popular) : APPLIANCE_GUIDE.filter((g) => g.category === tab);
   const total = rows.reduce((sum, r) => {
     const g = guideByKey(r.guideKey);
@@ -267,21 +296,21 @@ export function ApplianceEditor({
   return (
     <div className="appliance-editor">
       <div className="picker">
-        <div className="picker-tabs" role="tablist" aria-label="Appliance groups">
-          {tabs.map((t) => (
+        <div className="picker-tabs" role="tablist" aria-label={t("appliances.groups")}>
+          {tabs.map((g) => (
             <button
               type="button"
               role="tab"
-              key={t.key}
-              aria-selected={tab === t.key}
-              className={tab === t.key ? "picker-tab picker-tab-on" : "picker-tab"}
-              onClick={() => setTab(t.key)}
+              key={g.key}
+              aria-selected={tab === g.key}
+              className={tab === g.key ? "picker-tab picker-tab-on" : "picker-tab"}
+              onClick={() => setTab(g.key)}
             >
-              <span aria-hidden="true">{t.emoji}</span> {t.label}
+              <span aria-hidden="true">{g.emoji}</span> {g.label}
             </button>
           ))}
         </div>
-        <div className="picker-grid" role="tabpanel" aria-label={tabs.find((t) => t.key === tab)?.label}>
+        <div className="picker-grid" role="tabpanel" aria-label={tabs.find((g) => g.key === tab)?.label}>
           {tabItems.map((g) => {
             const count = rows.filter((r) => r.guideKey === g.key).length;
             return (
@@ -290,10 +319,10 @@ export function ApplianceEditor({
                 key={g.key}
                 className={count ? "pick pick-on" : "pick"}
                 onClick={() => add({ kind: "guide", item: g })}
-                aria-label={count ? `Add another ${g.name} (${count} added)` : `Add ${g.name}`}
+                aria-label={count ? t("appliances.addAnother", { name: text.name(g), count }) : t("appliances.add", { name: text.name(g) })}
               >
                 <span className="pick-emoji" aria-hidden="true">{g.emoji}</span>
-                <span className="pick-name">{g.name}</span>
+                <span className="pick-name">{text.name(g)}</span>
                 {count ? <span className="pick-count">{count}</span> : <span className="pick-plus" aria-hidden="true">+</span>}
               </button>
             );
@@ -301,7 +330,7 @@ export function ApplianceEditor({
         </div>
       </div>
 
-      <label htmlFor="es-search">Can’t find it? Search for any appliance</label>
+      <label htmlFor="es-search">{t("appliances.searchLabel")}</label>
       <div className="combo">
         <input
           id="es-search"
@@ -313,7 +342,7 @@ export function ApplianceEditor({
           aria-autocomplete="list"
           aria-activedescendant={open && suggestions.length ? `${listId}-${active}` : undefined}
           autoComplete="off"
-          placeholder="e.g. posho mill, hair dryer, borehole…"
+          placeholder={t("appliances.searchPlaceholder")}
           value={query}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); setActive(0); }}
           onFocus={() => setOpen(true)}
@@ -334,22 +363,22 @@ export function ApplianceEditor({
               >
                 {s.kind === "guide" ? (
                   <>
-                    <strong><span aria-hidden="true">{s.item.emoji}</span> {s.item.name}</strong>
+                    <strong><span aria-hidden="true">{s.item.emoji}</span> {text.name(s.item)}</strong>
                     <span>
                       {s.item.sizes.length > 1
-                        ? `${s.item.sizes[0].powerW}–${s.item.sizes[s.item.sizes.length - 1].powerW} W · choose size next`
-                        : `about ${s.item.sizes[0].powerW} W`}
+                        ? t("appliances.rangeChooseSize", { min: s.item.sizes[0].powerW, max: s.item.sizes[s.item.sizes.length - 1].powerW })
+                        : t("appliances.about", { watts: s.item.sizes[0].powerW })}
                     </span>
                   </>
                 ) : s.kind === "library" ? (
                   <>
                     <strong><span aria-hidden="true">{emojiFor(s.item.category)}</span> {s.item.name}</strong>
-                    <span>about {s.item.powerW} W</span>
+                    <span>{t("appliances.about", { watts: s.item.powerW })}</span>
                   </>
                 ) : (
                   <>
-                    <strong><span aria-hidden="true">🔌</span> Add “{s.name}”</strong>
-                    <span>Not on our list — you enter the watts</span>
+                    <strong><span aria-hidden="true">🔌</span> {t("appliances.addCustom", { name: s.name })}</strong>
+                    <span>{t("appliances.customHint")}</span>
                   </>
                 )}
               </li>
@@ -359,10 +388,7 @@ export function ApplianceEditor({
       </div>
 
       {rows.length === 0 ? (
-        <p className="hint">
-          Tap an appliance above, or search for one. We fill in typical sizes, watts and hours — change anything that
-          doesn&apos;t match yours.
-        </p>
+        <p className="hint">{t("appliances.empty")}</p>
       ) : (
         <>
           <ul className="appliance-list">
@@ -376,7 +402,7 @@ export function ApplianceEditor({
             ))}
           </ul>
           <p className="appliance-total" aria-live="polite">
-            {rows.length} appliance{rows.length === 1 ? "" : "s"} · about <strong>{fmtKwh(total)}</strong> a day
+            <Rich text={rows.length === 1 ? t("appliances.totalOne", { kwh: fmtKwh(total) }) : t("appliances.total", { count: rows.length, kwh: fmtKwh(total) })} />
           </p>
         </>
       )}

@@ -12,28 +12,36 @@ import type { ReportLine } from "./usageReport";
 import { SmsImport, useSmsSummary } from "./SmsImport";
 import { AppUpdateNeeded, savePdf } from "../../lib/savePdf";
 import { rememberPendingRequest } from "../../lib/pendingRequests";
+import { DraftNotice, LanguagePicker, Rich, useT, type MessageKey } from "@/lib/i18n";
+import { en } from "@/lib/i18n/en";
 
 type Grid = "none" | "unreliable" | "reliable";
 /** Matches RECOMMENDATION_KEY on the server: ask a technician to design a system. */
 const RECOMMENDATION = "recommendation";
 type Category = "residential" | "commercial_small" | "commercial_medium" | "industrial";
 
-const CATEGORY_CHOICES: { value: Category; label: string; hint: string; emoji: string }[] = [
-  { value: "residential", label: "Home", hint: "A house or apartment.", emoji: "🏠" },
-  { value: "commercial_small", label: "Small business", hint: "Shop, salon, small office.", emoji: "🏪" },
-  { value: "commercial_medium", label: "Medium business", hint: "Hotel, clinic, school, large office.", emoji: "🏨" },
-  { value: "industrial", label: "Industry", hint: "Factory, workshop, processing plant.", emoji: "🏭" }
+const CATEGORY_CHOICES: { value: Category; emoji: string }[] = [
+  { value: "residential", emoji: "🏠" },
+  { value: "commercial_small", emoji: "🏪" },
+  { value: "commercial_medium", emoji: "🏨" },
+  { value: "industrial", emoji: "🏭" }
 ];
 
-const GRID_CHOICES: { value: Grid; label: string; hint: string; emoji: string }[] = [
-  { value: "reliable", label: "Mostly reliable", hint: "UEDCL power is on most of the time.", emoji: "✅" },
-  { value: "unreliable", label: "Often goes off", hint: "Frequent outages or load-shedding.", emoji: "⚠️" },
-  { value: "none", label: "No grid power", hint: "Not connected to UEDCL.", emoji: "🚫" }
+const GRID_CHOICES: { value: Grid; emoji: string }[] = [
+  { value: "reliable", emoji: "✅" },
+  { value: "unreliable", emoji: "⚠️" },
+  { value: "none", emoji: "🚫" }
 ];
 
-function message(error: unknown) {
+function message(error: unknown, fallback: string) {
   if (error instanceof ConvexError && typeof error.data === "string") return error.data;
-  return "Something went wrong. Check your connection and try again.";
+  return fallback;
+}
+
+/** Text for a fixed option template, translated when the key is known, else the server's English. */
+function optionText(t: (key: MessageKey) => string, key: string, fallback: string) {
+  const k = key as MessageKey;
+  return k in en ? t(k) : fallback;
 }
 
 function money(minor: number, exponent: number, currency: string) {
@@ -42,20 +50,24 @@ function money(minor: number, exponent: number, currency: string) {
 }
 
 export default function EstimatePage() {
-  if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
-    return (
-      <main className="auth-shell">
-        <section className="auth-card">
-          <h1>Power check unavailable</h1>
-          <p>This page is not connected yet. Please try again later.</p>
-        </section>
-      </main>
-    );
-  }
+  if (!process.env.NEXT_PUBLIC_CONVEX_URL) return <Unavailable />;
   return <Estimator />;
 }
 
+function Unavailable() {
+  const t = useT();
+  return (
+    <main className="auth-shell">
+      <section className="auth-card">
+        <h1>{t("estimate.unavailable")}</h1>
+        <p>{t("estimate.unavailableHint")}</p>
+      </section>
+    </main>
+  );
+}
+
 function Estimator() {
+  const t = useT();
   const convex = useConvex();
   const config = useQuery(api.estimator.publicConfig, {});
   // Use the same customer-account lookup as the customer dashboard, not staff/profile state.
@@ -93,13 +105,13 @@ function Estimator() {
   }
 
   if (config === undefined) {
-    return <Shell><p className="muted">Loading…</p></Shell>;
+    return <Shell><p className="muted">{t("common.loading")}</p></Shell>;
   }
   if (!config.enabled) {
     return (
       <Shell>
-        <h1>Power check is not open yet</h1>
-        <p className="muted">Please check back soon, or contact us directly.</p>
+        <h1>{t("estimate.notOpen")}</h1>
+        <p className="muted">{t("estimate.notOpenHint")}</p>
       </Shell>
     );
   }
@@ -135,15 +147,15 @@ function Estimator() {
   async function calculate(event: FormEvent) {
     event.preventDefault();
     if (!grid) {
-      setError("Tell us about your grid power first.");
+      setError(t("estimate.errGrid"));
       return;
     }
     if (sms.purchases.length > 0 && !sms.summary.days) {
-      setError("In step 4, tell us about how many days one top-up lasts.");
+      setError(t("estimate.errDays"));
       return;
     }
     if (rows.length === 0 && !tokensReady) {
-      setError("Add the appliances you use in step 3, or paste your UEDCL messages in step 4.");
+      setError(t("estimate.errNothing"));
       return;
     }
     setBusy(true);
@@ -176,7 +188,7 @@ function Estimator() {
     } catch (e) {
       setResult(null);
       setSnapshot(null);
-      setError(message(e));
+      setError(message(e, t("common.genericError")));
     } finally {
       setBusy(false);
     }
@@ -189,7 +201,7 @@ function Estimator() {
       const { buildUsageReport } = await import("./usageReport");
       const bytes = await buildUsageReport({
         companyName: config!.enabled ? config!.companyName : "Solar Switch",
-        customerType: CATEGORY_CHOICES.find((c) => c.value === snapshot.category)?.label ?? "",
+        customerType: en[`estimate.cat.${snapshot.category}` as MessageKey] ?? "",
         currency: result.currency,
         exponent: result.exponent,
         rateMinorPerKwh: result.summary.ratePerKwhMinor,
@@ -200,7 +212,7 @@ function Estimator() {
       });
       await savePdf(bytes, `power-usage-estimate-${new Date().toISOString().slice(0, 10)}.pdf`, "Power usage estimate");
     } catch (e) {
-      setError(e instanceof AppUpdateNeeded ? e.message : "We could not create the PDF. Please try again.");
+      setError(e instanceof AppUpdateNeeded ? e.message : t("estimate.errPdf"));
     } finally {
       setPdfBusy(false);
     }
@@ -227,7 +239,7 @@ function Estimator() {
       if (sent.claimToken) rememberPendingRequest(sent.claimToken);
       setDone({ hasAccount: sent.hasAccount });
     } catch (e) {
-      setError(message(e));
+      setError(message(e, t("common.genericError")));
     } finally {
       setBusy(false);
     }
@@ -236,32 +248,28 @@ function Estimator() {
   if (done) {
     return (
       <Shell>
-        <h1>Thank you, {(hasCustomerAccount ? customer.account!.name : form.name).split(" ")[0]}</h1>
+        <h1>{t("estimate.thanks", { name: (hasCustomerAccount ? customer.account!.name : form.name).split(" ")[0] })}</h1>
         <p>
-          We have your request. A technician will review your power needs and prepare a recommendation with
-          options, photos and prices. We may call you on <strong>{hasCustomerAccount ? customer.account!.phone : form.phone}</strong> to check a few details.
+          <Rich text={t("estimate.thanksText", { phone: hasCustomerAccount ? customer.account!.phone : form.phone })} />
         </p>
         {done.hasAccount ? (
           <div className="next-step next-step-ok">
-            <strong>✅ It will appear in your account</strong>
-            <p>Open My recommendations to see it as soon as it is ready.</p>
-            <Link className="button" href="/my-requests">Go to My recommendations</Link>
+            <strong>{t("estimate.inAccountTitle")}</strong>
+            <p>{t("estimate.inAccountText")}</p>
+            <Link className="button" href="/my-requests">{t("estimate.goToRecommendations")}</Link>
           </div>
         ) : (
           <div className="next-step">
-            <strong>📲 Sign up to get your recommendation in the app</strong>
-            <p>
-              Create a free account on this phone to receive your recommendation with options, photos and prices, and
-              choose the one you want. It takes a minute.
-            </p>
-            <Link className="button" href="/sign-up?next=/my-requests">Create my free account</Link>
+            <strong>{t("estimate.signUpTitle")}</strong>
+            <p>{t("estimate.signUpText")}</p>
+            <Link className="button" href="/sign-up?next=/my-requests">{t("estimate.signUpButton")}</Link>
             <p className="hint">
-              Already have an account? <Link href="/sign-in"><u>Sign in</u></Link> on this phone and your request is added to it.
+              <Rich text={t("estimate.signInInstead")} link={(label) => <Link href="/sign-in"><u>{label}</u></Link>} />
             </p>
           </div>
         )}
-        {config.contactPhone ? <p className="muted">Questions? Call {config.contactPhone}.</p> : null}
-        <Link className="button button-secondary" href="/">Back to home</Link>
+        {config.contactPhone ? <p className="muted">{t("common.questionsCall", { phone: config.contactPhone })}</p> : null}
+        <Link className="button button-secondary" href="/">{t("estimate.backHome")}</Link>
       </Shell>
     );
   }
@@ -269,51 +277,47 @@ function Estimator() {
   return (
     <Shell>
       <p className="eyebrow">{config.companyName.toUpperCase()}</p>
-      <h1>How much power do you use?</h1>
-      <p className="muted">
-        Answer a few questions to see what you use and spend today, and the solar options that could fit.
-        It takes about two minutes.
-      </p>
+      <h1>{t("estimate.title")}</h1>
+      <p className="muted">{t("estimate.intro")}</p>
       <p className="hint">
-        Already have solar and want more from it? <Link href="/estimate/upgrade"><u>Check what your system can take</u></Link>.
+        <Rich text={t("estimate.haveSolar")} link={(label) => <Link href="/estimate/upgrade"><u>{label}</u></Link>} />
       </p>
 
       <form className="panel-form estimate-form" onSubmit={calculate}>
         <section className="step step-1" aria-labelledby="q1">
-          <h2 id="q1"><span className="step-num">1</span> Where do you need power?</h2>
+          <h2 id="q1"><span className="step-num">1</span> {t("estimate.q1")}</h2>
           <div className="choice-row" role="radiogroup" aria-labelledby="q1">
             {CATEGORY_CHOICES.map((c) => (
               <button type="button" key={c.value} role="radio" aria-checked={category === c.value} className={`choice ${category === c.value ? "choice-on" : ""}`} onClick={() => setCategory(c.value)}>
-                <strong><span aria-hidden="true">{c.emoji}</span> {c.label}</strong>
-                <span>{c.hint}</span>
+                <strong><span aria-hidden="true">{c.emoji}</span> {t(`estimate.cat.${c.value}`)}</strong>
+                <span>{t(`estimate.cat.${c.value}.hint`)}</span>
               </button>
             ))}
           </div>
         </section>
 
         <section className="step step-2" aria-labelledby="q2">
-          <h2 id="q2"><span className="step-num">2</span> How reliable is electricity?</h2>
+          <h2 id="q2"><span className="step-num">2</span> {t("estimate.q2")}</h2>
           <div className="choice-row" role="radiogroup" aria-labelledby="q2">
             {GRID_CHOICES.map((c) => (
               <button type="button" key={c.value} role="radio" aria-checked={grid === c.value} className={`choice ${grid === c.value ? "choice-on" : ""}`} onClick={() => setGrid(c.value)}>
-                <strong><span aria-hidden="true">{c.emoji}</span> {c.label}</strong>
-                <span>{c.hint}</span>
+                <strong><span aria-hidden="true">{c.emoji}</span> {t(`estimate.grid.${c.value}`)}</strong>
+                <span>{t(`estimate.grid.${c.value}.hint`)}</span>
               </button>
             ))}
           </div>
         </section>
 
         <section className="step step-3" aria-labelledby="q3">
-          <h2 id="q3"><span className="step-num">3</span> Which appliances need power?</h2>
+          <h2 id="q3"><span className="step-num">3</span> {t("estimate.q3")}</h2>
           <ApplianceEditor rows={rows} setRows={setRows} library={config.appliances} />
         </section>
 
         <section className="step step-4" aria-labelledby="q4">
-          <h2 id="q4"><span className="step-num">4</span> Cost of your UEDCL tokens <span className="step-optional">Optional</span></h2>
+          <h2 id="q4"><span className="step-num">4</span> {t("estimate.q4")} <span className="step-optional">{t("common.optional")}</span></h2>
           <p className="hint">
-            Paste your UEDCL token messages and we work out the units you use and what you really pay per unit.
-            {rows.length > 0 ? " Your appliance costs will then use your own price." : ""} Skip this to use the standard rate of{" "}
-            {money(unitRate, exponent, currency)} per unit.
+            {t("estimate.q4Hint")}
+            {rows.length > 0 ? ` ${t("estimate.q4HintOwnPrice")}` : ""} {t("estimate.q4HintStandard", { price: money(unitRate, exponent, currency) })}
           </p>
           <SmsImport
             text={smsText}
@@ -326,50 +330,52 @@ function Estimator() {
         </section>
 
         {error && !result ? <p className="auth-message" role="alert">{error}</p> : null}
-        <button className="button" type="submit" disabled={busy}>{busy && !chosen ? "Working it out…" : "Show my power needs"}</button>
+        <button className="button" type="submit" disabled={busy}>{busy && !chosen ? t("estimate.working") : t("estimate.show")}</button>
       </form>
 
       {result ? (
         <section id="results" className="estimate-results" aria-live="polite">
           <div className="result-block result-use">
-          <h2>Your power needs</h2>
+          <h2>{t("estimate.needsTitle")}</h2>
           <div className="projection-grid">
-            <div className="tile tile-energy"><span className="tile-label">Energy</span><span className="tile-value">{result.summary.dailyKwh} kWh</span><span className="tile-sub">per day</span></div>
+            <div className="tile tile-energy"><span className="tile-label">{t("estimate.tileEnergy")}</span><span className="tile-value">{result.summary.dailyKwh} kWh</span><span className="tile-sub">{t("estimate.perDay")}</span></div>
             {result.summary.costPerDayMinor !== null ? (
-              <div className="tile tile-day"><span className="tile-label">Cost</span><span className="tile-value">{money(result.summary.costPerDayMinor, result.exponent, result.currency)}</span><span className="tile-sub">per day</span></div>
+              <div className="tile tile-day"><span className="tile-label">{t("estimate.tileCost")}</span><span className="tile-value">{money(result.summary.costPerDayMinor, result.exponent, result.currency)}</span><span className="tile-sub">{t("estimate.perDay")}</span></div>
             ) : null}
             {result.summary.costPerMonthMinor !== null ? (
-              <div className="tile tile-month"><span className="tile-label">Cost</span><span className="tile-value">{money(result.summary.costPerMonthMinor, result.exponent, result.currency)}</span><span className="tile-sub">per month</span></div>
+              <div className="tile tile-month"><span className="tile-label">{t("estimate.tileCost")}</span><span className="tile-value">{money(result.summary.costPerMonthMinor, result.exponent, result.currency)}</span><span className="tile-sub">{t("estimate.perMonth")}</span></div>
             ) : null}
-            <div className="tile tile-peak"><span className="tile-label">Busiest moment</span><span className="tile-value">{result.summary.peakW.toLocaleString("en-US")} W</span><span className="tile-sub">estimated</span></div>
+            <div className="tile tile-peak"><span className="tile-label">{t("estimate.tileBusiest")}</span><span className="tile-value">{result.summary.peakW.toLocaleString("en-US")} W</span><span className="tile-sub">{t("estimate.estimated")}</span></div>
           </div>
           </div>
           {snapshot?.tokens ? (
             <p className="token-compare">
-              Your UEDCL payments show about <strong>{snapshot.tokens.dailyKwh} kWh a day</strong> (about{" "}
-              {money(snapshot.tokens.monthCost, result.exponent, result.currency)} a month) at{" "}
-              {money(snapshot.tokens.pricePerUnit, result.exponent, result.currency)} per unit.
+              <Rich text={t("estimate.tokensCompare", {
+                kwh: snapshot.tokens.dailyKwh,
+                month: money(snapshot.tokens.monthCost, result.exponent, result.currency),
+                price: money(snapshot.tokens.pricePerUnit, result.exponent, result.currency)
+              })} />{" "}
               {Math.abs(snapshot.tokens.dailyKwh - result.summary.dailyKwh) > Math.max(0.5, result.summary.dailyKwh * 0.3)
-                ? " That differs from your appliance list: check the hours, or whether some of your power comes from elsewhere."
-                : " That matches your appliance list well."}
+                ? t("estimate.tokensDiffer")
+                : t("estimate.tokensMatch")}
             </p>
           ) : null}
           <div className="result-block result-report report-download">
             <button type="button" className="button button-secondary" disabled={pdfBusy || !snapshot} onClick={downloadReport}>
-              {pdfBusy ? "Preparing PDF…" : "Download my usage report (PDF)"}
+              {pdfBusy ? t("estimate.preparingPdf") : t("estimate.downloadPdf")}
             </button>
-            <p className="hint">Watts and running cost per hour, day, week, month and year. It is an estimate, not a bill.</p>
+            <p className="hint">{t("estimate.pdfHint")}</p>
           </div>
 
           <div className="result-block result-options">
-          <h2>Solar options for you</h2>
-          <p className="estimate-banner">UNVERIFIED — FOR ILLUSTRATION ONLY. A technician checks every design before it is final. Prices are shared when you request a quote.</p>
+          <h2>{t("estimate.optionsTitle")}</h2>
+          <p className="estimate-banner">{t("estimate.banner")}</p>
 
           <div className="option-list">
             {result.options.map((o) => (
               <article key={o.key} className={`option-card ${chosen === o.key ? "option-on" : ""}`}>
-                <h3>{o.title}</h3>
-                <p className="muted">{o.blurb}</p>
+                <h3>{optionText(t, `option.${o.key}.title`, o.title)}</h3>
+                <p className="muted">{optionText(t, `option.${o.key}.blurb`, o.blurb)}</p>
                 <ul className="component-list">
                   {o.components.map((c) => (
                     <li key={c.role}>
@@ -379,63 +385,58 @@ function Estimator() {
                   ))}
                 </ul>
                 <p className="option-figures">
-                  {o.arrayKw !== null ? <>Solar {o.arrayKw} kW · makes about {o.solarKwhPerDay} kWh a day{o.coveragePercent !== null ? ` · covers about ${o.coveragePercent}% of your use` : ""}. </> : null}
-                  {o.batteryKwh !== null ? <>Battery {o.batteryKwh} kWh. </> : null}
-                  {o.offsetPerMonthMinor !== null && o.offsetPerMonthMinor > 0 ? <>Could offset about {money(o.offsetPerMonthMinor, result.exponent, result.currency)} of your monthly electricity cost.</> : null}
+                  {o.arrayKw !== null ? <>{t("estimate.figSolar", { kw: o.arrayKw, kwh: o.solarKwhPerDay ?? 0 })}{o.coveragePercent !== null ? t("estimate.figCoverage", { percent: o.coveragePercent }) : ""}. </> : null}
+                  {o.batteryKwh !== null ? <>{t("estimate.figBattery", { kwh: o.batteryKwh })} </> : null}
+                  {o.offsetPerMonthMinor !== null && o.offsetPerMonthMinor > 0 ? <>{t("estimate.figOffset", { amount: money(o.offsetPerMonthMinor, result.exponent, result.currency) })}</> : null}
                 </p>
                 {o.notes.map((n) => <p key={n} className="hint">{n}</p>)}
                 <button type="button" className="button" onClick={() => { setChosen(o.key); setError(null); setTimeout(() => document.getElementById("request")?.scrollIntoView({ behavior: "smooth" }), 50); }}>
-                  {chosen === o.key ? "Selected" : "Request a quote for this"}
+                  {chosen === o.key ? t("estimate.selected") : t("estimate.requestThis")}
                 </button>
               </article>
             ))}
           </div>
 
           <div className={`recommend-card ${chosen === RECOMMENDATION ? "option-on" : ""}`}>
-            <h3>{result.options.length === 0 ? "Get a system designed for you" : "Not sure which fits?"}</h3>
-            <p>
-              Send us your numbers and a technician will recommend the right system for your needs and prepare a quotation.
-              It is free and there is no obligation.
-            </p>
+            <h3>{result.options.length === 0 ? t("estimate.designForYou") : t("estimate.notSure")}</h3>
+            <p>{t("estimate.recommendText")}</p>
             <button
               type="button"
               className="button"
               onClick={() => { setChosen(RECOMMENDATION); setError(null); setTimeout(() => document.getElementById("request")?.scrollIntoView({ behavior: "smooth" }), 50); }}
             >
-              {chosen === RECOMMENDATION ? "Selected" : "Request a system recommendation and quotation"}
+              {chosen === RECOMMENDATION ? t("estimate.selected") : t("estimate.requestRecommendation")}
             </button>
           </div>
           </div>
 
           {chosen ? (
             <form id="request" className="panel-form" onSubmit={request}>
-              <h2>{chosen === RECOMMENDATION ? "Request a recommendation and quotation" : "Request your quote"}</h2>
+              <h2>{chosen === RECOMMENDATION ? t("estimate.formTitleRecommendation") : t("estimate.formTitleQuote")}</h2>
               <p className="hint">
-                {chosen === RECOMMENDATION
-                  ? "A technician will look at your numbers, recommend a system and send a quotation with prices. No payment is needed now."
-                  : "We will contact you with a quotation that includes prices. No payment is needed now."}
+                {chosen === RECOMMENDATION ? t("estimate.formHintRecommendation") : t("estimate.formHintQuote")}
               </p>
               {customer === undefined ? (
-                <p className="hint">Checking your account…</p>
+                <p className="hint">{t("estimate.checkingAccount")}</p>
               ) : signedInCustomer && !hasCustomerAccount ? (
-                <p className="hint">Your sign-in is active, but your customer account setup is incomplete. Please <Link href="/shop"><u>finish setting up your customer account</u></Link> before requesting a quotation.</p>
+                <p className="hint"><Rich text={t("estimate.accountIncomplete")} link={(label) => <Link href="/shop"><u>{label}</u></Link>} /></p>
               ) : hasCustomerAccount ? (
                 <div className="signed-in-request">
-                  <strong>Requesting as {customer.account!.name}</strong>
+                  <strong>{t("estimate.requestingAs", { name: customer.account!.name })}</strong>
                   {customer.email ? <p className="hint">{customer.email}</p> : null}
-                  <p className="hint">Your account details will be used. You only need to provide the property's location.</p>
-                  <label htmlFor="rq-loc">Where is the property? (town / area)</label>
+                  <p className="hint">{t("estimate.accountUsed")}</p>
+                  <label htmlFor="rq-loc">{t("estimate.location")}</label>
                   <input id="rq-loc" required maxLength={200} autoComplete="address-level2" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
                 </div>
               ) : (
                 <>
-                  <label htmlFor="rq-name">Your name</label>
+                  <label htmlFor="rq-name">{t("estimate.yourName")}</label>
                   <input id="rq-name" required maxLength={100} autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-                  <label htmlFor="rq-phone">Phone</label>
+                  <label htmlFor="rq-phone">{t("estimate.phone")}</label>
                   <input id="rq-phone" required type="tel" maxLength={20} autoComplete="tel" placeholder="+256 700 000000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-                  <label htmlFor="rq-email">Email (optional)</label>
+                  <label htmlFor="rq-email">{t("estimate.emailOptional")}</label>
                   <input id="rq-email" type="email" maxLength={120} autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-                  <label htmlFor="rq-loc">Where is the property? (town / area)</label>
+                  <label htmlFor="rq-loc">{t("estimate.location")}</label>
                   <input id="rq-loc" required maxLength={200} autoComplete="address-level2" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
                 </>
               )}
@@ -444,7 +445,7 @@ function Estimator() {
                 <input id="rq-site" tabIndex={-1} autoComplete="off" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
               </div>
               {error ? <p className="auth-message" role="alert">{error}</p> : null}
-              <button className="button" type="submit" disabled={busy || customer === undefined || (signedInCustomer && !hasCustomerAccount)}>{busy ? "Sending…" : "Send my request"}</button>
+              <button className="button" type="submit" disabled={busy || customer === undefined || (signedInCustomer && !hasCustomerAccount)}>{busy ? t("estimate.sending") : t("estimate.send")}</button>
             </form>
           ) : null}
         </section>
@@ -454,17 +455,22 @@ function Estimator() {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
+  const t = useT();
   return (
     <div className="public-bg">
       <div className="shell">
         <header className="topbar">
-          <Link className="brand" href="/" aria-label="Solar Switch home">
+          <Link className="brand" href="/" aria-label={t("common.brandHome")}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img className="brand-logo" src="/icons/icon-192.png" alt="" width={38} height={38} />
             <span>SOLAR SWITCH</span>
           </Link>
-          <Link className="button button-small button-secondary" href="/sign-in">Staff sign in</Link>
+          <div className="topbar-actions">
+            <LanguagePicker />
+            <Link className="button button-small button-secondary" href="/sign-in">{t("estimate.staffSignIn")}</Link>
+          </div>
         </header>
+        <DraftNotice />
         <main className="workspace">{children}</main>
       </div>
     </div>

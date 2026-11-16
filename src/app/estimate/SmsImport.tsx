@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { parseUedclSms, summarisePurchases, type ParsedSms, type Purchase, type SmsSummary } from "./uedclSms";
+import { Rich, useT } from "@/lib/i18n";
 
 const PAGE_SIZE = 5;
 
 const fmtDate = (d: Date | null) =>
   d ? d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null;
 const ugx = (n: number) => `UGX ${Math.round(n).toLocaleString("en-US")}`;
-const meterLabel = (account: string) => `Meter …⁠${account.slice(-4)}`;
+const meterTail = (account: string) => account.slice(-4);
 
 export type SmsState = {
   parsed: ParsedSms;
@@ -49,6 +50,7 @@ export function useSmsSummary(text: string, meter: string | null, daysByMeter: R
 }
 
 function PaymentList({ purchases }: { purchases: Purchase[] }) {
+  const t = useT();
   const [page, setPage] = useState(0);
   // Newest first: with dates by date, otherwise the last pasted message first.
   const ordered = useMemo(() => {
@@ -68,22 +70,22 @@ function PaymentList({ purchases }: { purchases: Purchase[] }) {
           <li key={`${p.tokenTail ?? "x"}-${current}-${i}`}>
             <div>
               <strong>{ugx(p.amount)}</strong>
-              <span>{fmtDate(p.date) ?? `Payment ${ordered.length - (current * PAGE_SIZE + i)}`}</span>
+              <span>{fmtDate(p.date) ?? t("sms.payment", { number: ordered.length - (current * PAGE_SIZE + i) })}</span>
             </div>
             <div className="payment-units">
               <strong>{p.units} kWh</strong>
-              <span>{ugx(p.amount / p.units)}/unit</span>
+              <span>{t("sms.perUnit", { price: ugx(p.amount / p.units) })}</span>
             </div>
           </li>
         ))}
       </ul>
       {pages > 1 ? (
-        <nav className="pager" aria-label="Payments pages">
-          <button type="button" className="button button-secondary button-small" disabled={current === 0} onClick={() => setPage(current - 1)}>‹ Newer</button>
+        <nav className="pager" aria-label={t("sms.pages")}>
+          <button type="button" className="button button-secondary button-small" disabled={current === 0} onClick={() => setPage(current - 1)}>{t("sms.newer")}</button>
           <span>
-            {current * PAGE_SIZE + 1}–{Math.min(ordered.length, (current + 1) * PAGE_SIZE)} of {ordered.length}
+            {t("sms.range", { from: current * PAGE_SIZE + 1, to: Math.min(ordered.length, (current + 1) * PAGE_SIZE), total: ordered.length })}
           </span>
-          <button type="button" className="button button-secondary button-small" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>Older ›</button>
+          <button type="button" className="button button-secondary button-small" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>{t("sms.older")}</button>
         </nav>
       ) : null}
     </div>
@@ -105,6 +107,8 @@ export function SmsImport({
   daysByMeter: Record<string, string>;
   setDaysForMeter: (account: string, days: string) => void;
 }) {
+  const t = useT();
+  const meterLabel = (account: string) => t("sms.meter", { tail: meterTail(account) });
   const { parsed, summary, purchases, meter, meters } = sms;
   const days = meter ? daysByMeter[meter] ?? "" : "";
 
@@ -120,16 +124,16 @@ export function SmsImport({
   return (
     <div className="sms-import">
       <ol className="sms-steps">
-        <li>Open your messages and find the ones from <strong>UEDCL</strong>.</li>
-        <li>Press and hold a message, select the others, then tap <strong>Copy</strong>.</li>
-        <li>Paste them below. A few recent ones are enough; repeats are ignored.</li>
+        <li><Rich text={t("sms.step1")} /></li>
+        <li><Rich text={t("sms.step2")} /></li>
+        <li>{t("sms.step3")}</li>
       </ol>
 
       <div className="sms-paste-row">
-        <button type="button" className="button button-secondary" onClick={pasteFromClipboard}>Paste from clipboard</button>
-        {text ? <button type="button" className="link-button" onClick={() => setText("")}>Clear</button> : null}
+        <button type="button" className="button button-secondary" onClick={pasteFromClipboard}>{t("sms.paste")}</button>
+        {text ? <button type="button" className="link-button" onClick={() => setText("")}>{t("sms.clear")}</button> : null}
       </div>
-      <label htmlFor="es-sms" className="visually-hidden">Your UEDCL messages</label>
+      <label htmlFor="es-sms" className="visually-hidden">{t("sms.label")}</label>
       <textarea
         id="es-sms"
         rows={parsed.purchases.length ? 3 : 6}
@@ -137,16 +141,16 @@ export function SmsImport({
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
-      <p className="hint">Your messages stay on this device. We only use the amount, units and date, never the token number.</p>
+      <p className="hint">{t("sms.private")}</p>
 
       {text.trim() && parsed.purchases.length === 0 ? (
         <p className="auth-message" role="alert">
-          We could not find a UEDCL payment in that text. Paste the messages exactly as UEDCL sent them, or type the numbers instead.
+          {t("sms.notFound")}
         </p>
       ) : null}
 
       {meters.length > 1 ? (
-        <div className="meter-tabs" role="tablist" aria-label="Meters">
+        <div className="meter-tabs" role="tablist" aria-label={t("sms.meters")}>
           {meters.map((m) => (
             <button
               type="button"
@@ -158,8 +162,8 @@ export function SmsImport({
             >
               <strong>{meterLabel(m.account)}</strong>
               <span>
-                {m.payments} payment{m.payments === 1 ? "" : "s"}
-                {m.summary.projection ? ` · ${ugx(m.summary.projection.cost.month)}/month` : ""}
+                {m.payments === 1 ? t("sms.paymentsOne") : t("sms.paymentsMany", { count: m.payments })}
+                {m.summary.projection ? ` · ${t("sms.perMonth", { amount: ugx(m.summary.projection.cost.month) })}` : ""}
               </span>
             </button>
           ))}
@@ -170,17 +174,17 @@ export function SmsImport({
         <div className="sms-found" aria-live="polite">
           <div className="sms-found-head">
             <p className="sms-found-title">
-              <strong>{purchases.length}</strong> payment{purchases.length === 1 ? "" : "s"}
-              {meters.length > 1 ? ` for ${meterLabel(meter)}` : ""}
+              <Rich text={purchases.length === 1 ? t("sms.foundOne") : t("sms.foundMany", { count: purchases.length })} />
+              {meters.length > 1 ? t("sms.forMeter", { meter: meterLabel(meter) }) : ""}
             </p>
             <p className="sms-found-totals">
-              {ugx(summary.totalAmount)} · {summary.totalUnits} kWh{summary.pricePerUnit ? ` · ${ugx(summary.pricePerUnit)}/unit` : ""}
+              {ugx(summary.totalAmount)} · {summary.totalUnits} kWh{summary.pricePerUnit ? ` · ${t("sms.perUnit", { price: ugx(summary.pricePerUnit) })}` : ""}
             </p>
           </div>
           {parsed.duplicates || parsed.unreadable ? (
             <p className="hint">
-              {parsed.duplicates ? `${parsed.duplicates} repeat${parsed.duplicates === 1 ? "" : "s"} ignored. ` : ""}
-              {parsed.unreadable ? `${parsed.unreadable} message${parsed.unreadable === 1 ? "" : "s"} could not be read.` : ""}
+              {parsed.duplicates ? `${parsed.duplicates === 1 ? t("sms.repeatOne") : t("sms.repeats", { count: parsed.duplicates })} ` : ""}
+              {parsed.unreadable ? (parsed.unreadable === 1 ? t("sms.unreadableOne") : t("sms.unreadable", { count: parsed.unreadable })) : ""}
             </p>
           ) : null}
 
@@ -188,36 +192,37 @@ export function SmsImport({
 
           {summary.basis === "dates" ? (
             <p className="form-success">
-              From {fmtDate(summary.firstDate)} to {fmtDate(summary.lastDate)} ({summary.days} days) you used about{" "}
-              <strong>{summary.units} kWh</strong>. Your latest top-up is left out because those units are still on your meter.
+              <Rich text={t("sms.usedBetween", { from: fmtDate(summary.firstDate) ?? "", to: fmtDate(summary.lastDate) ?? "", days: summary.days ?? 0, kwh: summary.units })} />
             </p>
           ) : (
             <div className="sms-days">
               <label htmlFor="es-sms-days">
                 {summary.payments === 1
-                  ? "About how many days does this top-up last?"
-                  : `About how many days does one top-up of about ${ugx(summary.typicalAmount)} (${summary.typicalUnits} kWh) last?`}
+                  ? t("sms.daysOne")
+                  : t("sms.daysTypical", { amount: ugx(summary.typicalAmount), kwh: summary.typicalUnits })}
               </label>
-              <div className="quick-row" role="group" aria-label="Quick pick days">
-                {[["1 day", "1"], ["2 days", "2"], ["3 days", "3"], ["5 days", "5"], ["A week", "7"], ["2 weeks", "14"], ["A month", "30"]].map(([label, v]) => (
+              <div className="quick-row" role="group" aria-label={t("sms.quickDays")}>
+                {([["sms.day1", "1"], ["sms.days2", "2"], ["sms.days3", "3"], ["sms.days5", "5"], ["sms.week", "7"], ["sms.weeks2", "14"], ["sms.month", "30"]] as const).map(([key, v]) => [t(key), v] as const).map(([label, v]) => (
                   <button type="button" key={v} className={`chip ${days === v ? "chip-on" : ""}`} onClick={() => setDaysForMeter(meter, v)}>{label}</button>
                 ))}
               </div>
-              <input id="es-sms-days" required inputMode="decimal" type="number" min="0.5" max="366" step="any" placeholder="Or type the number of days" value={days} onChange={(e) => setDaysForMeter(meter, e.target.value)} />
-              <p className="hint">Think of a normal top-up: how long until the meter runs low and you buy again?</p>
+              <input id="es-sms-days" required inputMode="decimal" type="number" min="0.5" max="366" step="any" placeholder={t("sms.daysPlaceholder")} value={days} onChange={(e) => setDaysForMeter(meter, e.target.value)} />
+              <p className="hint">{t("sms.daysHint")}</p>
             </div>
           )}
 
           {summary.projection ? (
             <div className="sms-projection" aria-live="polite">
               <p className="sms-projection-title">
-                {meters.length > 1 ? `Projected spend for ${meterLabel(meter)}` : "Your projected electricity spend"}
+                {meters.length > 1 ? t("sms.projectedFor", { meter: meterLabel(meter) }) : t("sms.projected")}
                 <span>
-                  {summary.payments === 1 ? "from 1 payment" : `from ${summary.payments} payments`} at {ugx(summary.pricePerUnit ?? 0)} per unit
+                  {summary.payments === 1
+                    ? t("sms.fromOne", { price: ugx(summary.pricePerUnit ?? 0) })
+                    : t("sms.fromMany", { count: summary.payments, price: ugx(summary.pricePerUnit ?? 0) })}
                 </span>
               </p>
               <div className="projection-grid">
-                {([["Per day", "day"], ["Per week", "week"], ["Per month", "month"], ["Per year", "year"]] as const).map(([label, key]) => (
+                {([["sms.perDay", "day"], ["sms.perWeek", "week"], ["sms.perMonthTile", "month"], ["sms.perYear", "year"]] as const).map(([labelKey, key]) => [t(labelKey), key] as const).map(([label, key]) => (
                   <div className={`tile tile-${key}`} key={key}>
                     <span className="tile-label">{label}</span>
                     <span className="tile-value">{ugx(summary.projection!.cost[key])}</span>
@@ -226,8 +231,8 @@ export function SmsImport({
                 ))}
               </div>
               <p className="hint">
-                An estimate that assumes you keep using power the same way.
-                {summary.payments < 3 ? " Paste a few more payments for a steadier figure." : ""}
+                {t("sms.estimateNote")}
+                {summary.payments < 3 ? ` ${t("sms.moreForSteady")}` : ""}
               </p>
             </div>
           ) : null}

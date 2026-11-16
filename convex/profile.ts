@@ -13,6 +13,7 @@ import {
 import { findViewerProfile } from "./lib/auth";
 import { validatePhone } from "./lib/crm";
 import { MAX_IMAGE_BYTES, sniffFile } from "./lib/files";
+import { isLang } from "./lib/languages";
 
 /**
  * Every account's own profile: the name to show (and print on certificates), a phone
@@ -58,6 +59,7 @@ export const myProfile = query({
       phone: profile.phone ?? account?.phone ?? "",
       photoUrl: await photoUrlOf(ctx, profile),
       saved: Boolean(profile.profileUpdatedAt),
+      language: profile.language ?? null,
       complete: profileComplete(profile)
     };
   }
@@ -80,6 +82,17 @@ export const updateProfile = mutation({
       .first();
     if (account) await ctx.db.patch(account._id, { name: displayName, ...(phone ? { phone } : {}) });
     return { saved: true };
+  }
+});
+
+/** The language the person reads the public pages and the Academy in. */
+export const setLanguage = mutation({
+  args: { language: v.string() },
+  handler: async (ctx, args) => {
+    const profile = await requireViewer(ctx);
+    if (!isLang(args.language)) throw new ConvexError("Unknown language.");
+    if (profile.language !== args.language) await ctx.db.patch(profile._id, { language: args.language, updatedAt: Date.now() });
+    return { language: args.language };
   }
 });
 

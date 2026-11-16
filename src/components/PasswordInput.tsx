@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useT } from "@/lib/i18n";
 
 type Props = {
   id: string;
@@ -15,6 +16,7 @@ type Props = {
  * with an eye button to hide it when someone is looking over their shoulder.
  */
 export function PasswordInput({ id, value, onChange, autoComplete, minLength = 8 }: Props) {
+  const t = useT();
   const [visible, setVisible] = useState(true);
   return (
     <div className="password-box">
@@ -37,7 +39,7 @@ export function PasswordInput({ id, value, onChange, autoComplete, minLength = 8
         className="password-eye"
         aria-controls={id}
         aria-pressed={!visible}
-        aria-label={visible ? "Hide password" : "Show password"}
+        aria-label={visible ? t("auth.hidePassword") : t("auth.showPassword")}
         onClick={() => setVisible(!visible)}
       >
         {visible ? (

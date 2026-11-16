@@ -221,6 +221,8 @@ export default defineSchema({
     photoStorageId: v.optional(v.id("_storage")),
     // Set once the person has saved their own profile, so sign-in never overwrites their name.
     profileUpdatedAt: v.optional(v.number()),
+    // Language chosen for the public pages and the Academy (a code from convex/lib/languages.ts).
+    language: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number()
   })
@@ -836,6 +838,41 @@ export default defineSchema({
   })
     .index("by_request", ["requestId"])
     .index("by_tenant_chosen", ["tenantId", "chosenAt"]),
+
+  // A super administrator's correction to one piece of translated screen text.
+  uiTranslations: defineTable({
+    tenantId: v.id("tenants"),
+    lang: v.string(),
+    key: v.string(),
+    text: v.string(),
+    updatedAt: v.number(),
+    updatedBy: v.id("userProfiles")
+  }).index("by_tenant_lang_key", ["tenantId", "lang", "key"]),
+
+  // Whether a language has been checked by a native speaker (until then pages say "Draft translation").
+  languageStatus: defineTable({
+    tenantId: v.id("tenants"),
+    lang: v.string(),
+    reviewed: v.boolean(),
+    updatedAt: v.number()
+  }).index("by_tenant_lang", ["tenantId", "lang"]),
+
+  // A translation of one Academy module, matched to the English by lesson and question keys.
+  academyTranslations: defineTable({
+    tenantId: v.id("tenants"),
+    moduleKey: v.string(),
+    lang: v.string(),
+    // The English module version it was translated from; an English edit after that makes it stale.
+    sourceVersion: v.number(),
+    title: v.string(),
+    summary: v.string(),
+    lessons: v.array(v.object({ key: v.string(), title: v.string(), body: v.string() })),
+    questions: v.array(
+      v.object({ key: v.string(), prompt: v.string(), options: v.array(v.string()), explanation: v.optional(v.string()) })
+    ),
+    updatedAt: v.number(),
+    updatedBy: v.id("userProfiles")
+  }).index("by_tenant_module_lang", ["tenantId", "moduleKey", "lang"]),
 
   // A phone with the Android app that checks in the background for new messages.
   // Only a hash of its secret key is kept.
