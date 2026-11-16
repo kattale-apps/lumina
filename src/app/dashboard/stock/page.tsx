@@ -5,6 +5,9 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { CompanyPage, ConfiguredOnly, errorMessage } from "../workspace";
+import { Pager, pageFor } from "../../../components/Pager";
+
+const STOCK_PAGE_SIZE = 25;
 
 type Overview = NonNullable<ReturnType<typeof useQuery<typeof api.stock.stockOverview>>>;
 type Notice = { ok: boolean; text: string } | null;
@@ -362,7 +365,23 @@ function Ledger({ tenantId }: { tenantId: Id<"tenants"> }) {
 
 function Stock({ tenantId }: { tenantId: Id<"tenants"> }) {
   const overview = useQuery(api.stock.stockOverview, { tenantId });
+  const [search, setSearch] = useState("");
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [paging, setPaging] = useState({ key: "", page: 1 });
   if (!overview) return <p className="muted">Loading stock…</p>;
+
+  const term = search.trim().toLowerCase();
+  const shown = overview.items.filter(
+    (i) => (!term || `${i.name} ${i.sku} ${i.categoryName}`.toLowerCase().includes(term)) && (!inStockOnly || i.totalAvailable > 0)
+  );
+  const filterKey = `${term}|${inStockOnly}`;
+  const pageCount = Math.ceil(shown.length / STOCK_PAGE_SIZE);
+  const page = pageFor(paging, filterKey, pageCount);
+  const onPage = shown.slice((page - 1) * STOCK_PAGE_SIZE, page * STOCK_PAGE_SIZE);
+  function goTo(next: number) {
+    setPaging({ key: filterKey, page: next });
+    document.getElementById("levels-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <>
@@ -372,12 +391,24 @@ function Stock({ tenantId }: { tenantId: Id<"tenants"> }) {
       </p>
 
       <section aria-labelledby="levels-heading" className="workspace-section">
-        <h2 id="levels-heading">Stock levels</h2>
+        <h2 id="levels-heading">
+          Stock levels ({shown.length === overview.items.length ? overview.items.length : `${shown.length} of ${overview.items.length}`})
+        </h2>
+        <div className="filter-row">
+          <label htmlFor="stock-search">Search</label>
+          <input id="stock-search" type="search" placeholder="Name, SKU or category" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <label>
+            <input type="checkbox" checked={inStockOnly} onChange={(e) => setInStockOnly(e.target.checked)} /> In stock only
+          </label>
+        </div>
         {overview.items.length === 0 ? (
           <p className="muted">No products yet.</p>
+        ) : shown.length === 0 ? (
+          <p className="muted">No products match.</p>
         ) : (
+          <>
           <ul className="record-list">
-            {overview.items.map((item) => (
+            {onPage.map((item) => (
               <li className="product-card" key={item.productId}>
                 <div className="field-head">
                   <div>
@@ -413,6 +444,8 @@ function Stock({ tenantId }: { tenantId: Id<"tenants"> }) {
               </li>
             ))}
           </ul>
+          <Pager page={page} pageCount={pageCount} onPage={goTo} />
+          </>
         )}
       </section>
 

@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type QueryCtx } from "./_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
 import { DEFAULT_CATEGORIES } from "./lib/catalogueDefaults";
@@ -69,6 +69,14 @@ export const loadStandardCategories = mutation({
   args: { tenantId: v.id("tenants") },
   handler: async (ctx, args) => {
     const { profile } = await requireTenantMembership(ctx, args.tenantId, CATALOGUE_ADMINS);
+    return { added: await addStandardCategories(ctx, args.tenantId, profile) };
+  }
+});
+
+/** Adds any standard category the company does not have yet. Existing ones are left as edited. */
+export async function addStandardCategories(ctx: MutationCtx, tenantId: Id<"tenants">, profile: Doc<"userProfiles">) {
+  const args = { tenantId };
+  {
     const now = Date.now();
     const added: string[] = [];
 
@@ -107,9 +115,9 @@ export const loadStandardCategories = mutation({
         metadata: { after: { key: template.key, fields: template.fields.length } }
       });
     }
-    return { added };
+    return added;
   }
-});
+}
 
 export const createCategory = mutation({
   args: {

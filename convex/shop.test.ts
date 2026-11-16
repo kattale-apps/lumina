@@ -46,8 +46,10 @@ describe("customer shop", () => {
     await asCustomer.mutation(api.shop.registerCustomer, { name: "Buyer", phone: "+256 700 000000" });
     const cat = await asCustomer.query(api.shop.catalogue, {});
     expect(cat.products).toHaveLength(1);
-    expect(cat.products[0].priceMinor).toBe(125_000);
-    expect(JSON.stringify(cat)).not.toMatch(/cost|margin|floor/i);
+    const details = await asCustomer.query(api.shop.catalogueDetails, { ids: [cat.products[0].id] });
+    expect(details[0].priceMinor).toBe(125_000);
+    expect(JSON.stringify(cat) + JSON.stringify(details)).not.toMatch(/cost|margin|floor/i);
+    await expect(t.query(api.shop.catalogueDetails, { ids: [cat.products[0].id] })).rejects.toThrow();
   });
 
   test("an order is priced by the server and staff can confirm it", async () => {

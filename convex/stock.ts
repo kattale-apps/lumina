@@ -19,7 +19,7 @@ import {
 } from "./lib/stock";
 import { requireText } from "./lib/validation";
 
-const MAX_ROWS = 2000;
+const MAX_ROWS = 3000;
 const MAX_HOLD_HOURS = 24 * 30;
 
 /**
@@ -62,7 +62,8 @@ export const stockOverview = query({
     const products = await ctx.db
       .query("products")
       .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
-      .take(500);
+      .take(MAX_ROWS);
+    const onHandAt = new Map(balances.map((b) => [`${b.productId}:${b.warehouseId}`, b.onHand]));
     const categories = new Map<string, string>();
 
     const items = [];
@@ -76,9 +77,7 @@ export const stockOverview = query({
       let totalAvailable = 0;
       for (const warehouse of warehouses) {
         if (!warehouseIds.has(warehouse._id)) continue;
-        const onHand =
-          balances.find((b) => b.productId === product._id && b.warehouseId === warehouse._id)
-            ?.onHand ?? 0;
+        const onHand = onHandAt.get(`${product._id}:${warehouse._id}`) ?? 0;
         const held = reserved.get(`${product._id}:${warehouse._id}`) ?? 0;
         const available = Math.max(onHand - held, 0);
         if (warehouse.status === "active") totalAvailable += available;

@@ -8,7 +8,9 @@ import { currencyExponent } from "./lib/money";
 import { currentCost, priceFrom, resolveMarginRule } from "./lib/pricing";
 import { requireText } from "./lib/validation";
 
-const MAX_LISTED = 500;
+const MAX_LISTED = 3000;
+// Prices and photos are looked up for one page of cards (plus the basket) at a time.
+const MAX_DETAILS = 150;
 const MAX_LINES = 30;
 const MAX_ORDERS_PER_DAY = 10;
 const DAY = 24 * 60 * 60 * 1000;
@@ -82,15 +84,23 @@ export const registerCustomer = mutation({
   }
 });
 
-/** The full catalogue with list prices, for signed-in customers. Cost and margin are never exposed. */
+/** The signed-in customer's company, or an error a customer can act on. */
+async function customerTenant(ctx: QueryCtx) {
+  const found = await viewerCustomer(ctx);
+  if (!found) throw new ConvexError("Create a customer account to see the catalogue.");
+  const tenant = await ctx.db.get(found.account.tenantId);
+  if (!tenant || tenant.status !== "active") throw new ConvexError("The catalogue is not available right now.");
+  return tenant;
+}
+
+/**
+ * Every product a customer may buy, without prices or photos: enough to search, filter by
+ * brand and group into cards. Prices and photos come a page at a time from catalogueDetails.
+ */
 export const catalogue = query({
   args: {},
   handler: async (ctx) => {
-    const found = await viewerCustomer(ctx);
-    if (!found) throw new ConvexError("Create a customer account to see the catalogue.");
-    const tenant = await ctx.db.get(found.account.tenantId);
-    if (!tenant || tenant.status !== "active") throw new ConvexError("The catalogue is not available right now.");
-
+    const tenant = await customerTenant(ctx);
     const products = await ctx.db
       .query("products")
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenant._id))
@@ -102,9 +112,6 @@ export const catalogue = query({
       if (!categories.has(product.categoryId)) categories.set(product.categoryId, await ctx.db.get(product.categoryId));
       const category = categories.get(product.categoryId);
       if (!category || category.status !== "active") continue;
-      const cost = await currentCost(ctx, product._id);
-      const rule = await resolveMarginRule(ctx, product);
-      const price = cost && rule ? priceFrom(cost, rule.rule) : null;
       items.push({
         id: product._id,
         category: category.name,
@@ -112,9 +119,7 @@ export const catalogue = query({
         brand: product.brand,
         model: product.model,
         description: product.description ?? "",
-        warrantyMonths: product.warrantyMonths ?? null,
-        priceMinor: price?.listMinor ?? null,
-        currency: price?.currency ?? null
+        warrantyMonths: product.warrantyMonths ?? null
       });
     }
     return {
@@ -122,6 +127,37 @@ export const catalogue = query({
       exponent: currencyExponent(tenant.defaultCurrency),
       products: items.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
     };
+  }
+});
+
+/** List price and photo for the products on screen (and in the basket). Cost and margin are never exposed. */
+export const catalogueDetails = query({
+  args: { ids: v.array(v.id("products")) },
+  handler: async (ctx, args) => {
+    if (args.ids.length > MAX_DETAILS) throw new ConvexError(`At most ${MAX_DETAILS} products at a time.`);
+    const tenant = await customerTenant(ctx);
+    const out = [];
+    for (const id of args.ids) {
+      const product = await ctx.db.get(id);
+      if (!product || product.tenantId !== tenant._id || product.status !== "active") continue;
+      const category = await ctx.db.get(product.categoryId);
+      if (!category || category.status !== "active") continue;
+      const cost = await currentCost(ctx, product._id);
+      const rule = await resolveMarginRule(ctx, product);
+      const price = cost && rule ? priceFrom(cost, rule.rule) : null;
+      const photo = await ctx.db
+        .query("productFiles")
+        .withIndex("by_product", (q) => q.eq("productId", product._id))
+        .filter((q) => q.eq(q.field("kind"), "image"))
+        .first();
+      out.push({
+        id: product._id,
+        imageUrl: photo ? await ctx.storage.getUrl(photo.storageId) : null,
+        priceMinor: price?.listMinor ?? null,
+        currency: price?.currency ?? null
+      });
+    }
+    return out;
   }
 });
 

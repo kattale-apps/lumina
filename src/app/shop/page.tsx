@@ -10,6 +10,10 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { hasPendingRequests } from "@/lib/pendingRequests";
 import { useRouter } from "next/navigation";
 import { useT } from "@/lib/i18n";
+import { Pager, pageFor } from "@/components/Pager";
+
+const CARDS_PER_PAGE = 12;
+type Detail = { id: string; imageUrl: string | null; priceMinor: number | null; currency: string | null };
 
 function msg(e: unknown, fallback: string) {
   return e instanceof ConvexError && typeof e.data === "string" ? e.data : fallback;
@@ -59,31 +63,64 @@ function Shop() {
   const place = useMutation(api.shop.placeOrder);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
+  const [brand, setBrand] = useState("");
   const [location, setLocation] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [placed, setPlaced] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [paging, setPaging] = useState({ key: "", page: 1 });
+  const [known, setKnown] = useState<Record<string, Detail>>({});
 
+  const brands = useMemo(() => [...new Set((data?.products ?? []).map((p) => p.brand))].sort(), [data]);
+
+  // The same item from different brands is one card, with each brand’s price as an option.
   const grouped = useMemo(() => {
     if (!data) return [];
     const term = search.trim().toLowerCase();
-    const map = new Map<string, typeof data.products>();
+    const map = new Map<string, Map<string, typeof data.products>>();
     for (const p of data.products) {
-      if (term && !`${p.name} ${p.brand} ${p.model}`.toLowerCase().includes(term)) continue;
-      map.set(p.category, [...(map.get(p.category) ?? []), p]);
+      if (brand && p.brand !== brand) continue;
+      if (term && !`${p.name} ${p.brand} ${p.model} ${p.description}`.toLowerCase().includes(term)) continue;
+      const cards = map.get(p.category) ?? new Map<string, typeof data.products>();
+      const key = p.name.trim().toLowerCase();
+      cards.set(key, [...(cards.get(key) ?? []), p]);
+      map.set(p.category, cards);
     }
-    return [...map.entries()];
-  }, [data, search]);
+    return [...map.entries()].map(([category, cards]) => [category, [...cards.values()]] as const);
+  }, [data, search, brand]);
+
+  // Cards are shown a page at a time; prices and photos are fetched for that page and the basket.
+  const cards = grouped.flatMap(([category, list]) => list.map((variants) => ({ category, variants })));
+  const pageCount = Math.ceil(cards.length / CARDS_PER_PAGE);
+  const filterKey = `${search.trim().toLowerCase()}|${brand}`;
+  const page = pageFor(paging, filterKey, pageCount);
+  const pageCards = cards.slice((page - 1) * CARDS_PER_PAGE, page * CARDS_PER_PAGE);
+  const pageGroups: [string, (typeof cards)[number]["variants"][]][] = [];
+  for (const c of pageCards) {
+    const last = pageGroups[pageGroups.length - 1];
+    if (last && last[0] === c.category) last[1].push(c.variants);
+    else pageGroups.push([c.category, [c.variants]]);
+  }
+  const wanted = [...new Set([...pageCards.flatMap((c) => c.variants.map((p) => p.id as string)), ...Object.keys(cart)])].slice(0, 150);
+  const details = useQuery(api.shop.catalogueDetails, data ? { ids: wanted as Id<"products">[] } : "skip");
+  if (details && details.some((d) => known[d.id] !== d)) {
+    setKnown((k) => ({ ...k, ...Object.fromEntries(details.map((d) => [d.id as string, d])) }));
+  }
 
   if (data === undefined) return <p className="muted">{t("shop.loading")}</p>;
 
   const byId = new Map(data.products.map((p) => [p.id as string, p]));
   const lines = Object.entries(cart)
-    .map(([id, qty]) => ({ id, qty, p: byId.get(id) }))
-    .filter((l): l is { id: string; qty: number; p: NonNullable<typeof l.p> } => Boolean(l.p));
-  const total = lines.reduce((sum, l) => sum + (l.p.priceMinor ?? 0) * l.qty, 0);
-  const currency = lines[0]?.p.currency ?? "";
+    .map(([id, qty]) => ({ id, qty, p: byId.get(id), d: known[id] }))
+    .filter((l): l is { id: string; qty: number; p: NonNullable<typeof l.p>; d: Detail } => Boolean(l.p && l.d));
+  const total = lines.reduce((sum, l) => sum + (l.d.priceMinor ?? 0) * l.qty, 0);
+  const currency = lines[0]?.d.currency ?? "";
+
+  function goTo(next: number) {
+    setPaging({ key: filterKey, page: next });
+    document.getElementById("shop-search")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -117,40 +154,75 @@ function Shop() {
       <label className="visually-hidden" htmlFor="shop-search">{t("shop.search")}</label>
       <input id="shop-search" className="shop-search" type="search" placeholder={t("shop.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
 
+      {brands.length > 1 ? (
+        <div className="quick-row shop-brands" role="group" aria-label={t("shop.brand")}>
+          <button type="button" className={`chip${brand === "" ? " chip-on" : ""}`} aria-pressed={brand === ""} onClick={() => setBrand("")}>{t("shop.allBrands")}</button>
+          {brands.map((b) => (
+            <button key={b} type="button" className={`chip${brand === b ? " chip-on" : ""}`} aria-pressed={brand === b} onClick={() => setBrand(b)}>{b}</button>
+          ))}
+        </div>
+      ) : null}
+
       {grouped.length === 0 ? <p className="muted">{t("shop.none")}</p> : null}
-      {grouped.map(([category, items]) => (
+      {pageGroups.map(([category, items]) => (
         <section key={category} className="workspace-section">
           <h2>{category}</h2>
           <div className="shop-grid">
-            {items.map((p) => (
-              <article className="option-card" key={p.id}>
-                <h3>{p.name}</h3>
-                <p className="muted">
-                  {[p.brand, p.model].filter(Boolean).join(" · ")}
-                  {p.warrantyMonths ? t("shop.warranty", { months: p.warrantyMonths }) : ""}
-                </p>
-                {p.description ? <p className="hint">{p.description}</p> : null}
-                <p className="stat-value">
-                  {p.priceMinor !== null && p.currency ? money(p.priceMinor, data.exponent, p.currency) : t("shop.priceOnRequest")}
-                </p>
-                {p.priceMinor !== null ? (
-                  cart[p.id] ? (
-                    <div className="quick-row">
-                      <button type="button" className="chip" aria-label={t("shop.fewer", { name: p.name })} onClick={() => setCart((c) => { const n = { ...c, [p.id]: c[p.id] - 1 }; if (n[p.id] < 1) delete n[p.id]; return n; })}>−</button>
-                      <strong>{cart[p.id]}</strong>
-                      <button type="button" className="chip" aria-label={t("shop.more", { name: p.name })} onClick={() => setCart((c) => ({ ...c, [p.id]: Math.min(1000, c[p.id] + 1) }))}>+</button>
-                    </div>
-                  ) : (
-                    <button type="button" className="button button-small" onClick={() => { setPlaced(false); setCart((c) => ({ ...c, [p.id]: 1 })); }}>
-                      {t("shop.add")}
-                    </button>
-                  )
-                ) : null}
-              </article>
-            ))}
+            {items.map((variants) => {
+              const first = variants[0];
+              const photo = variants.map((v) => known[v.id]?.imageUrl).find(Boolean);
+              return (
+                <article className="option-card shop-card" key={first.id}>
+                  {photo ? <img className="shop-photo" src={photo} alt={first.name} loading="lazy" /> : null}
+                  <h3>{first.name}</h3>
+                  {variants.length === 1 && first.description ? <p className="hint">{first.description}</p> : null}
+                  {variants.length > 1 ? <p className="muted">{t("shop.brandOptions", { count: variants.length })}</p> : null}
+                  <ul className="shop-variants">
+                    {variants.map((p) => {
+                      const d = known[p.id];
+                      return (
+                      <li key={p.id}>
+                        <div>
+                          <strong>{p.brand}</strong>
+                          <span className="muted">
+                            {" "}{p.model}
+                            {p.warrantyMonths ? t("shop.warranty", { months: p.warrantyMonths }) : ""}
+                          </span>
+                          {variants.length > 1 && p.description ? <span className="hint shop-variant-note">{p.description}</span> : null}
+                          <p className="stat-value">
+                            {!d ? "…" : d.priceMinor !== null && d.currency ? money(d.priceMinor, data.exponent, d.currency) : t("shop.priceOnRequest")}
+                          </p>
+                        </div>
+                        {d && d.priceMinor !== null ? (
+                          cart[p.id] ? (
+                            <div className="quick-row">
+                              <button type="button" className="chip" aria-label={t("shop.fewer", { name: `${p.brand} ${p.name}` })} onClick={() => setCart((c) => { const n = { ...c, [p.id]: c[p.id] - 1 }; if (n[p.id] < 1) delete n[p.id]; return n; })}>−</button>
+                              <strong>{cart[p.id]}</strong>
+                              <button type="button" className="chip" aria-label={t("shop.more", { name: `${p.brand} ${p.name}` })} onClick={() => setCart((c) => ({ ...c, [p.id]: Math.min(1000, c[p.id] + 1) }))}>+</button>
+                            </div>
+                          ) : (
+                            <button type="button" className="button button-small" onClick={() => { setPlaced(false); setCart((c) => ({ ...c, [p.id]: 1 })); }}>
+                              {t("shop.add")}
+                            </button>
+                          )
+                        ) : null}
+                      </li>
+                      );
+                    })}
+                  </ul>
+                </article>
+              );
+            })}
           </div>
         </section>
       ))}
+
+      <Pager
+        page={page}
+        pageCount={pageCount}
+        onPage={goTo}
+        labels={{ previous: t("shop.previous"), next: t("shop.next"), status: (p, n) => t("shop.pageOf", { page: p, pages: n }) }}
+      />
 
       {lines.length > 0 ? (
         <form className="panel-form" onSubmit={submit}>
@@ -158,8 +230,8 @@ function Shop() {
           <ul className="component-list">
             {lines.map((l) => (
               <li key={l.id}>
-                <strong>{l.qty} × {l.p.name}</strong>
-                <span>{money((l.p.priceMinor ?? 0) * l.qty, data.exponent, l.p.currency ?? currency)}</span>
+                <strong>{l.qty} × {l.p.brand} {l.p.name}</strong>
+                <span>{money((l.d.priceMinor ?? 0) * l.qty, data.exponent, l.d.currency ?? currency)}</span>
               </li>
             ))}
           </ul>

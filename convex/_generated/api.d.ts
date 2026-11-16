@@ -14,6 +14,7 @@ import type * as appliances from "../appliances.js";
 import type * as assessments from "../assessments.js";
 import type * as auth from "../auth.js";
 import type * as catalogue from "../catalogue.js";
+import type * as catalogueImport from "../catalogueImport.js";
 import type * as crons from "../crons.js";
 import type * as customers from "../customers.js";
 import type * as estimator from "../estimator.js";
@@ -81,6 +82,7 @@ declare const fullApi: ApiFromModules<{
   assessments: typeof assessments;
   auth: typeof auth;
   catalogue: typeof catalogue;
+  catalogueImport: typeof catalogueImport;
   crons: typeof crons;
   customers: typeof customers;
   estimator: typeof estimator;

@@ -1,5 +1,6 @@
 "use client";
 
+import type { FunctionReturnType } from "convex/server";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConvex } from "convex/react";
 import { api } from "../../../convex/_generated/api";
@@ -82,13 +83,26 @@ export function useSync(args: {
         });
         return outcomes as Outcome[];
       });
+      // The catalogue comes a page at a time; keep asking until the last page.
+      const allProducts = async () => {
+        const rows: FunctionReturnType<typeof api.products.listProducts>["products"] = [];
+        let cursor: string | null = null;
+        for (let i = 0; i < 50; i++) {
+          const page: FunctionReturnType<typeof api.products.listProducts> =
+            await convex.query(api.products.listProducts, { tenantId, cursor });
+          rows.push(...page.products);
+          if (page.isDone) break;
+          cursor = page.continueCursor;
+        }
+        return rows;
+      };
       const [snapshot, products, conflicts] = await Promise.all([
         convex.query(api.sync.snapshot, { tenantId }),
-        convex.query(api.products.listProducts, { tenantId }).catch(() => null),
+        allProducts().catch(() => null),
         convex.query(api.sync.listConflicts, { tenantId })
       ]);
-      const catalogue: CatalogueItem[] | undefined = products?.products
-        .filter((p) => p.status === "active")
+      const catalogue: CatalogueItem[] | undefined = products
+        ?.filter((p) => p.status === "active")
         .map((p) => ({
           id: p.id, name: p.name, brand: p.brand, model: p.model, sku: p.sku,
           categoryName: p.categoryName, listPrice: p.listPrice

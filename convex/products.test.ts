@@ -111,10 +111,10 @@ describe("products", () => {
     ).rejects.toThrow(/SKU must be/);
 
     const missing = { ...panelSpecs } as Record<string, unknown>;
-    delete missing.voc;
+    delete missing.rated_power;
     await expect(
       asOwner.mutation(api.products.createProduct, panelArgs(tenantId as never, panel.id as never, { sku: "A1", specValues: missing }))
-    ).rejects.toThrow(/Open-circuit voltage.*required/);
+    ).rejects.toThrow(/Rated power.*required/);
     await expect(
       asOwner.mutation(api.products.createProduct, panelArgs(tenantId as never, panel.id as never, { sku: "A2", specValues: { ...panelSpecs, voc: "high" } }))
     ).rejects.toThrow(/must be a number in V/);
@@ -257,7 +257,7 @@ describe("costs and pricing", () => {
     });
     await set({ amount: 1000 });
     await set({ amount: 9999, effectiveFrom: Date.now() + 30 * 24 * 3600 * 1000 }); // next month
-    expect((await row(c)).pricing?.cost).toEqual({ currency: "UGX", amount: "1000" });
+    expect((await row(c)).pricing?.cost).toMatchObject({ currency: "UGX", amount: "1000" });
 
     await set({ currency: "USD", amount: 19.99 });
     expect((await row(c)).listPrice).toEqual({ currency: "USD", amount: "21.99" });
@@ -300,7 +300,7 @@ describe("pricing visibility and permissions", () => {
     }
     const stock = await c.asStock.query(api.products.listProducts, { tenantId: c.tenantId });
     expect(stock.canManage).toBe(true);
-    expect(stock.products[0].pricing?.cost).toEqual({ currency: "UGX", amount: "1000000" });
+    expect(stock.products[0].pricing?.cost).toMatchObject({ currency: "UGX", amount: "1000000" });
   });
 
   test("non-admins cannot change products, costs or margin rules, or read them", async () => {

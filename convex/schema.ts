@@ -265,6 +265,8 @@ export default defineSchema({
     categoryId: v.id("productCategories"),
     name: v.string(),
     brand: v.string(),
+    // Who the company buys it from, when that differs from the brand (e.g. Deye bought from Battery World).
+    supplier: v.optional(v.string()),
     model: v.string(),
     // Stock-keeping unit, unique within the company.
     sku: v.string(),
@@ -289,6 +291,8 @@ export default defineSchema({
     currency: v.string(),
     amountMinor: v.number(),
     effectiveFrom: v.number(),
+    // Where the price came from, e.g. a supplier price list or "Bulk update +5%".
+    source: v.optional(v.string()),
     createdAt: v.number(),
     createdBy: v.string()
   }).index("by_product_effective", ["productId", "effectiveFrom"]),

@@ -5,11 +5,15 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { CompanyPage, ConfiguredOnly, errorMessage } from "../workspace";
+import { Pager, pageFor } from "../../../components/Pager";
 
 type Categories = NonNullable<ReturnType<typeof useQuery<typeof api.catalogue.listCategories>>>;
 type Category = Categories["categories"][number];
-type Products = NonNullable<ReturnType<typeof useQuery<typeof api.products.listProducts>>>;
-type Product = Products["products"][number];
+type Product = NonNullable<ReturnType<typeof useQuery<typeof api.products.productDetails>>>["products"][number];
+type IndexRow = NonNullable<ReturnType<typeof useQuery<typeof api.products.productIndex>>>["products"][number];
+
+const PAGE_SIZE = 20;
+const BULK_PAGE_SIZE = 50;
 type SpecValue = number | string | boolean;
 type Notice = { ok: boolean; text: string } | null;
 
@@ -19,6 +23,203 @@ function NoticeText({ notice }: { notice: Notice }) {
     <p className={notice.ok ? "form-success" : "auth-message"} role="status">
       {notice.text}
     </p>
+  );
+}
+
+const DAY = 24 * 60 * 60 * 1000;
+
+function shortDate(ms: number) {
+  return new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** Start of a yyyy-mm-dd day in local time (end of it when `end`), or null when empty. */
+function dayBound(value: string, end = false) {
+  if (!value) return null;
+  const [y, m, d] = value.split("-").map(Number);
+  return new Date(y, m - 1, d + (end ? 1 : 0)).getTime() - (end ? 1 : 0);
+}
+
+/**
+ * Changes the cost of every ticked product in one go: by a percentage (rounded to a sensible
+ * step) or by typing new figures. Works on whatever the filters above are showing, so a whole
+ * category, one brand or supplier, or items added on a given date can be repriced together.
+ */
+function BulkPrices({
+  products,
+  tenantId,
+  currency,
+  onClose
+}: {
+  products: IndexRow[];
+  tenantId: Id<"tenants">;
+  currency: string;
+  onClose: () => void;
+}) {
+  const save = useMutation(api.products.setCosts);
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [percent, setPercent] = useState("");
+  const [step, setStep] = useState("100");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
+
+  const [tablePage, setTablePage] = useState(1);
+  const pageCount = Math.ceil(products.length / BULK_PAGE_SIZE);
+  const onPage = products.slice((tablePage - 1) * BULK_PAGE_SIZE, tablePage * BULK_PAGE_SIZE);
+  const costOf = (p: IndexRow) => (p.pricing?.cost ? Number(p.pricing.cost.amount) : null);
+  const ticked = products.filter((p) => !excluded.has(p.id));
+  const changes = ticked
+    .map((p) => ({ p, amount: Number((drafts[p.id] ?? "").replace(/,/g, "")) }))
+    .filter(({ p, amount }) => drafts[p.id]?.trim() && Number.isFinite(amount) && amount > 0 && amount !== costOf(p));
+
+  function applyPercent() {
+    const pct = Number(percent);
+    if (!Number.isFinite(pct) || pct === 0) {
+      setNotice({ ok: false, text: "Enter a percentage such as 5 or -3." });
+      return;
+    }
+    const r = Number(step) || 1;
+    const next = { ...drafts };
+    let skipped = 0;
+    for (const p of ticked) {
+      const cost = costOf(p);
+      if (cost === null) {
+        skipped++;
+        continue;
+      }
+      next[p.id] = String(Math.max(r, Math.round((cost * (1 + pct / 100)) / r) * r));
+    }
+    setDrafts(next);
+    if (!note.trim()) setNote(`Bulk ${pct > 0 ? "+" : ""}${pct}%`);
+    setNotice(skipped ? { ok: true, text: `${skipped} ticked product(s) have no cost yet, so type theirs in.` } : null);
+  }
+
+  async function submit() {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const res = await save({
+        tenantId,
+        currency,
+        note: note || undefined,
+        changes: changes.map(({ p, amount }) => ({ productId: p.id as Id<"products">, amount }))
+      });
+      setDrafts({});
+      setNotice({ ok: true, text: `${res.changed} price${res.changed === 1 ? "" : "s"} updated.` });
+    } catch (e) {
+      setNotice({ ok: false, text: errorMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const allTicked = ticked.length === products.length;
+  return (
+    <section className="bulk-prices" aria-labelledby="bulk-heading">
+      <div className="field-head">
+        <h3 id="bulk-heading">Update prices ({ticked.length} of {products.length} ticked)</h3>
+        <button type="button" className="button button-secondary button-small" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      <p className="hint">
+        Use the filters above to narrow to a category, brand, supplier or date, untick anything to leave alone, then either change
+        everything by a percentage or type new costs. Customer prices follow from cost plus margin.
+      </p>
+      <div className="filter-row">
+        <label htmlFor="bulk-percent">Change cost by %</label>
+        <input id="bulk-percent" inputMode="decimal" placeholder="e.g. 5 or -3" value={percent} onChange={(e) => setPercent(e.target.value)} />
+        <label htmlFor="bulk-step">Round to</label>
+        <select id="bulk-step" value={step} onChange={(e) => setStep(e.target.value)}>
+          <option value="1">1</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="500">500</option>
+          <option value="1000">1,000</option>
+        </select>
+        <button type="button" className="button button-secondary button-small" onClick={applyPercent}>
+          Apply to ticked
+        </button>
+      </div>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>
+                <input
+                  type="checkbox"
+                  aria-label={`Tick all ${products.length}`}
+                  checked={allTicked}
+                  onChange={() => setExcluded(allTicked ? new Set(products.map((p) => p.id)) : new Set())}
+                />{" "}
+                Product
+              </th>
+              <th>Added</th>
+              <th>Current cost</th>
+              <th>Price updated</th>
+              <th>New cost ({currency})</th>
+              <th>Change</th>
+            </tr>
+          </thead>
+          <tbody>
+            {onPage.map((p) => {
+              const cost = costOf(p);
+              const draft = drafts[p.id] ?? "";
+              const next = Number(draft.replace(/,/g, ""));
+              const diff = cost && draft && Number.isFinite(next) ? ((next - cost) / cost) * 100 : null;
+              return (
+                <tr key={p.id} className={excluded.has(p.id) ? "row-off" : undefined}>
+                  <td className="bulk-name">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={!excluded.has(p.id)}
+                        onChange={() =>
+                          setExcluded((s) => {
+                            const n = new Set(s);
+                            if (n.has(p.id)) n.delete(p.id);
+                            else n.add(p.id);
+                            return n;
+                          })
+                        }
+                      />{" "}
+                      {p.name}
+                    </label>
+                    <span className="record-meta">
+                      {p.brand} · {p.sku}
+                    </span>
+                  </td>
+                  <td>{shortDate(p.addedAt)}</td>
+                  <td>{cost !== null ? `${p.pricing?.cost?.currency} ${cost.toLocaleString()}` : "Not set"}</td>
+                  <td>{p.pricing?.cost ? shortDate(p.pricing.cost.since) : "—"}</td>
+                  <td>
+                    <input
+                      className="bulk-input"
+                      inputMode="decimal"
+                      aria-label={`New cost for ${p.name} (${p.brand})`}
+                      value={draft}
+                      placeholder={cost !== null ? cost.toLocaleString() : ""}
+                      onChange={(e) => setDrafts((d) => ({ ...d, [p.id]: e.target.value }))}
+                    />
+                  </td>
+                  <td>{diff !== null ? `${diff > 0 ? "+" : ""}${diff.toFixed(1)}%` : ""}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <Pager page={tablePage} pageCount={pageCount} onPage={setTablePage} />
+      <div className="filter-row">
+        <label htmlFor="bulk-note">Note</label>
+        <input id="bulk-note" maxLength={80} placeholder="e.g. LUMINA price list 1 Dec 2026" value={note} onChange={(e) => setNote(e.target.value)} />
+        <button type="button" className="button button-small" disabled={busy || changes.length === 0} onClick={submit}>
+          {busy ? "Saving…" : `Save ${changes.length} price change${changes.length === 1 ? "" : "s"}`}
+        </button>
+      </div>
+      <NoticeText notice={notice} />
+    </section>
   );
 }
 
@@ -144,6 +345,7 @@ function ProductForm({
   const category = categories.find((c) => c.id === categoryId);
   const [name, setName] = useState(product?.name ?? "");
   const [brand, setBrand] = useState(product?.brand ?? "");
+  const [supplier, setSupplier] = useState(product?.supplier ?? "");
   const [model, setModel] = useState(product?.model ?? "");
   const [sku, setSku] = useState(product?.sku ?? "");
   const [warranty, setWarranty] = useState(product?.warrantyMonths?.toString() ?? "");
@@ -164,6 +366,7 @@ function ProductForm({
       const common = {
         name,
         brand,
+        supplier,
         model,
         sku,
         warrantyMonths: warranty.trim() === "" ? undefined : Number(warranty),
@@ -188,6 +391,7 @@ function ProductForm({
         });
         setName("");
         setBrand("");
+        setSupplier("");
         setModel("");
         setSku("");
         setWarranty("");
@@ -230,6 +434,14 @@ function ProductForm({
       <input id={`${prefix}-name`} required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
       <label htmlFor={`${prefix}-brand`}>Brand</label>
       <input id={`${prefix}-brand`} required maxLength={60} value={brand} onChange={(e) => setBrand(e.target.value)} />
+      <label htmlFor={`${prefix}-supplier`}>Supplier (optional)</label>
+      <input
+        id={`${prefix}-supplier`}
+        maxLength={60}
+        placeholder="Who you buy it from, if not the brand"
+        value={supplier}
+        onChange={(e) => setSupplier(e.target.value)}
+      />
       <label htmlFor={`${prefix}-model`}>Model</label>
       <input id={`${prefix}-model`} required maxLength={60} value={model} onChange={(e) => setModel(e.target.value)} />
       <label htmlFor={`${prefix}-sku`}>SKU</label>
@@ -520,6 +732,7 @@ function ProductCard({
         productId: product.id as Id<"products">,
         name: product.name,
         brand: product.brand,
+        supplier: product.supplier,
         model: product.model,
         sku: product.sku,
         warrantyMonths: product.warrantyMonths ?? undefined,
@@ -540,7 +753,16 @@ function ProductCard({
           <span className="record-meta">
             {product.brand} {product.model} · <span className="record-code">{product.sku}</span>
           </span>
+          {product.supplier && product.supplier !== product.brand ? (
+            <span className="record-meta">Supplier: {product.supplier}</span>
+          ) : null}
           <span className="record-meta">{product.categoryName}</span>
+          <span className="record-meta">
+            Added {shortDate(product.addedAt)}
+            {product.pricing?.cost
+              ? ` · Price updated ${shortDate(product.pricing.cost.since)}${product.pricing.cost.source ? ` (${product.pricing.cost.source})` : ""}`
+              : ""}
+          </span>
           <span className="pill-row">
             {product.status === "archived" ? <span className="pill pill-warn">Archived</span> : null}
             {product.missingCritical.length > 0 ? (
@@ -660,14 +882,61 @@ function ProductCard({
 
 function Products({ tenantId }: { tenantId: Id<"tenants"> }) {
   const [filter, setFilter] = useState("");
+  const [brand, setBrand] = useState("");
+  const [supplier, setSupplier] = useState("");
+  const [search, setSearch] = useState("");
+  const [addedFrom, setAddedFrom] = useState("");
+  const [addedTo, setAddedTo] = useState("");
+  const [priceAge, setPriceAge] = useState("");
+  const [sort, setSort] = useState("name");
+  const [bulk, setBulk] = useState(false);
+  const [paging, setPaging] = useState({ key: "", page: 1 });
   const catalogue = useQuery(api.catalogue.listCategories, { tenantId });
   const company = useQuery(api.settings.getCompany, { tenantId });
-  const data = useQuery(api.products.listProducts, {
-    tenantId,
-    categoryId: filter ? (filter as Id<"productCategories">) : undefined
-  });
+  const data = useQuery(api.products.productIndex, { tenantId });
+  const all = data?.products ?? [];
+
+  const brands = [...new Set(all.map((p) => p.brand))].sort();
+  const suppliers = [...new Set(all.map((p) => p.supplier).filter(Boolean))].sort();
+  const term = search.trim().toLowerCase();
+  const from = dayBound(addedFrom);
+  const to = dayBound(addedTo, true);
+  const now = Date.now();
+  const shown = all
+    .filter((p) => {
+      if (filter && p.categoryId !== filter) return false;
+      if (brand && p.brand !== brand) return false;
+      if (supplier && p.supplier !== supplier) return false;
+      if (term && !`${p.name} ${p.model} ${p.sku}`.toLowerCase().includes(term)) return false;
+      if (from !== null && p.addedAt < from) return false;
+      if (to !== null && p.addedAt > to) return false;
+      const since = p.pricing?.cost?.since ?? null;
+      if (priceAge === "never") return since === null;
+      if (priceAge) return since !== null && now - since > Number(priceAge) * DAY;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sort === "newest") return b.addedAt - a.addedAt;
+      if (sort === "stale") return (a.pricing?.cost?.since ?? 0) - (b.pricing?.cost?.since ?? 0);
+      return a.name.localeCompare(b.name);
+    });
+  const filtered = Boolean(filter || brand || supplier || term || from || to || priceAge);
+  const filterKey = [filter, brand, supplier, term, addedFrom, addedTo, priceAge, sort].join("|");
+  const pageCount = Math.ceil(shown.length / PAGE_SIZE);
+  const page = pageFor(paging, filterKey, pageCount);
+  const pageIds = shown.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((p) => p.id);
+  const details = useQuery(api.products.productDetails, data ? { tenantId, ids: pageIds } : "skip");
+  // Keep the cards that are already on screen while the next page loads.
+  const [lastCards, setLastCards] = useState<Product[]>([]);
+  if (details && details.products !== lastCards && details.products.map((p) => p.id).join() === pageIds.join()) setLastCards(details.products);
+  const cards = details?.products ?? lastCards;
 
   if (!catalogue || !company || !data) return <p className="muted">Loading products…</p>;
+
+  function goTo(next: number) {
+    setPaging({ key: filterKey, page: next });
+    document.getElementById("products-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <>
@@ -676,7 +945,9 @@ function Products({ tenantId }: { tenantId: Id<"tenants"> }) {
       ) : null}
 
       <section aria-labelledby="products-heading" className="workspace-section">
-        <h2 id="products-heading">Products ({data.products.length})</h2>
+        <h2 id="products-heading">
+          Products ({shown.length === all.length ? all.length : `${shown.length} of ${all.length}`})
+        </h2>
         <div className="filter-row">
           <label htmlFor="category-filter">Category</label>
           <select id="category-filter" value={filter} onChange={(e) => setFilter(e.target.value)}>
@@ -687,14 +958,98 @@ function Products({ tenantId }: { tenantId: Id<"tenants"> }) {
               </option>
             ))}
           </select>
+          <label htmlFor="brand-filter">Brand</label>
+          <select id="brand-filter" value={brand} onChange={(e) => setBrand(e.target.value)}>
+            <option value="">All brands</option>
+            {brands.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+          {suppliers.length > 0 ? (
+            <>
+              <label htmlFor="supplier-filter">Supplier</label>
+              <select id="supplier-filter" value={supplier} onChange={(e) => setSupplier(e.target.value)}>
+                <option value="">All suppliers</option>
+                {suppliers.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : null}
+          <label htmlFor="product-search">Search</label>
+          <input id="product-search" type="search" placeholder="Name, model or SKU" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        {data.products.length === 0 ? (
+        <div className="filter-row">
+          <label htmlFor="added-from">Added from</label>
+          <input id="added-from" type="date" value={addedFrom} onChange={(e) => setAddedFrom(e.target.value)} />
+          <label htmlFor="added-to">to</label>
+          <input id="added-to" type="date" value={addedTo} onChange={(e) => setAddedTo(e.target.value)} />
+          {data.canManage ? (
+            <>
+              <label htmlFor="price-age">Price last changed</label>
+              <select id="price-age" value={priceAge} onChange={(e) => setPriceAge(e.target.value)}>
+                <option value="">Any time</option>
+                <option value="30">Over 30 days ago</option>
+                <option value="60">Over 60 days ago</option>
+                <option value="90">Over 90 days ago</option>
+                <option value="never">Never priced</option>
+              </select>
+            </>
+          ) : null}
+          <label htmlFor="product-sort">Sort</label>
+          <select id="product-sort" value={sort} onChange={(e) => setSort(e.target.value)}>
+            <option value="name">Name</option>
+            <option value="newest">Newest added</option>
+            {data.canManage ? <option value="stale">Oldest price first</option> : null}
+          </select>
+          {filtered ? (
+            <button
+              type="button"
+              className="button button-secondary button-small"
+              onClick={() => {
+                setFilter("");
+                setBrand("");
+                setSupplier("");
+                setSearch("");
+                setAddedFrom("");
+                setAddedTo("");
+                setPriceAge("");
+              }}
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </div>
+        {data.canManage && shown.length > 0 ? (
+          bulk ? (
+            <BulkPrices
+              key={shown.map((p) => p.id).join()}
+              products={shown}
+              tenantId={tenantId}
+              currency={company.defaultCurrency}
+              onClose={() => setBulk(false)}
+            />
+          ) : (
+            <p>
+              <button type="button" className="button button-small" onClick={() => setBulk(true)}>
+                Update prices for these {shown.length} product{shown.length === 1 ? "" : "s"}
+              </button>
+            </p>
+          )
+        ) : null}
+        {shown.length === 0 ? (
           <p className="muted">
-            No products yet.{data.canManage ? " Add your first one above." : ""}
+            {all.length === 0 ? `No products yet.${data.canManage ? " Add your first one above." : ""}` : "No products match these filters."}
           </p>
         ) : (
-          <ul className="record-list">
-            {data.products.map((product) => (
+          <>
+          {data.truncated ? <p className="hint">Showing the first 3,000 products only.</p> : null}
+          <ul className="record-list" aria-busy={!details}>
+            {cards.map((product) => (
               <ProductCard
                 key={product.id}
                 product={product}
@@ -705,6 +1060,8 @@ function Products({ tenantId }: { tenantId: Id<"tenants"> }) {
               />
             ))}
           </ul>
+          <Pager page={page} pageCount={pageCount} onPage={goTo} />
+          </>
         )}
       </section>
     </>

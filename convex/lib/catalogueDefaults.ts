@@ -38,10 +38,10 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     description: "Photovoltaic modules.",
     fields: [
       num("rated_power", "Rated power (Pmax)", "Wp", { required: true, critical: true }),
-      num("voc", "Open-circuit voltage (Voc)", "V", { required: true, critical: true }),
-      num("vmp", "Voltage at max power (Vmp)", "V", { required: true, critical: true }),
-      num("isc", "Short-circuit current (Isc)", "A", { required: true, critical: true }),
-      num("imp", "Current at max power (Imp)", "A", { required: true, critical: true }),
+      num("voc", "Open-circuit voltage (Voc)", "V", { critical: true }),
+      num("vmp", "Voltage at max power (Vmp)", "V", { critical: true }),
+      num("isc", "Short-circuit current (Isc)", "A", { critical: true }),
+      num("imp", "Current at max power (Imp)", "A", { critical: true }),
       num("voc_temp_coeff", "Voc temperature coefficient", "%/°C", { critical: true }),
       num("max_system_voltage", "Maximum system voltage", "V", { critical: true }),
       num("efficiency", "Module efficiency", "%"),
@@ -99,7 +99,7 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     fields: [
       { key: "technology", label: "Technology", type: "choice", options: ["MPPT", "PWM"], required: true, critical: true },
       num("battery_voltage", "Supported battery voltage", "V", { critical: true }),
-      num("max_pv_voltage", "Maximum PV input voltage", "V", { required: true, critical: true }),
+      num("max_pv_voltage", "Maximum PV input voltage", "V", { critical: true }),
       num("max_pv_power", "Maximum PV input power", "W", { critical: true }),
       num("max_charge_current", "Maximum charge current", "A", { required: true, critical: true }),
       num("mppt_min_voltage", "MPPT minimum voltage", "V", { critical: true })
@@ -120,9 +120,9 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     name: "Protection",
     description: "Breakers, fuses, isolators and surge protection.",
     fields: [
-      { key: "device_type", label: "Device type", type: "choice", options: ["DC breaker", "AC breaker", "Fuse", "Isolator", "Surge protector"], required: true },
+      { key: "device_type", label: "Device type", type: "choice", options: ["DC breaker", "AC breaker", "Fuse", "Isolator", "Surge protector", "Voltage protector", "Distribution box", "Combiner box"], required: true },
       { key: "current_type", label: "Current type", type: "choice", options: ["DC", "AC"], required: true, critical: true },
-      num("rated_voltage", "Rated voltage", "V", { required: true, critical: true }),
+      num("rated_voltage", "Rated voltage", "V", { critical: true }),
       num("rated_current", "Rated current", "A", { critical: true }),
       num("poles", "Number of poles", "")
     ]
@@ -132,10 +132,58 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     name: "Cables",
     description: "DC, AC and battery cabling.",
     fields: [
-      { key: "cable_type", label: "Cable type", type: "choice", options: ["DC solar", "AC", "Battery"], required: true },
+      { key: "cable_type", label: "Cable type", type: "choice", options: ["DC solar", "AC", "Battery", "General purpose"], required: true },
       num("conductor_size", "Conductor size", "mm²", { required: true, critical: true }),
       num("rated_voltage", "Rated voltage", "V", { critical: true }),
-      num("length", "Length per unit", "m")
+      num("length", "Length per unit", "m"),
+      num("awg", "Wire gauge", "AWG")
+    ]
+  },
+  {
+    key: "portable_power",
+    name: "Portable power stations",
+    description: "All-in-one battery, inverter and charger units, with or without a solar input.",
+    fields: [
+      num("output_power", "Continuous output power", "W", { required: true }),
+      num("battery_energy", "Battery energy", "Wh"),
+      num("battery_voltage", "Battery voltage", "V"),
+      { key: "solar_input", label: "Solar input", type: "boolean" },
+      { key: "notes", label: "Notes", type: "text" }
+    ]
+  },
+  {
+    key: "battery_charger",
+    name: "Battery chargers",
+    description: "Mains chargers for 12 V and 24 V batteries.",
+    fields: [
+      num("output_voltage", "Rated voltage", "V", { required: true }),
+      num("output_current", "Charging current", "A", { required: true }),
+      { key: "battery_type", label: "Battery type", type: "choice", options: ["Lithium (LiFePO4)", "Lead-acid", "Any"] },
+      { key: "connector", label: "Connector", type: "text" },
+      { key: "plug", label: "Mains plug", type: "text" }
+    ]
+  },
+  {
+    key: "solar_lighting",
+    name: "Solar lighting",
+    description: "Solar street lights and floodlights.",
+    fields: [
+      { key: "light_type", label: "Type", type: "choice", options: ["Street light", "Floodlight", "Other"], required: true },
+      num("power", "Rated power", "W"),
+      num("led_heads", "LED heads", ""),
+      num("panel_power", "Panel power", "Wp"),
+      { key: "notes", label: "Notes", type: "text" }
+    ]
+  },
+  {
+    key: "solar_appliance",
+    name: "Solar appliances",
+    description: "Solar-powered security cameras, water pumps and similar equipment.",
+    fields: [
+      { key: "appliance_type", label: "Type", type: "choice", options: ["Security camera", "Water pump", "Other"], required: true },
+      num("power", "Rated power", "W"),
+      num("panel_power", "Panel power needed", "Wp"),
+      { key: "notes", label: "Notes", type: "text" }
     ]
   },
   {
