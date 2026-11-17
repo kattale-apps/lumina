@@ -9,7 +9,7 @@ import { rememberPendingRequest } from "../../../lib/pendingRequests";
 import { AppUpdateNeeded, savePdf } from "../../../lib/savePdf";
 import { describeNeeds, describeSystem, type ExistingSystem, type UpgradeNeeds } from "./describe";
 import { blankUpgradeForm, stepProblem, toPayload, UpgradeForm } from "./UpgradeForm";
-import { StepButtons, StepProgress } from "@/components/StepNav";
+import { StepButtons, StepProgress, useGoBack } from "@/components/StepNav";
 import { toggleOption, UpgradeReport, type Report } from "./UpgradeReport";
 import { DraftNotice, LanguagePicker, Rich, useT } from "@/lib/i18n";
 
@@ -41,6 +41,7 @@ function Unavailable() {
 
 function UpgradeCheck() {
   const t = useT();
+  const goBack = useGoBack("/");
   const convex = useConvex();
   const config = useQuery(api.upgrades.publicConfig, {});
   const customer = useQuery(api.shop.myAccount, {});
@@ -221,7 +222,7 @@ function UpgradeCheck() {
         <UpgradeForm state={form} setState={setForm} audience="public" step={step} />
         {error ? <p className="auth-message" role="alert">{error}</p> : null}
         <StepButtons
-          onBack={step > 1 ? () => goToStep(step - 1) : undefined}
+          onBack={step > 1 ? () => goToStep(step - 1) : goBack}
           backLabel={t("wizard.back")}
           nextLabel={busy ? t("estimate.working") : step < STEPS ? t("wizard.next") : t("upgrade.check")}
           busy={busy}

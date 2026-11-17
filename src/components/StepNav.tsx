@@ -1,6 +1,16 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
+
+/** Goes to the page the person came from, or to `fallback` when there is nothing to go back to. */
+export function useGoBack(fallback: string) {
+  const router = useRouter();
+  return () => {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push(fallback);
+  };
+}
 
 /** "Question 2 of 4" with a progress bar, shown above the one question on screen. */
 export function StepProgress({ step, total, label }: { step: number; total: number; label: string }) {

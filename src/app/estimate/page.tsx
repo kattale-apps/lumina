@@ -14,7 +14,7 @@ import { AppUpdateNeeded, savePdf } from "../../lib/savePdf";
 import { rememberPendingRequest } from "../../lib/pendingRequests";
 import { DraftNotice, LanguagePicker, Rich, useT, type MessageKey } from "@/lib/i18n";
 import { en } from "@/lib/i18n/en";
-import { StepButtons, StepProgress } from "@/components/StepNav";
+import { StepButtons, StepProgress, useGoBack } from "@/components/StepNav";
 
 const STEPS = 4;
 
@@ -71,6 +71,7 @@ function Unavailable() {
 
 function Estimator() {
   const t = useT();
+  const goBack = useGoBack("/");
   const convex = useConvex();
   const config = useQuery(api.estimator.publicConfig, {});
   // Use the same customer-account lookup as the customer dashboard, not staff/profile state.
@@ -387,7 +388,7 @@ function Estimator() {
 
         {error ? <p className="auth-message" role="alert">{error}</p> : null}
         <StepButtons
-          onBack={step > 1 ? () => goToStep(step - 1) : undefined}
+          onBack={step > 1 ? () => goToStep(step - 1) : goBack}
           backLabel={t("wizard.back")}
           nextLabel={busy ? t("estimate.working") : step < STEPS ? t("wizard.next") : t("estimate.show")}
           busy={busy}
