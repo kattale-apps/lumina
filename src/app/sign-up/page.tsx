@@ -9,9 +9,10 @@ import { DraftNotice, LanguagePicker, Rich, useT } from "@/lib/i18n";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvexAuth, useMutation } from "convex/react";
+import { useMutation } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
+import { STILL_SIGNING_IN } from "../../../convex/lib/signup";
 
 /** Where to go after signing up: only paths on this site, defaulting to the shop. */
 function nextPath() {
@@ -26,50 +27,67 @@ function nextPath() {
 function SignUpForm() {
   const t = useT();
   const { signIn } = useAuthActions();
-  const { isAuthenticated } = useConvexAuth();
   const register = useMutation(api.shop.registerCustomer);
   const router = useRouter();
   const [form, setForm] = useState({ name: "", phone: "", email: "", password: "" });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const pending = useRef(false);
+  const [created, setCreated] = useState(false);
+  const fallback = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const login = useSavedLogin();
 
-  // Once the new auth account is live, attach the customer details and go to the shop.
-  useEffect(() => {
-    if (!isAuthenticated || !pending.current) return;
-    pending.current = false;
-    register({ name: form.name, phone: form.phone })
-      .then(() => router.replace(nextPath()))
-      .catch((e) => {
-        setMessage(
-          e instanceof ConvexError && typeof e.data === "string"
-            ? e.data
-            : t("signup.finishFailed")
-        );
-        setBusy(false);
-      });
-  }, [isAuthenticated, register, router, form.name, form.phone]);
+  // If the page is left normally, the hard-navigation fallback must not fire afterwards.
+  useEffect(() => () => clearTimeout(fallback.current), []);
+
+  /**
+   * Attaches the customer details to the account just created. Waits for the new login to be
+   * the one in use (the server checks the email) instead of waiting for a sign-in state change,
+   * which never comes when the phone was still signed in as someone else.
+   */
+  async function attachDetails(email: string) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await register({ name: form.name.trim(), phone: form.phone.trim(), email });
+        return;
+      } catch (e) {
+        const text = e instanceof ConvexError && typeof e.data === "string" ? e.data : "";
+        if (text !== STILL_SIGNING_IN || attempt >= 12) throw e;
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
     setBusy(true);
+    const email = form.email.trim().toLowerCase();
     try {
       const data = new FormData();
-      const email = form.email.trim().toLowerCase();
       data.set("email", email);
       data.set("password", form.password);
       data.set("name", form.name.trim());
       data.set("flow", "signUp");
-      pending.current = true;
       await signIn("password", data);
-      await login.afterSuccess({ email, password: form.password });
     } catch {
-      pending.current = false;
       setMessage(t("signup.failed"));
       setBusy(false);
+      return;
     }
+    // The account exists from here on. Whatever happens next, the shop can finish the details.
+    setCreated(true);
+    try {
+      await attachDetails(email);
+      await login.afterSuccess({ email, password: form.password }).catch(() => undefined);
+    } catch (e) {
+      setMessage(e instanceof ConvexError && typeof e.data === "string" && e.data !== STILL_SIGNING_IN ? e.data : t("signup.finishFailed"));
+      setBusy(false);
+      return;
+    }
+    const next = nextPath();
+    router.replace(next);
+    // If the in-app navigation does not happen, load the page directly.
+    fallback.current = setTimeout(() => window.location.assign(next), 3000);
   }
 
   return (
@@ -84,6 +102,9 @@ function SignUpForm() {
       <PasswordInput id="su-password" autoComplete="new-password" value={form.password} onChange={(password) => setForm({ ...form, password })} />
       {login.supported ? <RememberLogin checked={login.remember} onChange={login.setRemember} /> : null}
       {message ? <p className="auth-message" role="alert">{message}</p> : null}
+      {created && message ? (
+        <p className="auth-note"><Link className="button" href={nextPath()}>{t("shop.continue")}</Link></p>
+      ) : null}
       <button type="submit" disabled={busy}>{busy ? t("common.pleaseWait") : t("signup.submit")}</button>
       <p className="auth-note">
         <Rich text={t("signup.haveAccount")} link={(label) => <Link href="/sign-in"><u>{label}</u></Link>} />

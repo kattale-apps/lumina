@@ -204,6 +204,7 @@ async function compute(
   const options: PublicOption[] = [];
   const unavailable: string[] = [];
   const optionInputs = new Map<string, { systemType: string; backupHours?: number; autonomyDays?: number }>();
+  const shown = new Set<string>();
   for (const template of optionsFor(grid)) {
     const sizingInputs = {
       systemType: template.systemType,
@@ -218,7 +219,12 @@ async function compute(
       unavailable.push(template.title);
       continue;
     }
-    options.push(toPublicOption(template, best, catalogue, labels, built.summary, PUBLIC_ASSUMPTIONS));
+    const option = toPublicOption(template, best, catalogue, labels, built.summary, PUBLIC_ASSUMPTIONS);
+    // A small home can need the same hardware for two goals; showing it twice only looks like a repeat.
+    const signature = option.components.map((c) => `${c.role}:${c.model ?? c.name}:${c.quantity}`).join("|");
+    if (shown.has(signature)) continue;
+    shown.add(signature);
+    options.push(option);
     optionInputs.set(template.key, sizingInputs);
   }
 

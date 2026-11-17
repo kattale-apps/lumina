@@ -545,10 +545,16 @@ export function buildCandidates(
 
   const skuOf = (id: string | null) => catalogue.find((c) => c.id === id)?.sku ?? "";
   const rank = (c: Candidate) => (c.status === "compatible" ? 0 : 1);
+  // Among systems of the same size, the smallest inverter that passed is the closest fit.
+  const inverterW = (c: Candidate) => {
+    const inv = catalogue.find((i) => i.id === c.inverterId);
+    return (inv && num(inv, "rated_output_power")) ?? Number.MAX_SAFE_INTEGER;
+  };
   candidates.sort(
     (x, y) =>
       rank(x) - rank(y) ||
       x.counts.panels + x.counts.batteries - (y.counts.panels + y.counts.batteries) ||
+      inverterW(x) - inverterW(y) ||
       `${skuOf(x.inverterId)}${skuOf(x.batteryId)}${skuOf(x.panelId)}`.localeCompare(
         `${skuOf(y.inverterId)}${skuOf(y.batteryId)}${skuOf(y.panelId)}`
       )

@@ -6,6 +6,7 @@ import { findViewerProfile, requireTenantMembership } from "./lib/auth";
 import { validatePhone } from "./lib/crm";
 import { currencyExponent } from "./lib/money";
 import { currentCost, priceFrom, resolveMarginRule } from "./lib/pricing";
+import { STILL_SIGNING_IN } from "./lib/signup";
 import { requireText } from "./lib/validation";
 
 const MAX_LISTED = 3000;
@@ -56,10 +57,15 @@ export const myAccount = query({
 
 /** Turns the signed-in user into a customer of the open company. Safe to call twice. */
 export const registerCustomer = mutation({
-  args: { name: v.string(), phone: v.string() },
+  // `email` is sent by the sign-up form so details are never attached to a previous account that
+  // is still signed in on the same phone while the new one is being switched in.
+  args: { name: v.string(), phone: v.string(), email: v.optional(v.string()) },
   handler: async (ctx: MutationCtx, args) => {
     const viewer = await findViewerProfile(ctx);
     if (!viewer?.profile || viewer.profile.status !== "active") throw new ConvexError("Please sign in first.");
+    if (args.email !== undefined && viewer.profile.email !== args.email.trim().toLowerCase()) {
+      throw new ConvexError(STILL_SIGNING_IN);
+    }
     const tenant = await openCompany(ctx);
     if (!tenant) throw new ConvexError("Customer accounts are not open right now.");
     const name = requireText(args.name, "Name", 100);

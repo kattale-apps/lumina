@@ -52,6 +52,8 @@ async function setup(withCatalogue = true) {
   const asOwner = t.withIdentity({ subject: owner.subject });
   const as = (email: string) => t.withIdentity({ subject: people[email].subject });
 
+  type SpecValues = Record<string, number | string | boolean>;
+  let addProduct: (key: string, sku: string, cost: number, specValues: SpecValues) => Promise<void> = async () => {};
   if (withCatalogue) {
     await asOwner.mutation(api.catalogue.loadStandardCategories, { tenantId });
     const cats = (await asOwner.query(api.catalogue.listCategories, { tenantId })).categories;
@@ -61,6 +63,7 @@ async function setup(withCatalogue = true) {
       });
       await asOwner.mutation(api.products.setCost, { productId, currency: "UGX", amount: cost });
     };
+    addProduct = make;
     await make("inverter", "INV-3K", 2_000_000, inverterSpecs);
     await make("battery", "BAT-4.8", 3_000_000, batterySpecs);
     await make("pv_panel", "PV-550", 500_000, panelSpecs);
@@ -71,7 +74,7 @@ async function setup(withCatalogue = true) {
   });
   return {
     t, tenantId, asOwner, agent: as("agent@acme.ug"), other: as("other@acme.ug"),
-    mgr: as("mgr@acme.ug"), tech: as("tech@acme.ug"), people
+    mgr: as("mgr@acme.ug"), tech: as("tech@acme.ug"), people, addProduct
   };
 }
 
@@ -273,6 +276,39 @@ describe("public power check", () => {
     expect((await mgr.query(api.estimator.getEstimatorSettings, { tenantId })).tariffMinorPerKwh).toBe(800);
     const stranger = t.withIdentity({ subject: (await registerUser(t, "x@x.ug")).subject });
     await expect(stranger.mutation(api.estimator.updateEstimatorSettings, args)).rejects.toThrow();
+  });
+});
+
+describe("recommendations follow the need", () => {
+  const smallBill = { mode: "bill" as const, units: 30, days: 30 };
+  const bigBill = { mode: "bill" as const, units: 150, days: 30 };
+  const part = (o: { components: { role: string; model?: string; quantity: number }[] }, role: string) =>
+    o.components.find((c) => c.role === role);
+
+  test("a small home gets the smallest inverter that fits, not whichever sorts first by code", async () => {
+    const { t, addProduct } = await setup();
+    // "INV-12K" sorts before "INV-3K" alphabetically, which used to make it everyone's answer.
+    await addProduct("inverter", "INV-12K", 6_000_000, {
+      ...inverterSpecs, rated_output_power: 12000, rated_output_apparent: 12000, surge_power: 24000
+    });
+    const small = await t.query(api.estimator.recommend, { input: smallBill, grid: "reliable" });
+    expect(small.options.length).toBeGreaterThan(0);
+    for (const o of small.options) expect(part(o, "Inverter")?.model).toBe("INV-3K");
+  });
+
+  test("panel counts grow with the energy used", async () => {
+    const { t } = await setup();
+    const small = (await t.query(api.estimator.recommend, { input: smallBill, grid: "unreliable" })).options[0];
+    const big = (await t.query(api.estimator.recommend, { input: bigBill, grid: "unreliable" })).options[0];
+    expect(part(big, "Solar panels")!.quantity).toBeGreaterThan(part(small, "Solar panels")!.quantity);
+    expect(big.arrayKw!).toBeGreaterThan(small.arrayKw!);
+  });
+
+  test("two goals that need identical hardware are shown once", async () => {
+    const { t } = await setup();
+    const result = await t.query(api.estimator.recommend, { input: smallBill, grid: "unreliable" });
+    const signatures = result.options.map((o) => o.components.map((c) => `${c.role}:${c.model}:${c.quantity}`).join("|"));
+    expect(new Set(signatures).size).toBe(signatures.length);
   });
 });
 
