@@ -1678,3 +1678,9 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 .saved-check h2 { margin: 0; font-size: 18px; }
 .saved-check .saved-location { margin-top: 0; max-width: none; }
 .saved-check > .button-secondary { justify-self: start; }
+
+/* Customer home: the dashboard a signed-in customer lands on */
+.landing-choice-recs { background: #2d5d7b; }
+.landing-choice-shop { background: #8a5a12; }
+.customer-home { justify-content: flex-start; padding-top: 8px; }
+.customer-home h1 { font-size: clamp(30px, 8vw, 48px); }

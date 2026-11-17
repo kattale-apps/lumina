@@ -31,6 +31,12 @@ export const en = {
   "home.newHint": "New to solar? See the energy you use and the systems that fit.",
   "home.existingTitle": "Upgrade or fix my system",
   "home.existingHint": "Already have solar? Add more, or replace a faulty part.",
+  "home.welcome": "Welcome back, {name}",
+  "home.welcomeIntro": "What would you like to do today?",
+  "home.recsTitle": "My recommendations",
+  "home.recsHint": "Your energy checks and the options our team sends you.",
+  "home.shopTitle": "Shop",
+  "home.shopHint": "Panels, batteries, inverters and more, with prices.",
   "home.account": "Want to see our products and order? [Create an account]",
 
   // ------------------------------------------------------------ Android app download
@@ -80,6 +86,7 @@ export const en = {
   "signup.unavailable": "Sign-up is not available yet",
 
   // ------------------------------------------------------------ customer pages
+  "customer.tabHome": "Home",
   "customer.tabRecommendations": "My recommendations",
   "customer.tabShop": "Shop",
   "customer.tabPowerCheck": "Energy check",
