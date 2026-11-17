@@ -8,12 +8,14 @@ import { api } from "../../../../convex/_generated/api";
 import { rememberPendingRequest } from "../../../lib/pendingRequests";
 import { AppUpdateNeeded, savePdf } from "../../../lib/savePdf";
 import { describeNeeds, describeSystem, type ExistingSystem, type UpgradeNeeds } from "./describe";
-import { blankUpgradeForm, toPayload, UpgradeForm } from "./UpgradeForm";
+import { blankUpgradeForm, stepProblem, toPayload, UpgradeForm } from "./UpgradeForm";
+import { StepButtons, StepProgress } from "@/components/StepNav";
 import { toggleOption, UpgradeReport, type Report } from "./UpgradeReport";
 import { DraftNotice, LanguagePicker, Rich, useT } from "@/lib/i18n";
 
 type Grid = "none" | "unreliable" | "reliable";
 const GRID_CHOICES: Grid[] = ["reliable", "unreliable", "none"];
+const STEPS = 4;
 
 function message(error: unknown, fallback: string) {
   if (error instanceof ConvexError && typeof error.data === "string") return error.data;
@@ -49,7 +51,11 @@ function UpgradeCheck() {
   const [checked, setChecked] = useState<{ system: ExistingSystem; needs: UpgradeNeeds; report: Report } | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [asking, setAsking] = useState(false);
-  const [grid, setGrid] = useState<Grid | null>(null);
+  // Most customers have grid power that comes and goes, so that is the starting answer.
+  const [grid, setGrid] = useState<Grid | null>("unreliable");
+  // One question on screen at a time, then a page with the report.
+  const [step, setStep] = useState(1);
+  const [view, setView] = useState<"questions" | "results">("questions");
   const [contact, setContact] = useState({ name: "", phone: "", email: "", location: "", website: "" });
   const [busy, setBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -69,8 +75,27 @@ function UpgradeCheck() {
     );
   }
 
+  function toTop() {
+    setTimeout(() => document.getElementById("upgrade-top")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+  function goToStep(next: number) {
+    setError(null);
+    setStep(next);
+    toTop();
+  }
+
+  /** Next: the following question, or the report after the last one. */
   async function calculate(event: FormEvent) {
     event.preventDefault();
+    const problem = stepProblem(form, step, t);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    if (step < STEPS) {
+      goToStep(step + 1);
+      return;
+    }
     const payload = toPayload(form, t);
     if (!payload.ok) {
       setError(payload.error);
@@ -83,7 +108,8 @@ function UpgradeCheck() {
       setChecked({ system: payload.system, needs: payload.needs, report });
       setSelected([]);
       setAsking(false);
-      setTimeout(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }), 50);
+      setView("results");
+      toTop();
     } catch (e) {
       setChecked(null);
       setError(message(e, t("common.genericError")));
@@ -177,21 +203,42 @@ function UpgradeCheck() {
 
   return (
     <Shell>
+      <span id="upgrade-top" />
+      {view === "questions" ? (
+      <>
       <h1>{t("upgrade.title")}</h1>
-      <p className="muted">{t("upgrade.intro")}</p>
-      <p className="hint">
-        <Rich text={t("upgrade.fromNothing")} link={(label) => <Link href="/estimate"><u>{label}</u></Link>} />
-      </p>
+      {step === 1 ? (
+        <>
+          <p className="muted">{t("upgrade.intro")}</p>
+          <p className="hint">
+            <Rich text={t("upgrade.fromNothing")} link={(label) => <Link href="/estimate"><u>{label}</u></Link>} />
+          </p>
+        </>
+      ) : null}
 
-      <form className="panel-form estimate-form" onSubmit={calculate}>
-        <UpgradeForm state={form} setState={setForm} audience="public" />
-        {error && !checked ? <p className="auth-message" role="alert">{error}</p> : null}
-        <button className="button" type="submit" disabled={busy}>{busy && !asking ? t("estimate.working") : t("upgrade.check")}</button>
+      <form className="panel-form estimate-form" onSubmit={calculate} noValidate>
+        <StepProgress step={step} total={STEPS} label={t("wizard.progress", { step, total: STEPS })} />
+        <UpgradeForm state={form} setState={setForm} audience="public" step={step} />
+        {error ? <p className="auth-message" role="alert">{error}</p> : null}
+        <StepButtons
+          onBack={step > 1 ? () => goToStep(step - 1) : undefined}
+          backLabel={t("wizard.back")}
+          nextLabel={busy ? t("estimate.working") : step < STEPS ? t("wizard.next") : t("upgrade.check")}
+          busy={busy}
+          glowNext={stepProblem(form, step, t) === null}
+        />
       </form>
+      </>
+      ) : null}
 
-      {checked ? (
+      {view === "results" && checked ? (
         <section id="results" className="estimate-results" aria-live="polite">
-          <h2>{t("upgrade.reportTitle")}</h2>
+          <div className="results-head">
+            <h1>{t("upgrade.reportTitle")}</h1>
+            <button type="button" className="button button-secondary button-small" onClick={() => { setView("questions"); goToStep(1); }}>
+              ← {t("estimate.changeAnswers")}
+            </button>
+          </div>
           <UpgradeReport
             report={checked.report}
             selected={selected}
@@ -204,7 +251,13 @@ function UpgradeCheck() {
                 <button type="button" className="button button-secondary" disabled={pdfBusy} onClick={downloadReport}>
                   {pdfBusy ? t("estimate.preparingPdf") : t("upgrade.downloadPdf")}
                 </button>
-                <p className="hint">{t("upgrade.pricesOnRequest")}</p>
+                <p className="price-note">
+                  {hasCustomerAccount ? (
+                    <Rich text={t("estimate.pricesShop")} link={(label) => <Link href="/shop"><u>{label}</u></Link>} />
+                  ) : (
+                    <Rich text={t("estimate.pricesAccount")} link={(label) => <Link href="/sign-up?next=/shop"><u>{label}</u></Link>} />
+                  )}
+                </p>
               </div>
 
               <div className={`recommend-card ${asking ? "option-on" : ""}`}>

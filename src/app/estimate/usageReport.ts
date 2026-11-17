@@ -20,6 +20,16 @@ export type UsageReportData = {
   peakW: number;
   basis: "bill" | "appliances";
   lines: ReportLine[];
+  /** The solar options recommended on screen. Parts and sizes only: never prices. */
+  options?: ReportOption[];
+};
+
+export type ReportOption = {
+  title: string;
+  blurb: string;
+  components: string[];
+  figures: string[];
+  notes: string[];
 };
 
 const DAYS_PER_WEEK = 7;
@@ -65,7 +75,7 @@ function clip(text: string, font: PDFFont, size: number, width: number) {
 
 export async function buildUsageReport(data: UsageReportData): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
-  pdf.setTitle("Power usage estimate");
+  pdf.setTitle("Energy usage estimate");
   pdf.setProducer("Solar Switch");
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -112,7 +122,7 @@ export async function buildUsageReport(data: UsageReportData): Promise<Uint8Arra
   }
 
   // Header
-  text("POWER USAGE ESTIMATE", M, 9, bold, green);
+  text("ENERGY USAGE ESTIMATE", M, 9, bold, green);
   right(new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }), W - M, 9, font, muted);
   y -= 22;
   text(data.companyName, M, 20, bold);
@@ -265,6 +275,64 @@ export async function buildUsageReport(data: UsageReportData): Promise<Uint8Arra
     y -= 4;
     text("Bill-based figures are spread evenly over the day. Add your appliances for a per-appliance breakdown.", M, 8, font, muted);
     y -= 11;
+  }
+
+  // Recommended solar options, as shown on screen. No prices.
+  if (data.options && data.options.length > 0) {
+    page = pdf.addPage([W, H]);
+    y = H - M;
+    const room = (needed: number) => {
+      if (y < M + needed) {
+        page = pdf.addPage([W, H]);
+        y = H - M;
+      }
+    };
+    text("RECOMMENDED SOLAR OPTIONS", M, 9, bold, green);
+    y -= 20;
+    text("Systems that could fit the energy use in this report", M, 16, bold);
+    y -= 16;
+    for (const l of wrap(
+      "For illustration only. A technician checks every design before it is final. Prices are not shown in this report: " +
+        "create a free account to see our best prices, or request a quotation.",
+      font, 9, W - 2 * M
+    )) {
+      text(l, M, 9, font, muted);
+      y -= 12;
+    }
+    y -= 8;
+    data.options.forEach((o, i) => {
+      room(90);
+      page.drawRectangle({ x: M, y: y - 5, width: W - 2 * M, height: 20, color: rgb(0.94, 0.97, 0.95) });
+      text(`Option ${i + 1}: ${o.title}`, M + 6, 11, bold);
+      y -= 20;
+      for (const l of wrap(o.blurb, font, 9, W - 2 * M - 12)) {
+        room(30);
+        text(l, M + 6, 9, font, muted);
+        y -= 12;
+      }
+      y -= 2;
+      for (const c of o.components) {
+        for (const [n, l] of wrap(c, font, 9.5, W - 2 * M - 30).entries()) {
+          room(30);
+          if (n === 0) text("-", M + 10, 9.5);
+          text(l, M + 20, 9.5);
+          y -= 13;
+        }
+      }
+      for (const f of o.figures) {
+        room(30);
+        text(f, M + 6, 9.5, bold);
+        y -= 13;
+      }
+      for (const note of o.notes) {
+        for (const l of wrap(note, font, 8.5, W - 2 * M - 12)) {
+          room(30);
+          text(l, M + 6, 8.5, font, muted);
+          y -= 11;
+        }
+      }
+      y -= 12;
+    });
   }
 
   // Footer caveat on every page

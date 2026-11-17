@@ -196,6 +196,55 @@ export function toPayload(
   }
 }
 
+/** What is still missing on one question (1 to 4), or null when it can be left. */
+export function stepProblem(f: UpgradeFormState, step: number, t: Translate = translateEnglish): string | null {
+  formT = t;
+  try {
+    if (step === 1) {
+      const batteryless = f.systemType === "grid_tied" && !f.hasBatteries && !f.hasController;
+      if (!batteryless) need(f.systemVoltage, t("upgradeForm.field.systemVoltage"));
+    } else if (step === 2) {
+      if (f.hasInverter) need(f.inverterW, t("upgradeForm.field.inverterPower"));
+      if (f.hasController) need(f.controllerA, t("upgradeForm.field.controllerCurrent"));
+    } else if (step === 3) {
+      if (f.hasPanels) {
+        need(f.panelCount, t("upgradeForm.field.panelCount"));
+        need(f.panelWp, t("upgradeForm.field.panelPower"));
+      }
+      if (f.hasBatteries) {
+        need(f.batteryCount, t("upgradeForm.field.batteryCount"));
+        need(f.batteryV, t("upgradeForm.field.batteryVoltage"));
+        need(f.batteryAh, t("upgradeForm.field.batteryCapacity"));
+      }
+    } else if (step === 4 && f.goals.length === 0) {
+      throw new FormProblem(t("upgradeForm.err.goal"));
+    }
+    return null;
+  } catch (e) {
+    if (e instanceof FormProblem) return e.message;
+    throw e;
+  }
+}
+
+/** The first box that still needs an answer on a question, so it can be made to glow. */
+function nextToFill(f: UpgradeFormState, step: number): string {
+  if (step === 1) return f.systemVoltage.trim() || (f.systemType === "grid_tied" && !f.hasBatteries && !f.hasController) ? "" : "up-voltage";
+  if (step === 2) {
+    if (f.hasInverter && !f.inverterW.trim()) return "up-inv-w";
+    if (f.hasController && !f.controllerA.trim()) return "up-ctl-a";
+    return "";
+  }
+  if (step === 3) {
+    if (f.hasPanels && !f.panelCount.trim()) return "up-pv-n";
+    if (f.hasPanels && !f.panelWp.trim()) return "up-pv-w";
+    if (f.hasBatteries && !f.batteryCount.trim()) return "up-bat-n";
+    if (f.hasBatteries && !f.batteryV.trim()) return "up-bat-v";
+    if (f.hasBatteries && !f.batteryAh.trim()) return "up-bat-ah";
+    return "";
+  }
+  return step === 4 && f.goals.length === 0 ? "goals" : "";
+}
+
 /** Drops unset fields so they are sent as absent, not as empty values. */
 function clean<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -206,8 +255,10 @@ const SYSTEM_TYPES: SystemType[] = ["hybrid", "off_grid", "backup_only", "grid_t
 const GOALS: Goal[] = ["battery", "panels", "inverter", "swaps", "repair"];
 
 function Num({
-  id, label, unit, value, onChange, hint, placeholder, required
+  id, label, unit, value, onChange, hint, placeholder, required, glow
 }: {
+  /** Id of the box to draw the eye to; this one glows when it matches. */
+  glow?: string;
   id: string;
   label: string;
   unit?: string;
@@ -225,7 +276,7 @@ function Num({
         {unit ? <span className="upgrade-unit"> ({unit})</span> : null}
         {required ? null : <span className="step-optional">{t("common.optional")}</span>}
       </label>
-      <input id={id} inputMode="decimal" autoComplete="off" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+      <input id={id} className={glow === id ? "guide-glow" : undefined} inputMode="decimal" autoComplete="off" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
       {hint ? <p className="hint">{hint}</p> : null}
     </div>
   );
@@ -249,8 +300,10 @@ function Chips({ label, options, value, onChange }: { label: string; options: st
  * for a technician instead of being assumed.
  */
 export function UpgradeForm({
-  state, setState, audience
+  state, setState, audience, step
 }: {
+  /** Show only this question (1 to 4) and guide the eye to its next empty box. All four when omitted. */
+  step?: number;
   state: UpgradeFormState;
   setState: Dispatch<SetStateAction<UpgradeFormState>>;
   audience: "public" | "staff";
@@ -260,6 +313,8 @@ export function UpgradeForm({
   const you = audience === "public";
   const f = state;
   const needsVoltage = !(f.systemType === "grid_tied" && !f.hasBatteries && !f.hasController);
+  const off = (n: number) => step !== undefined && step !== n;
+  const glow = step === undefined ? "" : nextToFill(f, step);
 
   function chooseType(type: SystemType) {
     setState((s) => ({
@@ -276,7 +331,7 @@ export function UpgradeForm({
 
   return (
     <>
-      <section className="step step-1" aria-labelledby="up-q1">
+      <section className="step step-1" aria-labelledby="up-q1" hidden={off(1)}>
         <h2 id="up-q1"><span className="step-num">1</span> {t("upgradeForm.q1")}</h2>
         <div className="choice-row" role="radiogroup" aria-labelledby="up-q1">
           {SYSTEM_TYPES.map((type) => (
@@ -290,13 +345,13 @@ export function UpgradeForm({
           <div className="upgrade-field">
             <label htmlFor="up-voltage">{t("upgradeForm.systemVoltage")} <span className="upgrade-unit">(V)</span></label>
             <Chips label={t("upgradeForm.commonSystemVoltages")} options={["12", "24", "48"]} value={f.systemVoltage} onChange={(v) => set("systemVoltage", v)} />
-            <input id="up-voltage" inputMode="decimal" autoComplete="off" placeholder={t("upgradeForm.orType")} value={f.systemVoltage} onChange={(e) => set("systemVoltage", e.target.value)} />
+            <input id="up-voltage" className={glow === "up-voltage" ? "guide-glow" : undefined} inputMode="decimal" autoComplete="off" placeholder={t("upgradeForm.orType")} value={f.systemVoltage} onChange={(e) => set("systemVoltage", e.target.value)} />
             <p className="hint">{t("upgradeForm.voltageHint")}</p>
           </div>
         ) : null}
       </section>
 
-      <section className="step step-2" aria-labelledby="up-q2">
+      <section className="step step-2" aria-labelledby="up-q2" hidden={off(2)}>
         <h2 id="up-q2"><span className="step-num">2</span> {t("upgradeForm.q2")}</h2>
         <label className="check-row" htmlFor="up-has-inv">
           <input id="up-has-inv" type="checkbox" checked={f.hasInverter} onChange={(e) => set("hasInverter", e.target.checked)} />
@@ -304,7 +359,7 @@ export function UpgradeForm({
         </label>
         {f.hasInverter ? (
           <>
-            <Num id="up-inv-w" required label={t("upgradeForm.power")} unit="W" value={f.inverterW} onChange={(v) => set("inverterW", v)} placeholder="e.g. 3000"
+            <Num id="up-inv-w" glow={glow} required label={t("upgradeForm.power")} unit="W" value={f.inverterW} onChange={(v) => set("inverterW", v)} placeholder="e.g. 3000"
               hint={t("upgradeForm.inverterPowerHint")} />
             <label className="check-row" htmlFor="up-inv-solar">
               <input id="up-inv-solar" type="checkbox" checked={f.inverterHasSolar} onChange={(e) => set("inverterHasSolar", e.target.checked)} />
@@ -343,7 +398,7 @@ export function UpgradeForm({
               ))}
             </div>
             <div className="upgrade-grid">
-              <Num id="up-ctl-a" required label={t("upgradeForm.ratedCurrent")} unit="A" value={f.controllerA} onChange={(v) => set("controllerA", v)} placeholder="e.g. 60" />
+              <Num id="up-ctl-a" glow={glow} required label={t("upgradeForm.ratedCurrent")} unit="A" value={f.controllerA} onChange={(v) => set("controllerA", v)} placeholder="e.g. 60" />
               <Num id="up-ctl-v" label={t("upgradeForm.maxSolarVoltage")} unit="V" value={f.controllerPvVoltage} onChange={(v) => set("controllerPvVoltage", v)} placeholder="e.g. 150" />
               <Num id="up-ctl-w" label={t("upgradeForm.maxSolarPower")} unit="W" value={f.controllerPvPowerW} onChange={(v) => set("controllerPvPowerW", v)} />
             </div>
@@ -351,7 +406,7 @@ export function UpgradeForm({
         ) : null}
       </section>
 
-      <section className="step step-3" aria-labelledby="up-q3">
+      <section className="step step-3" aria-labelledby="up-q3" hidden={off(3)}>
         <h2 id="up-q3"><span className="step-num">3</span> {t("upgradeForm.q3")}</h2>
         <label className="check-row" htmlFor="up-has-pv">
           <input id="up-has-pv" type="checkbox" checked={f.hasPanels} onChange={(e) => set("hasPanels", e.target.checked)} />
@@ -360,8 +415,8 @@ export function UpgradeForm({
         {f.hasPanels ? (
           <>
             <div className="upgrade-grid">
-              <Num id="up-pv-n" required label={t("upgradeForm.panelCount")} value={f.panelCount} onChange={(v) => set("panelCount", v)} />
-              <Num id="up-pv-w" required label={t("upgradeForm.panelEach")} unit="W" value={f.panelWp} onChange={(v) => set("panelWp", v)} placeholder="e.g. 330" />
+              <Num id="up-pv-n" glow={glow} required label={t("upgradeForm.panelCount")} value={f.panelCount} onChange={(v) => set("panelCount", v)} />
+              <Num id="up-pv-w" glow={glow} required label={t("upgradeForm.panelEach")} unit="W" value={f.panelWp} onChange={(v) => set("panelWp", v)} placeholder="e.g. 330" />
               <Num id="up-pv-s" label={t("upgradeForm.perString")} value={f.panelPerString} onChange={(v) => set("panelPerString", v)}
                 hint={t("upgradeForm.perStringHint")} />
             </div>
@@ -384,15 +439,15 @@ export function UpgradeForm({
         {f.hasBatteries ? (
           <>
             <div className="upgrade-grid">
-              <Num id="up-bat-n" required label={t("upgradeForm.batteryCount")} value={f.batteryCount} onChange={(v) => set("batteryCount", v)} />
+              <Num id="up-bat-n" glow={glow} required label={t("upgradeForm.batteryCount")} value={f.batteryCount} onChange={(v) => set("batteryCount", v)} />
               <div className="upgrade-field">
                 <label htmlFor="up-bat-v">{t("upgradeForm.batteryEachV")} <span className="upgrade-unit">(V)</span></label>
                 <div className="upgrade-control">
-                  <input id="up-bat-v" inputMode="decimal" autoComplete="off" placeholder={t("upgradeForm.orType")} value={f.batteryV} onChange={(e) => set("batteryV", e.target.value)} />
+                  <input id="up-bat-v" className={glow === "up-bat-v" ? "guide-glow" : undefined} inputMode="decimal" autoComplete="off" placeholder={t("upgradeForm.orType")} value={f.batteryV} onChange={(e) => set("batteryV", e.target.value)} />
                   <Chips label={t("upgradeForm.commonBatteryVoltages")} options={["12", "24", "48", "51.2"]} value={f.batteryV} onChange={(v) => set("batteryV", v)} />
                 </div>
               </div>
-              <Num id="up-bat-ah" required label={t("upgradeForm.capacityEach")} unit="Ah" value={f.batteryAh} onChange={(v) => set("batteryAh", v)} placeholder="e.g. 200" />
+              <Num id="up-bat-ah" glow={glow} required label={t("upgradeForm.capacityEach")} unit="Ah" value={f.batteryAh} onChange={(v) => set("batteryAh", v)} placeholder="e.g. 200" />
               <Num id="up-bat-age" label={t("upgradeForm.age")} unit={t("upgradeForm.years")} value={f.batteryAge} onChange={(v) => set("batteryAge", v)} />
             </div>
             <p className="field-label" id="up-chem">{t("upgradeForm.batteryType")}</p>
@@ -408,9 +463,9 @@ export function UpgradeForm({
         ) : null}
       </section>
 
-      <section className="step step-4" aria-labelledby="up-q4">
+      <section className="step step-4" aria-labelledby="up-q4" hidden={off(4)}>
         <h2 id="up-q4"><span className="step-num">4</span> {you ? t("upgradeForm.q4You") : t("upgradeForm.q4Customer")}</h2>
-        <div className="choice-row" role="group" aria-labelledby="up-q4">
+        <div className={`choice-row${glow === "goals" ? " guide-glow" : ""}`} role="group" aria-labelledby="up-q4">
           {GOALS.map((g) => (
             <button type="button" key={g} aria-pressed={f.goals.includes(g)} className={`choice ${f.goals.includes(g) ? "choice-on" : ""}`} onClick={() => toggleGoal(g)}>
               <strong>{f.goals.includes(g) ? "✓ " : ""}{t(`upgradeForm.goal.${g}`)}</strong>

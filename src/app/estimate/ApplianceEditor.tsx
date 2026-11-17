@@ -222,8 +222,11 @@ function RowCard({
 export function ApplianceEditor({
   rows,
   setRows,
-  library
+  library,
+  guide = false
 }: {
+  /** Draw the eye to the appliance picker while nothing has been added yet. */
+  guide?: boolean;
   rows: ApplianceRow[];
   setRows: (update: (prev: ApplianceRow[]) => ApplianceRow[]) => void;
   library: LibraryItem[];
@@ -310,7 +313,7 @@ export function ApplianceEditor({
             </button>
           ))}
         </div>
-        <div className="picker-grid" role="tabpanel" aria-label={tabs.find((g) => g.key === tab)?.label}>
+        <div className={`picker-grid${guide && rows.length === 0 ? " guide-glow" : ""}`} role="tabpanel" aria-label={tabs.find((g) => g.key === tab)?.label}>
           {tabItems.map((g) => {
             const count = rows.filter((r) => r.guideKey === g.key).length;
             return (

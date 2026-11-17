@@ -14,6 +14,9 @@ import { AppUpdateNeeded, savePdf } from "../../lib/savePdf";
 import { rememberPendingRequest } from "../../lib/pendingRequests";
 import { DraftNotice, LanguagePicker, Rich, useT, type MessageKey } from "@/lib/i18n";
 import { en } from "@/lib/i18n/en";
+import { StepButtons, StepProgress } from "@/components/StepNav";
+
+const STEPS = 4;
 
 type Grid = "none" | "unreliable" | "reliable";
 /** Matches RECOMMENDATION_KEY on the server: ask a technician to design a system. */
@@ -75,7 +78,11 @@ function Estimator() {
   const submit = useMutation(api.estimator.submitRequest);
 
   const [category, setCategory] = useState<Category>("residential");
-  const [grid, setGrid] = useState<Grid | null>(null);
+  // Most customers have grid power that comes and goes, so that is the starting answer.
+  const [grid, setGrid] = useState<Grid | null>("unreliable");
+  // One question on screen at a time, then a page with the results.
+  const [step, setStep] = useState(1);
+  const [view, setView] = useState<"questions" | "results">("questions");
   const [rows, setRows] = useState<ApplianceRow[]>([]);
   // Step 4 (optional): UEDCL token messages give the real price per unit and actual use.
   const [smsText, setSmsText] = useState("");
@@ -144,9 +151,28 @@ function Estimator() {
     };
   }
 
+  function toTop() {
+    setTimeout(() => document.getElementById("estimate-top")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+  function goToStep(next: number) {
+    setError(null);
+    setStep(next);
+    toTop();
+  }
+
+  /** Next: the following question, or the results after the last one. */
   async function calculate(event: FormEvent) {
     event.preventDefault();
+    if (step === 2 && !grid) {
+      setError(t("estimate.errGrid"));
+      return;
+    }
+    if (step < STEPS) {
+      goToStep(step + 1);
+      return;
+    }
     if (!grid) {
+      goToStep(2);
       setError(t("estimate.errGrid"));
       return;
     }
@@ -155,6 +181,7 @@ function Estimator() {
       return;
     }
     if (rows.length === 0 && !tokensReady) {
+      goToStep(3);
       setError(t("estimate.errNothing"));
       return;
     }
@@ -184,7 +211,8 @@ function Estimator() {
             ? { dailyKwh: sms.summary.projection.kwh.day, monthCost: sms.summary.projection.cost.month, pricePerUnit: tokenRate }
             : null
       });
-      setTimeout(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }), 50);
+      setView("results");
+      toTop();
     } catch (e) {
       setResult(null);
       setSnapshot(null);
@@ -208,9 +236,20 @@ function Estimator() {
         dailyKwh: result.summary.dailyKwh,
         peakW: result.summary.peakW,
         basis: result.summary.basis,
-        lines: snapshot.lines
+        lines: snapshot.lines,
+        // The recommendations travel with the report. Parts only: prices are never included.
+        options: result.options.map((o) => ({
+          title: o.title,
+          blurb: o.blurb,
+          components: o.components.map((c) => `${c.quantity} x ${c.role}: ${[c.brand, c.model ?? c.name].filter(Boolean).join(" ")}${c.detail ? ` (${c.detail})` : ""}`),
+          figures: [
+            o.arrayKw !== null ? `Solar ${o.arrayKw} kW, about ${o.solarKwhPerDay ?? 0} kWh a day${o.coveragePercent !== null ? `, covers about ${o.coveragePercent}% of your use` : ""}` : "",
+            o.batteryKwh !== null ? `Battery ${o.batteryKwh} kWh` : ""
+          ].filter(Boolean),
+          notes: o.notes
+        }))
       });
-      await savePdf(bytes, `power-usage-estimate-${new Date().toISOString().slice(0, 10)}.pdf`, "Power usage estimate");
+      await savePdf(bytes, `energy-usage-estimate-${new Date().toISOString().slice(0, 10)}.pdf`, "Energy usage estimate");
     } catch (e) {
       setError(e instanceof AppUpdateNeeded ? e.message : t("estimate.errPdf"));
     } finally {
@@ -245,6 +284,11 @@ function Estimator() {
     }
   }
 
+  const firstEmpty = hasCustomerAccount
+    ? (form.location.trim() ? "" : "location")
+    : !form.name.trim() ? "name" : !form.phone.trim() ? "phone" : !form.location.trim() ? "location" : "";
+  const glowIf = (field: string) => (firstEmpty === field ? "guide-glow" : undefined);
+
   if (done) {
     return (
       <Shell>
@@ -276,15 +320,23 @@ function Estimator() {
 
   return (
     <Shell>
+      <span id="estimate-top" />
       <p className="eyebrow">{config.companyName.toUpperCase()}</p>
+      {view === "questions" ? (
+      <>
       <h1>{t("estimate.title")}</h1>
-      <p className="muted">{t("estimate.intro")}</p>
-      <p className="hint">
-        <Rich text={t("estimate.haveSolar")} link={(label) => <Link href="/estimate/upgrade"><u>{label}</u></Link>} />
-      </p>
+      {step === 1 ? (
+        <>
+          <p className="muted">{t("estimate.intro")}</p>
+          <p className="hint">
+            <Rich text={t("estimate.haveSolar")} link={(label) => <Link href="/estimate/upgrade"><u>{label}</u></Link>} />
+          </p>
+        </>
+      ) : null}
 
-      <form className="panel-form estimate-form" onSubmit={calculate}>
-        <section className="step step-1" aria-labelledby="q1">
+      <form className="panel-form estimate-form" onSubmit={calculate} noValidate>
+        <StepProgress step={step} total={STEPS} label={t("wizard.progress", { step, total: STEPS })} />
+        <section className="step step-1" aria-labelledby="q1" hidden={step !== 1}>
           <h2 id="q1"><span className="step-num">1</span> {t("estimate.q1")}</h2>
           <div className="choice-row" role="radiogroup" aria-labelledby="q1">
             {CATEGORY_CHOICES.map((c) => (
@@ -296,7 +348,7 @@ function Estimator() {
           </div>
         </section>
 
-        <section className="step step-2" aria-labelledby="q2">
+        <section className="step step-2" aria-labelledby="q2" hidden={step !== 2}>
           <h2 id="q2"><span className="step-num">2</span> {t("estimate.q2")}</h2>
           <div className="choice-row" role="radiogroup" aria-labelledby="q2">
             {GRID_CHOICES.map((c) => (
@@ -308,18 +360,22 @@ function Estimator() {
           </div>
         </section>
 
-        <section className="step step-3" aria-labelledby="q3">
+        <section className="step step-3" aria-labelledby="q3" hidden={step !== 3}>
           <h2 id="q3"><span className="step-num">3</span> {t("estimate.q3")}</h2>
-          <ApplianceEditor rows={rows} setRows={setRows} library={config.appliances} />
+          {rows.length === 0 ? <p className="guide-pointer">👇 {t("estimate.q3Prompt")}</p> : null}
+          <ApplianceEditor rows={rows} setRows={setRows} library={config.appliances} guide={step === 3} />
+          {rows.length === 0 ? <p className="hint">{t("estimate.q3Skip")}</p> : null}
         </section>
 
-        <section className="step step-4" aria-labelledby="q4">
+        <section className="step step-4" aria-labelledby="q4" hidden={step !== 4}>
           <h2 id="q4"><span className="step-num">4</span> {t("estimate.q4")} <span className="step-optional">{t("common.optional")}</span></h2>
           <p className="hint">
             {t("estimate.q4Hint")}
             {rows.length > 0 ? ` ${t("estimate.q4HintOwnPrice")}` : ""} {t("estimate.q4HintStandard", { price: money(unitRate, exponent, currency) })}
           </p>
+          {!smsText.trim() ? <p className="guide-pointer">👇 {t("estimate.q4Prompt")}</p> : null}
           <SmsImport
+            guide={step === 4}
             text={smsText}
             setText={setSmsText}
             sms={sms}
@@ -329,12 +385,27 @@ function Estimator() {
           />
         </section>
 
-        {error && !result ? <p className="auth-message" role="alert">{error}</p> : null}
-        <button className="button" type="submit" disabled={busy}>{busy && !chosen ? t("estimate.working") : t("estimate.show")}</button>
+        {error ? <p className="auth-message" role="alert">{error}</p> : null}
+        <StepButtons
+          onBack={step > 1 ? () => goToStep(step - 1) : undefined}
+          backLabel={t("wizard.back")}
+          nextLabel={busy ? t("estimate.working") : step < STEPS ? t("wizard.next") : t("estimate.show")}
+          busy={busy}
+          // Glow once the question on screen has an answer; until then the answer area glows.
+          glowNext={step <= 2 || (step === 3 && rows.length > 0) || (step === 4 && (tokensReady || (rows.length > 0 && sms.purchases.length === 0)))}
+        />
       </form>
+      </>
+      ) : null}
 
-      {result ? (
+      {view === "results" && result ? (
         <section id="results" className="estimate-results" aria-live="polite">
+          <div className="results-head">
+            <h1>{t("estimate.resultsTitle")}</h1>
+            <button type="button" className="button button-secondary button-small" onClick={() => { setView("questions"); setChosen(null); goToStep(1); }}>
+              ← {t("estimate.changeAnswers")}
+            </button>
+          </div>
           <div className="result-block result-use">
           <h2>{t("estimate.needsTitle")}</h2>
           <div className="projection-grid">
@@ -360,16 +431,17 @@ function Estimator() {
                 : t("estimate.tokensMatch")}
             </p>
           ) : null}
-          <div className="result-block result-report report-download">
-            <button type="button" className="button button-secondary" disabled={pdfBusy || !snapshot} onClick={downloadReport}>
-              {pdfBusy ? t("estimate.preparingPdf") : t("estimate.downloadPdf")}
-            </button>
-            <p className="hint">{t("estimate.pdfHint")}</p>
-          </div>
-
           <div className="result-block result-options">
           <h2>{t("estimate.optionsTitle")}</h2>
           <p className="estimate-banner">{t("estimate.banner")}</p>
+          <p className="price-note">
+            {hasCustomerAccount ? (
+              <Rich text={t("estimate.pricesShop")} link={(label) => <Link href="/shop"><u>{label}</u></Link>} />
+            ) : (
+              <Rich text={t("estimate.pricesAccount")} link={(label) => <Link href="/sign-up?next=/shop"><u>{label}</u></Link>} />
+            )}
+          </p>
+          {result.options.length === 0 ? <p className="muted">{t("estimate.noOptionsYet")}</p> : null}
 
           <div className="option-list">
             {result.options.map((o) => (
@@ -410,6 +482,14 @@ function Estimator() {
           </div>
           </div>
 
+          <div className="result-block result-report report-download">
+            <button type="button" className="button button-secondary" disabled={pdfBusy || !snapshot} onClick={downloadReport}>
+              {pdfBusy ? t("estimate.preparingPdf") : t("estimate.downloadPdf")}
+            </button>
+            <p className="hint">{t("estimate.pdfHint")}</p>
+          </div>
+
+
           {chosen ? (
             <form id="request" className="panel-form" onSubmit={request}>
               <h2>{chosen === RECOMMENDATION ? t("estimate.formTitleRecommendation") : t("estimate.formTitleQuote")}</h2>
@@ -426,18 +506,18 @@ function Estimator() {
                   {customer.email ? <p className="hint">{customer.email}</p> : null}
                   <p className="hint">{t("estimate.accountUsed")}</p>
                   <label htmlFor="rq-loc">{t("estimate.location")}</label>
-                  <input id="rq-loc" required maxLength={200} autoComplete="address-level2" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+                  <input id="rq-loc" className={glowIf("location")} required maxLength={200} autoComplete="address-level2" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
                 </div>
               ) : (
                 <>
                   <label htmlFor="rq-name">{t("estimate.yourName")}</label>
-                  <input id="rq-name" required maxLength={100} autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                  <input id="rq-name" className={glowIf("name")} required maxLength={100} autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
                   <label htmlFor="rq-phone">{t("estimate.phone")}</label>
-                  <input id="rq-phone" required type="tel" maxLength={20} autoComplete="tel" placeholder="+256 700 000000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                  <input id="rq-phone" className={glowIf("phone")} required type="tel" maxLength={20} autoComplete="tel" placeholder="+256 700 000000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
                   <label htmlFor="rq-email">{t("estimate.emailOptional")}</label>
                   <input id="rq-email" type="email" maxLength={120} autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
                   <label htmlFor="rq-loc">{t("estimate.location")}</label>
-                  <input id="rq-loc" required maxLength={200} autoComplete="address-level2" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+                  <input id="rq-loc" className={glowIf("location")} required maxLength={200} autoComplete="address-level2" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
                 </>
               )}
               <div className="honeypot" aria-hidden="true">
@@ -445,7 +525,7 @@ function Estimator() {
                 <input id="rq-site" tabIndex={-1} autoComplete="off" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
               </div>
               {error ? <p className="auth-message" role="alert">{error}</p> : null}
-              <button className="button" type="submit" disabled={busy || customer === undefined || (signedInCustomer && !hasCustomerAccount)}>{busy ? t("estimate.sending") : t("estimate.send")}</button>
+              <button className={`button${firstEmpty ? "" : " guide-glow"}`} type="submit" disabled={busy || customer === undefined || (signedInCustomer && !hasCustomerAccount)}>{busy ? t("estimate.sending") : t("estimate.send")}</button>
             </form>
           ) : null}
         </section>

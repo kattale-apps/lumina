@@ -98,8 +98,11 @@ export function SmsImport({
   sms,
   setMeter,
   daysByMeter,
-  setDaysForMeter
+  setDaysForMeter,
+  guide = false
 }: {
+  /** Draw the eye to the next thing to do: Paste first, then the days a top-up lasts. */
+  guide?: boolean;
   text: string;
   setText: (v: string) => void;
   sms: SmsState;
@@ -130,7 +133,7 @@ export function SmsImport({
       </ol>
 
       <div className="sms-paste-row">
-        <button type="button" className="button button-secondary" onClick={pasteFromClipboard}>{t("sms.paste")}</button>
+        <button type="button" className={`button button-secondary${guide && !text.trim() ? " guide-glow" : ""}`} onClick={pasteFromClipboard}>{t("sms.paste")}</button>
         {text ? <button type="button" className="link-button" onClick={() => setText("")}>{t("sms.clear")}</button> : null}
       </div>
       <label htmlFor="es-sms" className="visually-hidden">{t("sms.label")}</label>
@@ -206,7 +209,7 @@ export function SmsImport({
                   <button type="button" key={v} className={`chip ${days === v ? "chip-on" : ""}`} onClick={() => setDaysForMeter(meter, v)}>{label}</button>
                 ))}
               </div>
-              <input id="es-sms-days" required inputMode="decimal" type="number" min="0.5" max="366" step="any" placeholder={t("sms.daysPlaceholder")} value={days} onChange={(e) => setDaysForMeter(meter, e.target.value)} />
+              <input id="es-sms-days" className={guide && !days ? "guide-glow" : undefined} required inputMode="decimal" type="number" min="0.5" max="366" step="any" placeholder={t("sms.daysPlaceholder")} value={days} onChange={(e) => setDaysForMeter(meter, e.target.value)} />
               <p className="hint">{t("sms.daysHint")}</p>
             </div>
           )}

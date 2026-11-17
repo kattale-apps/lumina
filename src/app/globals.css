@@ -1639,3 +1639,27 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 
 /* Page-at-a-time controls under long lists. */
 .pager { display: flex; align-items: center; justify-content: center; gap: 0.75rem; flex-wrap: wrap; margin: 1rem 0; }
+
+/* One question on screen at a time: progress, Back / Next. */
+.step-progress { display: grid; gap: 6px; margin: 4px 0 2px; }
+.step-progress-label { margin: 0; color: var(--green); font-size: 14px; font-weight: 800; letter-spacing: .04em; }
+.step-progress-bar { display: flex; gap: 6px; }
+.step-progress-dot { flex: 1; height: 6px; border-radius: 3px; background: #dfe7e3; }
+.step-progress-done { background: var(--green); }
+.step-buttons { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.step-buttons .step-next { margin-left: auto; }
+.step[hidden] { display: none; }
+
+/* A soft pulse on the place to act next, for people who are unsure where to tap or type. */
+@keyframes guide-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(23, 107, 75, 0); }
+  50% { box-shadow: 0 0 0 6px rgba(23, 107, 75, 0.22); }
+}
+.guide-glow { animation: guide-pulse 1.8s ease-in-out infinite; border-color: var(--green) !important; border-radius: 12px; }
+.guide-glow:focus, .guide-glow:focus-within { animation: none; }
+.guide-pointer { margin: 0; color: var(--green); font-size: 14px; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) {
+  .guide-glow { animation: none; box-shadow: 0 0 0 3px rgba(23, 107, 75, 0.25); }
+}
+.results-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.price-note { margin: 0; padding: 12px 14px; border: 1px dashed var(--green); border-radius: 12px; background: #f3faf6; }
