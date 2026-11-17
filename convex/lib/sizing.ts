@@ -548,18 +548,22 @@ export function buildCandidates(
 
   const skuOf = (id: string | null) => catalogue.find((c) => c.id === id)?.sku ?? "";
   // Fully verified first, then designs needing a review, then designs built on estimated figures.
+  // Closest fit first: fewest units, then the smallest inverter, array and battery that passed.
+  // Verification only breaks ties, so a design on estimated figures (always marked for a
+  // technician) can lead when it fits the need best.
   const rank = (c: Candidate) =>
     c.status === "compatible" ? 0 : c.checks.some((k) => k.id.startsWith("estimated_")) ? 2 : 1;
-  // Among systems of the same size, the smallest inverter that passed is the closest fit.
   const inverterW = (c: Candidate) => {
     const inv = catalogue.find((i) => i.id === c.inverterId);
     return (inv && num(inv, "rated_output_power")) ?? Number.MAX_SAFE_INTEGER;
   };
   candidates.sort(
     (x, y) =>
-      rank(x) - rank(y) ||
       x.counts.panels + x.counts.batteries - (y.counts.panels + y.counts.batteries) ||
       inverterW(x) - inverterW(y) ||
+      x.counts.arrayWp - y.counts.arrayWp ||
+      x.counts.batteryNominalWh - y.counts.batteryNominalWh ||
+      rank(x) - rank(y) ||
       `${skuOf(x.inverterId)}${skuOf(x.batteryId)}${skuOf(x.panelId)}`.localeCompare(
         `${skuOf(y.inverterId)}${skuOf(y.batteryId)}${skuOf(y.panelId)}`
       )

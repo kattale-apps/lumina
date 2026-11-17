@@ -103,6 +103,29 @@ describe("designs that rely on estimates", () => {
     expect(flagged[0].detail).toMatch(/pending verification by a technician/);
   });
 
+  test("the closest fit leads even when it relies on estimates, and stays marked for a technician", () => {
+    const base = {
+      topology: "Hybrid", phase: "Single-phase", battery_voltage: 48, max_charge_current: 60,
+      max_pv_voltage: 500, mppt_min_voltage: 120, mppt_max_voltage: 450, max_pv_current: 18, mppt_count: 1
+    };
+    const catalogue = withSafeEstimates([
+      // Fully specified but far bigger than needed.
+      item("big", "inverter", { ...base, rated_output_power: 12000, rated_output_apparent: 12000 }),
+      // Right-sized, but the price list gave no PV current or MPPT count.
+      item("small", "inverter", { ...base, rated_output_power: 3000, rated_output_apparent: 3000, max_pv_current: undefined as never, mppt_count: undefined as never, max_pv_input_power: 4000 }),
+      item("pv", "pv_panel", { rated_power: 400, voc: 45, vmp: 37, isc: 8 })
+    ]);
+    const a = { ...DEFAULT_ASSUMPTIONS, solarResourceSource: "test" };
+    const inputs = {
+      systemType: "grid_tied" as const,
+      lines: [{ name: "Lights", quantity: 10, powerW: 20, currentType: "ac" as const, critical: false, windows: [{ start: 8, end: 18 }] }]
+    };
+    const top = buildCandidates(inputs, computeRequirements(inputs, a), a, catalogue).candidates[0];
+    expect(top.inverterId).toBe("small");
+    expect(top.status).toBe("requires_review");
+    expect(top.checks.some((k) => k.id === "estimated_small")).toBe(true);
+  });
+
   test("complete products add no estimate check", () => {
     expect(estimateChecks([item("x", "inverter", {}), null, undefined])).toEqual([]);
   });

@@ -1202,9 +1202,8 @@ function inverterSection(
 
 /** Verified-compatible options first, then those that meet the whole target, then fewest units. Caps the list. */
 function finish<T extends UpgradeSection>(section: T, sort = true): T {
-  // Parts with estimated figures come after verified ones.
-  const rank = (o: UpgradeOption) =>
-    o.status === "compatible" ? 0 : o.checks.some((c) => c.id.startsWith("estimated_")) ? 2 : 1;
+  // Parts with estimated figures rank with any other part awaiting review, so the best fit can lead.
+  const rank = (o: UpgradeOption) => (o.status === "compatible" ? 0 : 1);
   if (sort) {
     section.options.sort(
       (x, y) =>
