@@ -12,9 +12,11 @@ import type { ReportLine } from "./usageReport";
 import { SmsImport, useSmsSummary } from "./SmsImport";
 import { AppUpdateNeeded, savePdf } from "../../lib/savePdf";
 import { rememberPendingRequest } from "../../lib/pendingRequests";
-import { DraftNotice, LanguagePicker, Rich, useT, type MessageKey } from "@/lib/i18n";
+import { clearPendingEstimate, savePendingEstimate } from "../../lib/pendingEstimate";
+import { Rich, useT, type MessageKey } from "@/lib/i18n";
 import { en } from "@/lib/i18n/en";
 import { StepButtons, StepProgress, useGoBack } from "@/components/StepNav";
+import { PublicShell } from "@/components/PublicShell";
 
 const STEPS = 4;
 
@@ -190,8 +192,11 @@ function Estimator() {
     setError(null);
     setChosen(null);
     try {
-      const response = await runQuery({ input: buildInput(), grid });
+      const check = { input: buildInput(), grid };
+      const response = await runQuery(check);
       setResult(response);
+      // Kept on the phone so the same options appear in My recommendations after signing up.
+      if (customer !== undefined && !hasCustomerAccount) savePendingEstimate(check);
       setSnapshot({
         category,
         lines:
@@ -277,6 +282,8 @@ function Estimator() {
         website: form.website || undefined
       });
       if (sent.claimToken) rememberPendingRequest(sent.claimToken);
+      // Sent: nothing is left waiting to be carried over.
+      clearPendingEstimate();
       setDone({ hasAccount: sent.hasAccount });
     } catch (e) {
       setError(message(e, t("common.genericError")));
@@ -439,7 +446,7 @@ function Estimator() {
             {hasCustomerAccount ? (
               <Rich text={t("estimate.pricesShop")} link={(label) => <Link href="/shop"><u>{label}</u></Link>} />
             ) : (
-              <Rich text={t("estimate.pricesAccount")} link={(label) => <Link href="/sign-up?next=/shop"><u>{label}</u></Link>} />
+              <Rich text={t("estimate.pricesAccount")} link={(label) => <Link href="/sign-up?next=/my-requests"><u>{label}</u></Link>} />
             )}
           </p>
           {result.options.length === 0 ? <p className="muted">{t("estimate.noOptionsYet")}</p> : null}
@@ -449,6 +456,12 @@ function Estimator() {
               <article key={o.key} className={`option-card ${chosen === o.key ? "option-on" : ""}`}>
                 <h3>{optionText(t, `option.${o.key}.title`, o.title)}</h3>
                 <p className="muted">{optionText(t, `option.${o.key}.blurb`, o.blurb)}</p>
+                <ul className="option-facts">
+                  <li className={o.cutsBill ? "fact-yes" : "fact-no"}>{o.cutsBill ? t("estimate.factBill") : t("estimate.factNoBill")}</li>
+                  <li className={o.key === "bill_saver" ? "fact-no" : "fact-yes"}>
+                    {t("estimate.factOutage", { text: optionText(t, `option.${o.key}.outage`, o.duringOutage) })}
+                  </li>
+                </ul>
                 <ul className="component-list">
                   {o.components.map((c) => (
                     <li key={c.role}>
@@ -537,24 +550,5 @@ function Estimator() {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  const t = useT();
-  return (
-    <div className="public-bg">
-      <div className="shell">
-        <header className="topbar">
-          <Link className="brand" href="/" aria-label={t("common.brandHome")}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="brand-logo" src="/icons/icon-192.png" alt="" width={38} height={38} />
-            <span>SOLAR SWITCH</span>
-          </Link>
-          <div className="topbar-actions">
-            <LanguagePicker />
-            <Link className="button button-small button-secondary" href="/sign-in">{t("estimate.staffSignIn")}</Link>
-          </div>
-        </header>
-        <DraftNotice />
-        <main className="workspace">{children}</main>
-      </div>
-    </div>
-  );
+  return <PublicShell>{children}</PublicShell>;
 }

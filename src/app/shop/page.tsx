@@ -8,9 +8,11 @@ import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { hasPendingRequests } from "@/lib/pendingRequests";
+import { readPendingEstimate } from "@/lib/pendingEstimate";
 import { useRouter } from "next/navigation";
 import { useT } from "@/lib/i18n";
 import { Pager, pageFor } from "@/components/Pager";
+import { byPartOrder } from "../../../convex/lib/shopParts";
 
 const CARDS_PER_PAGE = 12;
 type Detail = { id: string; imageUrl: string | null; priceMinor: number | null; currency: string | null };
@@ -64,6 +66,7 @@ function Shop() {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
   const [brand, setBrand] = useState("");
+  const [part, setPart] = useState("");
   const [location, setLocation] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
@@ -72,7 +75,12 @@ function Shop() {
   const [paging, setPaging] = useState({ key: "", page: 1 });
   const [known, setKnown] = useState<Record<string, Detail>>({});
 
-  const brands = useMemo(() => [...new Set((data?.products ?? []).map((p) => p.brand))].sort(), [data]);
+  const parts = useMemo(() => [...new Set((data?.products ?? []).map((p) => p.type))].sort(byPartOrder), [data]);
+  // Brands follow the chosen part, so a brand chip never leads to an empty list.
+  const brands = useMemo(
+    () => [...new Set((data?.products ?? []).filter((p) => !part || p.type === part).map((p) => p.brand))].sort(),
+    [data, part]
+  );
 
   // The same item from different brands is one card, with each brand’s price as an option.
   const grouped = useMemo(() => {
@@ -80,20 +88,23 @@ function Shop() {
     const term = search.trim().toLowerCase();
     const map = new Map<string, Map<string, typeof data.products>>();
     for (const p of data.products) {
+      if (part && p.type !== part) continue;
       if (brand && p.brand !== brand) continue;
-      if (term && !`${p.name} ${p.brand} ${p.model} ${p.description}`.toLowerCase().includes(term)) continue;
-      const cards = map.get(p.category) ?? new Map<string, typeof data.products>();
+      if (term && !`${p.name} ${p.brand} ${p.model} ${p.description} ${p.category} ${p.type}`.toLowerCase().includes(term)) continue;
+      const cards = map.get(p.type) ?? new Map<string, typeof data.products>();
       const key = p.name.trim().toLowerCase();
       cards.set(key, [...(cards.get(key) ?? []), p]);
-      map.set(p.category, cards);
+      map.set(p.type, cards);
     }
-    return [...map.entries()].map(([category, cards]) => [category, [...cards.values()]] as const);
-  }, [data, search, brand]);
+    return [...map.entries()]
+      .sort(([a], [b]) => byPartOrder(a, b))
+      .map(([category, cards]) => [category, [...cards.values()]] as const);
+  }, [data, search, brand, part]);
 
   // Cards are shown a page at a time; prices and photos are fetched for that page and the basket.
   const cards = grouped.flatMap(([category, list]) => list.map((variants) => ({ category, variants })));
   const pageCount = Math.ceil(cards.length / CARDS_PER_PAGE);
-  const filterKey = `${search.trim().toLowerCase()}|${brand}`;
+  const filterKey = `${search.trim().toLowerCase()}|${part}|${brand}`;
   const page = pageFor(paging, filterKey, pageCount);
   const pageCards = cards.slice((page - 1) * CARDS_PER_PAGE, page * CARDS_PER_PAGE);
   const pageGroups: [string, (typeof cards)[number]["variants"][]][] = [];
@@ -153,6 +164,15 @@ function Shop() {
 
       <label className="visually-hidden" htmlFor="shop-search">{t("shop.search")}</label>
       <input id="shop-search" className="shop-search" type="search" placeholder={t("shop.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
+
+      {parts.length > 1 ? (
+        <div className="quick-row shop-parts" role="group" aria-label={t("shop.part")}>
+          <button type="button" className={`chip${part === "" ? " chip-on" : ""}`} aria-pressed={part === ""} onClick={() => { setPart(""); setBrand(""); }}>{t("shop.allParts")}</button>
+          {parts.map((x) => (
+            <button key={x} type="button" className={`chip${part === x ? " chip-on" : ""}`} aria-pressed={part === x} onClick={() => { setPart(x); setBrand(""); }}>{x}</button>
+          ))}
+        </div>
+      ) : null}
 
       {brands.length > 1 ? (
         <div className="quick-row shop-brands" role="group" aria-label={t("shop.brand")}>
@@ -273,7 +293,7 @@ function Gate() {
   const ready = Boolean(me?.signedIn && me.account);
   // Someone who asked for a recommendation before signing up goes to see it; that page attaches it.
   useEffect(() => {
-    if (ready && hasPendingRequests()) router.replace("/my-requests");
+    if (ready && (hasPendingRequests() || readPendingEstimate())) router.replace("/my-requests");
   }, [ready, router]);
 
   if (isLoading || (isAuthenticated && me === undefined)) return <Page><p className="muted">{t("common.loading")}</p></Page>;

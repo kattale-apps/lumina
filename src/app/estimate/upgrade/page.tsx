@@ -10,8 +10,9 @@ import { AppUpdateNeeded, savePdf } from "../../../lib/savePdf";
 import { describeNeeds, describeSystem, type ExistingSystem, type UpgradeNeeds } from "./describe";
 import { blankUpgradeForm, stepProblem, toPayload, UpgradeForm } from "./UpgradeForm";
 import { StepButtons, StepProgress, useGoBack } from "@/components/StepNav";
+import { PublicShell } from "@/components/PublicShell";
 import { toggleOption, UpgradeReport, type Report } from "./UpgradeReport";
-import { DraftNotice, LanguagePicker, Rich, useT } from "@/lib/i18n";
+import { Rich, useT } from "@/lib/i18n";
 
 type Grid = "none" | "unreliable" | "reliable";
 const GRID_CHOICES: Grid[] = ["reliable", "unreliable", "none"];
@@ -327,24 +328,5 @@ function UpgradeCheck() {
 }
 
 function Shell({ children }: { children: ReactNode }) {
-  const t = useT();
-  return (
-    <div className="public-bg">
-      <div className="shell">
-        <header className="topbar">
-          <Link className="brand" href="/" aria-label={t("common.brandHome")}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="brand-logo" src="/icons/icon-192.png" alt="" width={38} height={38} />
-            <span>SOLAR SWITCH</span>
-          </Link>
-          <div className="topbar-actions">
-            <LanguagePicker />
-            <Link className="button button-small button-secondary" href="/sign-in">{t("estimate.staffSignIn")}</Link>
-          </div>
-        </header>
-        <DraftNotice />
-        <main className="workspace">{children}</main>
-      </div>
-    </div>
-  );
+  return <PublicShell>{children}</PublicShell>;
 }

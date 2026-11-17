@@ -13,6 +13,7 @@ const TABS: { href: string; label: MessageKey }[] = [
   { href: "/my-requests", label: "customer.tabRecommendations" },
   { href: "/shop", label: "customer.tabShop" },
   { href: "/estimate", label: "customer.tabPowerCheck" },
+  { href: "/estimate/upgrade", label: "customer.tabUpgradeCheck" },
   { href: "/profile", label: "customer.tabProfile" }
 ];
 

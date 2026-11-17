@@ -100,6 +100,23 @@ async function customerTenant(ctx: QueryCtx) {
 }
 
 /**
+ * The shop's "part" filter. Batteries are split by chemistry because customers shop for lithium
+ * and gel batteries as different things. The chemistry spec is used when set; otherwise the
+ * product name decides, since this only sorts the catalogue and is never a specification.
+ */
+function partType(category: Doc<"productCategories">, product: Doc<"products">) {
+  if (category.key !== "battery") return category.name;
+  const chemistry = product.specValues.chemistry;
+  const text = `${typeof chemistry === "string" ? chemistry : ""} ${product.name} ${product.model}`.toLowerCase();
+  if (/lifepo|lithium|li-ion|lfp/.test(text)) return "Lithium batteries";
+  if (/\bgel\b/.test(text)) return "Gel batteries";
+  if (/\bagm\b/.test(text)) return "AGM batteries";
+  if (/flooded|lead[- ]acid|tubular/.test(text)) return "Lead-acid batteries";
+  return "Other batteries";
+}
+
+
+/**
  * Every product a customer may buy, without prices or photos: enough to search, filter by
  * brand and group into cards. Prices and photos come a page at a time from catalogueDetails.
  */
@@ -121,6 +138,7 @@ export const catalogue = query({
       items.push({
         id: product._id,
         category: category.name,
+        type: partType(category, product),
         name: product.name,
         brand: product.brand,
         model: product.model,

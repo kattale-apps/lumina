@@ -304,6 +304,32 @@ describe("recommendations follow the need", () => {
     expect(big.arrayKw!).toBeGreaterThan(small.arrayKw!);
   });
 
+  test("an unreliable grid never gets a battery-free option; each option says what happens in a power cut", async () => {
+    const { t } = await setup();
+    const result = await t.query(api.estimator.recommend, { input: bigBill, grid: "unreliable" });
+    const keys = result.options.map((o) => o.key);
+    expect(keys).not.toContain("bill_saver");
+    for (const o of result.options) {
+      expect(o.duringOutage).not.toMatch(/switches off/i);
+      expect(part(o, "Battery")).toBeDefined();
+    }
+    const backup = result.options.find((o) => o.key === "backup_power");
+    expect(backup).toBeDefined();
+    expect(backup!.cutsBill).toBe(false);
+    expect(part(backup!, "Solar panels")).toBeUndefined();
+  });
+
+  test("solar without a battery is offered only on a reliable grid, and says it switches off", async () => {
+    const { t } = await setup();
+    const reliable = await t.query(api.estimator.recommend, { input: bigBill, grid: "reliable" });
+    const solarOnly = reliable.options.find((o) => o.key === "bill_saver");
+    expect(solarOnly).toBeDefined();
+    expect(solarOnly!.duringOutage).toMatch(/switches off/i);
+    expect(part(solarOnly!, "Battery")).toBeUndefined();
+    const none = await t.query(api.estimator.recommend, { input: bigBill, grid: "none" });
+    expect(none.options.map((o) => o.key)).toEqual(["independent"]);
+  });
+
   test("two goals that need identical hardware are shown once", async () => {
     const { t } = await setup();
     const result = await t.query(api.estimator.recommend, { input: smallBill, grid: "unreliable" });

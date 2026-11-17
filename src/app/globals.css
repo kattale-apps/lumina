@@ -785,6 +785,12 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 .option-card p { margin: 0; line-height: 1.5; }
 .option-card .button { justify-self: start; }
 .option-figures { font-size: 14px; }
+.option-facts { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 14px; font-weight: 700; }
+.option-facts li::before { display: inline-block; width: 1.4em; }
+.option-facts .fact-yes { color: #0f5a3a; }
+.option-facts .fact-yes::before { content: "✓"; }
+.option-facts .fact-no { color: #8a1c13; }
+.option-facts .fact-no::before { content: "✕"; }
 .component-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .component-list li { display: grid; gap: 1px; padding: 8px 10px; border-radius: 8px; background: var(--canvas); }
 .component-list li span { color: var(--muted); font-size: 13px; }
@@ -1166,7 +1172,7 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 .my-option .button { justify-self: stretch; text-align: center; }
 
 /* Tabs under the header on customer pages */
-.customer-nav { display: flex; gap: 6px; margin: 8px 0 0; overflow-x: auto; scrollbar-width: none; }
+.customer-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
 .customer-nav::-webkit-scrollbar { display: none; }
 .customer-tab {
   flex: 0 0 auto;
@@ -1619,7 +1625,8 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 }
 
 /* Shop: product photo, and one card per item with a price per brand. */
-.shop-brands { margin: 0.75rem 0; flex-wrap: wrap; }
+.shop-brands, .shop-parts { margin: 0.75rem 0; flex-wrap: wrap; }
+.shop-parts .chip { font-weight: 700; }
 .shop-photo { display: block; width: 100%; height: 160px; object-fit: contain; background: #fff; border-radius: 8px; margin-bottom: 0.5rem; }
 .shop-variants { list-style: none; margin: 0.5rem 0 0; padding: 0; display: grid; gap: 0.5rem; }
 .shop-variants li { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; border-top: 1px solid var(--line, #e3e6e8); padding-top: 0.5rem; }
@@ -1663,3 +1670,11 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 }
 .results-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .price-note { margin: 0; padding: 12px 14px; border: 1px dashed var(--green); border-radius: 12px; background: #f3faf6; }
+
+/* My recommendations: the two checks, and an energy check carried over from before sign-up */
+.check-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 18px; }
+.check-actions .button { min-height: 52px; font-size: 16px; }
+.saved-check { display: grid; gap: 12px; margin: 0 0 24px; padding: 18px; border: 2px dashed var(--green); border-radius: 14px; background: #f2f9f5; }
+.saved-check h2 { margin: 0; font-size: 18px; }
+.saved-check .saved-location { margin-top: 0; max-width: none; }
+.saved-check > .button-secondary { justify-self: start; }

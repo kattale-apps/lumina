@@ -147,7 +147,7 @@ export function summariseAppliances(
   };
 }
 
-export type OptionKey = "bill_saver" | "bill_saver_backup" | "independent";
+export type OptionKey = "bill_saver" | "bill_saver_backup" | "backup_power" | "independent";
 
 export type OptionTemplate = {
   key: OptionKey;
@@ -156,35 +156,56 @@ export type OptionTemplate = {
   systemType: SystemType;
   backupHours?: number;
   autonomyDays?: number;
+  // What the customer gets, stated plainly so the options can be told apart.
+  cutsBill: boolean;
+  duringOutage: string;
 };
 
 const TEMPLATES: Record<OptionKey, OptionTemplate> = {
   bill_saver: {
     key: "bill_saver",
-    title: "Cut my electricity bill",
-    blurb: "Solar panels and an inverter that feed your home and reduce what you buy from the grid. No battery, so it stops when the grid is off.",
-    systemType: "grid_tied"
+    title: "Solar only (no battery)",
+    blurb: "The lowest-cost way to cut your bill where the grid is reliable. Solar panels feed your home during the day. There is no battery, so it switches off whenever the grid is off.",
+    systemType: "grid_tied",
+    cutsBill: true,
+    duringOutage: "Switches off"
   },
   bill_saver_backup: {
     key: "bill_saver_backup",
-    title: "Cut my bill and keep the lights on",
-    blurb: "Solar plus a battery. It reduces your bill and keeps your home running for about four hours when the grid goes off.",
+    title: "Solar with battery backup",
+    blurb: "Solar panels cut your bill, and a battery keeps your home running for about four hours when the grid goes off.",
     systemType: "hybrid",
-    backupHours: 4
+    backupHours: 4,
+    cutsBill: true,
+    duringOutage: "Keeps running for about 4 hours"
+  },
+  backup_power: {
+    key: "backup_power",
+    title: "Battery backup only (no panels)",
+    blurb: "An inverter and battery that charge from the grid and keep your home running for about four hours during power cuts. It does not lower your bill. Panels can be added later.",
+    systemType: "backup_only",
+    backupHours: 4,
+    cutsBill: false,
+    duringOutage: "Keeps running for about 4 hours"
   },
   independent: {
     key: "independent",
-    title: "Run without the grid",
-    blurb: "Solar plus a battery sized to carry your full daily use. For homes with no grid, or no wish to rely on it.",
+    title: "Full solar, no grid needed",
+    blurb: "Solar panels and a battery sized to carry your whole day. For homes with no grid, or that do not want to rely on it.",
     systemType: "off_grid",
-    autonomyDays: 1
+    autonomyDays: 1,
+    cutsBill: true,
+    duringOutage: "Not affected: runs on its own"
   }
 };
 
-/** Which options to offer, best fit first, given what the customer says about the grid. */
+/**
+ * Which options to offer, best fit first. A battery-free system is only offered where the grid is
+ * reliable: where power cuts are common it would switch off exactly when it is needed.
+ */
 export function optionsFor(grid: GridAvailability): OptionTemplate[] {
-  if (grid === "none") return [TEMPLATES.independent, TEMPLATES.bill_saver_backup];
-  if (grid === "unreliable") return [TEMPLATES.bill_saver_backup, TEMPLATES.bill_saver, TEMPLATES.independent];
+  if (grid === "none") return [TEMPLATES.independent];
+  if (grid === "unreliable") return [TEMPLATES.bill_saver_backup, TEMPLATES.backup_power, TEMPLATES.independent];
   return [TEMPLATES.bill_saver, TEMPLATES.bill_saver_backup];
 }
 
@@ -210,6 +231,8 @@ export type PublicOption = {
   key: OptionKey;
   title: string;
   blurb: string;
+  cutsBill: boolean;
+  duringOutage: string;
   // "ready" passed every check; "to_confirm" needs a technician to confirm a detail.
   confidence: "ready" | "to_confirm";
   components: Component[];
@@ -295,6 +318,8 @@ export function toPublicOption(
     key: template.key,
     title: template.title,
     blurb: template.blurb,
+    cutsBill: template.cutsBill,
+    duringOutage: template.duringOutage,
     confidence: candidate.status === "compatible" ? "ready" : "to_confirm",
     components,
     arrayKw,
