@@ -202,6 +202,8 @@ export type Component = {
   quantity: number;
   // Plain-language size, e.g. "550 W each".
   detail?: string;
+  // Some figures for this part were safe estimates, pending technician verification.
+  estimated?: boolean;
 };
 
 export type PublicOption = {
@@ -236,7 +238,10 @@ export function toPublicOption(
   a: Assumptions
 ): PublicOption {
   const find = (id: string | null) => catalogue.find((c) => c.id === id);
-  const label = (id: string): ProductLabel => labels.get(id) ?? { name: find(id)?.name ?? "Component" };
+  const label = (id: string): ProductLabel & { estimated?: boolean } => ({
+    ...(labels.get(id) ?? { name: find(id)?.name ?? "Component" }),
+    ...(find(id)?.estimated ? { estimated: true } : {})
+  });
   const components: Component[] = [];
 
   if (candidate.panelId && candidate.counts.panels > 0) {
@@ -275,7 +280,11 @@ export function toPublicOption(
       ? null
       : Math.round((summary.costPerMonthMinor * coverage) / 100);
   const notes: string[] = [];
-  if (candidate.status === "requires_review") {
+  if (components.some((c) => c.estimated)) {
+    notes.push(
+      "Some figures for the marked parts were missing from the supplier, so safe estimates were used. A technician will verify them before this is final."
+    );
+  } else if (candidate.status === "requires_review") {
     notes.push("A technician will confirm a few technical details before this is final.");
   }
   if (summary.basis === "bill") {

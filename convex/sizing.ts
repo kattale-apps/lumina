@@ -12,6 +12,7 @@ import {
   type CatalogueItem,
   type SystemType
 } from "./lib/sizing";
+import { withSafeEstimates } from "./lib/specEstimate";
 import { requireText } from "./lib/validation";
 
 /** Only technicians (and the company owner) may clear checks that need review. */
@@ -62,7 +63,7 @@ export const runSizing = mutation({
       .query("products")
       .withIndex("by_tenant", (q) => q.eq("tenantId", assessment.tenantId))
       .collect();
-    const catalogue: CatalogueItem[] = products
+    const catalogue: CatalogueItem[] = withSafeEstimates(products
       .filter((p) => p.status === "active")
       .map((p) => ({
         id: p._id,
@@ -72,7 +73,7 @@ export const runSizing = mutation({
         specSchemaVersion: p.specSchemaVersion,
         specValues: p.specValues
       }))
-      .sort((a, b) => a.sku.localeCompare(b.sku));
+      .sort((a, b) => a.sku.localeCompare(b.sku)));
 
     const inputs = {
       systemType: revision.inputs.systemType as SystemType,

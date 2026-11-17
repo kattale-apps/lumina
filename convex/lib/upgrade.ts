@@ -14,6 +14,7 @@
  *   2. How much more is needed to meet what the customer wants?
  *   3. Which catalogue products fit, and what must a technician still confirm?
  */
+import { estimateChecks } from "./specEstimate";
 import {
   TOPOLOGY_OK,
   type Assumptions,
@@ -857,8 +858,8 @@ function planPanels(
       `${strings} string${strings === 1 ? "" : "s"} of ${s} add ${addWp} Wp, taking the array to ${totalWp} Wp (about ${kwh(figures.solarWhPerDay)} on a design day).` +
       (short > 0 ? ` That is all the ${charger.label} has room for: about ${Math.round(short)} Wp of the target is left over.` : ""),
     figures,
-    checks,
-    status: statusOf(checks)
+    checks: [...checks, ...estimateChecks([panel])],
+    status: statusOf([...checks, ...estimateChecks([panel])])
   };
   if (partner) option.requires = partner.key;
   return { option, addWp };
@@ -1190,8 +1191,8 @@ function inverterSection(
         (pvIn !== undefined ? `, solar input up to ${pvIn} W` : "") +
         ".",
       figures: f,
-      checks,
-      status: statusOf(checks)
+      checks: [...checks, ...estimateChecks([inv])],
+      status: statusOf([...checks, ...estimateChecks([inv])])
     });
   }
   // Smallest adequate inverter first.
@@ -1201,7 +1202,9 @@ function inverterSection(
 
 /** Verified-compatible options first, then those that meet the whole target, then fewest units. Caps the list. */
 function finish<T extends UpgradeSection>(section: T, sort = true): T {
-  const rank = (o: UpgradeOption) => (o.status === "compatible" ? 0 : 1);
+  // Parts with estimated figures come after verified ones.
+  const rank = (o: UpgradeOption) =>
+    o.status === "compatible" ? 0 : o.checks.some((c) => c.id.startsWith("estimated_")) ? 2 : 1;
   if (sort) {
     section.options.sort(
       (x, y) =>
@@ -1403,8 +1406,8 @@ function faultyPanelSection(old: NonNullable<ExistingSystem["panels"]>, catalogu
       title: `Replace faulty panels with ${panel.name}`,
       summary: `${wp} W each, against the existing ${old.wp} W. Priced per panel; the technician confirms how many have failed.`,
       figures: { wp },
-      checks,
-      status: statusOf(checks)
+      checks: [...checks, ...estimateChecks([panel])],
+      status: statusOf([...checks, ...estimateChecks([panel])])
     });
   }
   if (section.options.length === 0) section.messages.push("No panel in the catalogue is close enough to the existing ones; a technician will source a match.");

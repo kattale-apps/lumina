@@ -21,6 +21,7 @@ import {
 import { categoryRateMinor, CUSTOMER_CATEGORIES } from "./lib/tariff";
 import { currencyExponent, toMinorUnits } from "./lib/money";
 import { buildCandidates, computeRequirements, type CatalogueItem } from "./lib/sizing";
+import { withSafeEstimates } from "./lib/specEstimate";
 import { validateLine } from "./lib/load";
 import { optionalText, validateOptionalEmail, validatePhone } from "./lib/crm";
 import { requireText } from "./lib/validation";
@@ -187,7 +188,7 @@ async function compute(
     .withIndex("by_tenant", (q) => q.eq("tenantId", tenant._id))
     .collect();
   const active = products.filter((p) => p.status === "active");
-  const catalogue: CatalogueItem[] = active
+  const catalogue: CatalogueItem[] = withSafeEstimates(active
     .map((p) => ({
       id: p._id as string,
       sku: p.sku,
@@ -196,7 +197,7 @@ async function compute(
       specSchemaVersion: p.specSchemaVersion,
       specValues: p.specValues
     }))
-    .sort((a, b) => a.sku.localeCompare(b.sku));
+    .sort((a, b) => a.sku.localeCompare(b.sku)));
   const labels = new Map<string, ProductLabel>(
     active.map((p) => [p._id as string, { name: p.name, brand: p.brand, model: p.model }])
   );

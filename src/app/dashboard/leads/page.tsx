@@ -104,7 +104,7 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
                 </span>
                 <span className="record-meta">
                   {l.components.length
-                    ? l.components.map((c) => `${c.quantity} × ${c.name}`).join(", ")
+                    ? l.components.map((c) => `${c.quantity} × ${c.name}${c.estimated ? " (specs estimated — verify)" : ""}`).join(", ")
                     : l.isUpgrade
                       ? "No option chosen: recommend from the upgrade check."
                       : "No catalogue option yet: design from the load details."}

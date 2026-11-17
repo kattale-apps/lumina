@@ -782,7 +782,9 @@ export default defineSchema({
         brand: v.optional(v.string()),
         model: v.optional(v.string()),
         quantity: v.number(),
-        detail: v.optional(v.string())
+        detail: v.optional(v.string()),
+        // Some of this part's figures were safe estimates, pending technician verification.
+        estimated: v.optional(v.boolean())
       })
     ),
     // The load lines the estimate used, so a conversion starts from the same numbers.

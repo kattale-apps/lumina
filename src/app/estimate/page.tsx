@@ -454,6 +454,7 @@ function Estimator() {
                     <li key={c.role}>
                       <strong>{c.quantity} × {c.role}</strong>
                       <span>{[c.brand, c.model ?? c.name].filter(Boolean).join(" ")}{c.detail ? ` · ${c.detail}` : ""}</span>
+                      {c.estimated ? <span className="pill pill-warn">{t("estimate.specsPending")}</span> : null}
                     </li>
                   ))}
                 </ul>

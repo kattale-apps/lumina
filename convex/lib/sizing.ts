@@ -9,6 +9,7 @@
  * is rejected with the reason shown.
  */
 import { computeLoad, type LoadLine } from "./load";
+import { estimateChecks } from "./specEstimate";
 
 export const SIZING_ENGINE_VERSION = "size-1";
 
@@ -188,6 +189,8 @@ export type CatalogueItem = {
   categoryKey: string;
   specSchemaVersion: number;
   specValues: Record<string, number | string | boolean>;
+  // Figures filled in by safe estimates (key -> how), pending technician verification.
+  estimated?: Record<string, string>;
 };
 
 export type CheckState = "pass" | "fail" | "review";
@@ -521,7 +524,7 @@ export function buildCandidates(
           reject(inv, bat, pan, `${pan!.sku} with ${inv.sku}: ${arrFail.detail}`);
           continue;
         }
-        const checks = [...base, ...(batPlan?.checks ?? []), ...(arrPlan?.checks ?? [])];
+        const checks = [...base, ...(batPlan?.checks ?? []), ...(arrPlan?.checks ?? []), ...estimateChecks([inv, bat, pan])];
         candidates.push({
           inverterId: inv.id,
           batteryId: bat?.id ?? null,
@@ -544,7 +547,9 @@ export function buildCandidates(
   }
 
   const skuOf = (id: string | null) => catalogue.find((c) => c.id === id)?.sku ?? "";
-  const rank = (c: Candidate) => (c.status === "compatible" ? 0 : 1);
+  // Fully verified first, then designs needing a review, then designs built on estimated figures.
+  const rank = (c: Candidate) =>
+    c.status === "compatible" ? 0 : c.checks.some((k) => k.id.startsWith("estimated_")) ? 2 : 1;
   // Among systems of the same size, the smallest inverter that passed is the closest fit.
   const inverterW = (c: Candidate) => {
     const inv = catalogue.find((i) => i.id === c.inverterId);

@@ -187,6 +187,7 @@ export const en = {
   "estimate.figBattery": "Battery {kwh} kWh.",
   "estimate.figOffset": "Could offset about {amount} of your monthly electricity cost.",
   "estimate.selected": "Selected",
+  "estimate.specsPending": "Some specs estimated · pending technician verification",
   "estimate.requestThis": "Request a quote for this",
   "estimate.designForYou": "Get a system designed for you",
   "estimate.notSure": "Not sure which fits?",

@@ -24,6 +24,7 @@ import { PUBLIC_ASSUMPTIONS } from "./lib/estimate";
 import { currencyExponent } from "./lib/money";
 import { currentCost, priceFrom, resolveMarginRule } from "./lib/pricing";
 import type { Assumptions, CatalogueItem } from "./lib/sizing";
+import { withSafeEstimates } from "./lib/specEstimate";
 import {
   buildUpgradeReport,
   optionsOf,
@@ -74,7 +75,7 @@ async function loadCatalogue(ctx: Ctx, tenantId: Id<"tenants">) {
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
       .collect()
   ).filter((p) => p.status === "active");
-  const catalogue: CatalogueItem[] = products
+  const catalogue: CatalogueItem[] = withSafeEstimates(products
     .map((p) => ({
       id: p._id as string,
       sku: p.sku,
@@ -83,7 +84,7 @@ async function loadCatalogue(ctx: Ctx, tenantId: Id<"tenants">) {
       specSchemaVersion: p.specSchemaVersion,
       specValues: p.specValues
     }))
-    .sort((a, b) => a.sku.localeCompare(b.sku));
+    .sort((a, b) => a.sku.localeCompare(b.sku)));
   return { catalogue, products: new Map(products.map((p) => [p._id as string, p])) };
 }
 

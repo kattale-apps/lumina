@@ -157,7 +157,7 @@ function UpgradeSpecs({ lead }: { lead: Lead }) {
           <div><dt>Grid</dt><dd>{GRID[lead.gridAvailability]}</dd></div>
           <div>
             <dt>Asked about</dt>
-            <dd>{lead.components.length ? lead.components.map((c) => `${c.quantity} × ${c.name}`).join(", ") : "A recommendation"}</dd>
+            <dd>{lead.components.length ? lead.components.map((c) => `${c.quantity} × ${c.name}${c.estimated ? " (specs estimated — verify)" : ""}`).join(", ") : "A recommendation"}</dd>
           </div>
         </dl>
         <p className="hint">
