@@ -200,7 +200,7 @@ export const forDevice = internalQuery({
       return {
         count,
         title: "Solar Switch",
-        body: inbox.items === 1 ? "1 new item request" : `${inbox.items} new item requests`,
+        body: inbox.items === 1 ? "1 new item price request" : `${inbox.items} new item price requests`,
         path: "/dashboard/item-requests"
       };
     }

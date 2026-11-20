@@ -126,7 +126,7 @@ function RequestItem() {
     if (!hints?.open) return null;
     const who = account ?? { name: form.name, phone: form.phone };
     return [
-      `Hello ${hints.companyName}, I would like these items:`,
+      `Hello ${hints.companyName}, please send me prices for these items:`,
       "",
       ...items.map((it, i) => `${i + 1}. ${describeItem(it)}`),
       "",

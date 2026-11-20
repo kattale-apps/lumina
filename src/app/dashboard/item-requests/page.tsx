@@ -29,9 +29,9 @@ function ItemRequests({ tenantId, companyName }: { tenantId: Id<"tenants">; comp
 
   return (
     <section className="workspace-section">
-      <h2>Item requests{rows ? ` (${rows.length})` : ""}</h2>
+      <h2>Item price requests{rows ? ` (${rows.length})` : ""}</h2>
       <p className="hint">
-        Parts people asked for on the public &ldquo;Request an item&rdquo; page. Call or WhatsApp them with what you have and the price, then mark the request.
+        Parts people asked prices for on the public &ldquo;Request Item Prices&rdquo; page. Call or WhatsApp them with what you have and the price, then mark the request.
       </p>
       <div className="quick-row" role="group" aria-label="Show">
         {(["new", "contacted", "closed", ""] as const).map((s) => (
@@ -84,7 +84,7 @@ function ItemRequests({ tenantId, companyName }: { tenantId: Id<"tenants">; comp
 export default function ItemRequestsPage() {
   return (
     <ConfiguredOnly>
-      <CompanyPage title="Item requests" allowedRoles={["super_admin", "sales_manager", "sales_agent", "technician"]}>
+      <CompanyPage title="Item price requests" allowedRoles={["super_admin", "sales_manager", "sales_agent", "technician"]}>
         {(company) => <ItemRequests tenantId={company.tenantId} companyName={company.companyName} />}
       </CompanyPage>
     </ConfiguredOnly>
