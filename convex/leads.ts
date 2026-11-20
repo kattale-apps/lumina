@@ -59,6 +59,8 @@ export const listLeads = query({
         optionTitle: r.optionTitle,
         isRecommendation: r.optionKey === "recommendation",
         isUpgrade: r.inputMode === "existing_system",
+        // "What can my money buy?": the equipment budget they gave.
+        budgetMinor: r.budget?.amountMinor ?? null,
         // Something in the existing system is faulty or worn out.
         isRepair: r.upgrade?.needs.goals.includes("repair") ?? false,
         faultyParts: r.upgrade?.needs.faultyParts ?? [],

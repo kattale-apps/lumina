@@ -28,7 +28,7 @@ function salesModules(role: Role) {
     { href: "/dashboard/installations", title: "Installations", text: "Jobs from order to handover", show: crm },
     { href: "/dashboard/commissions", title: "Commissions", text: "What each agent has earned", show: SALES.includes(role ?? "") },
     { href: "/dashboard/overview", title: "Overview", text: "Sales and pipeline at a glance", show: role === "super_admin" || role === "sales_manager" },
-    { href: "/shop", title: "Shop", text: "Products with list prices, as customers order them", show: true }
+    { href: "/shop", title: "Shop", text: "Products with list prices (staff only: prices are confirmed before quoting)", show: true }
   ].filter((m) => m.show);
 }
 

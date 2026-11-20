@@ -225,6 +225,8 @@ export type Component = {
   detail?: string;
   // Some figures for this part were safe estimates, pending technician verification.
   estimated?: boolean;
+  // The catalogue product, so staff can price the request later.
+  productId?: string;
 };
 
 export type PublicOption = {
@@ -251,22 +253,15 @@ const spec = (item: CatalogueItem | undefined, key: string) => {
   return typeof value === "number" ? value : undefined;
 };
 
-/** Builds the customer-facing option from a candidate. No price field exists on this type. */
-export function toPublicOption(
-  template: OptionTemplate,
-  candidate: Candidate,
-  catalogue: CatalogueItem[],
-  labels: Map<string, ProductLabel>,
-  summary: Summary,
-  a: Assumptions
-): PublicOption {
+/** The parts of a candidate, in the order a customer reads them: panels, inverter, battery. */
+export function componentsOf(candidate: Candidate, catalogue: CatalogueItem[], labels: Map<string, ProductLabel>): Component[] {
   const find = (id: string | null) => catalogue.find((c) => c.id === id);
-  const label = (id: string): ProductLabel & { estimated?: boolean } => ({
+  const label = (id: string): ProductLabel & { estimated?: boolean; productId: string } => ({
     ...(labels.get(id) ?? { name: find(id)?.name ?? "Component" }),
-    ...(find(id)?.estimated ? { estimated: true } : {})
+    ...(find(id)?.estimated ? { estimated: true } : {}),
+    productId: id
   });
   const components: Component[] = [];
-
   if (candidate.panelId && candidate.counts.panels > 0) {
     const wp = spec(find(candidate.panelId), "rated_power");
     components.push({
@@ -293,6 +288,19 @@ export function toPublicOption(
       detail: unitWh > 0 ? `${round2(unitWh / 1000)} kWh each` : undefined
     });
   }
+  return components;
+}
+
+/** Builds the customer-facing option from a candidate. No price field exists on this type. */
+export function toPublicOption(
+  template: OptionTemplate,
+  candidate: Candidate,
+  catalogue: CatalogueItem[],
+  labels: Map<string, ProductLabel>,
+  summary: Summary,
+  a: Assumptions
+): PublicOption {
+  const components = componentsOf(candidate, catalogue, labels);
 
   const arrayKw = candidate.counts.arrayWp > 0 ? round2(candidate.counts.arrayWp / 1000) : null;
   const solarKwh = arrayKw === null ? null : round2(arrayKw * a.peakSunHours * a.performanceRatio);

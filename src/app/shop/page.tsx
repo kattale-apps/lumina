@@ -368,6 +368,7 @@ function Gate() {
   const t = useT();
   const { isLoading, isAuthenticated } = useConvexAuth();
   const me = useQuery(api.shop.myAccount, isAuthenticated ? {} : "skip");
+  const access = useQuery(api.shop.shopAccess, isAuthenticated ? {} : "skip");
   const router = useRouter();
   const ready = Boolean(me?.signedIn && me.account);
   // Someone who asked for a recommendation before signing up goes to see it; that page attaches it.
@@ -375,9 +376,24 @@ function Gate() {
     if (ready && (hasPendingRequests() || readPendingEstimate())) router.replace("/my-requests");
   }, [ready, router]);
 
-  if (isLoading || (isAuthenticated && me === undefined)) return <Page><p className="muted">{t("common.loading")}</p></Page>;
-  // The shop, with prices, is open to everyone; ordering asks a guest for a name and phone.
+  if (isLoading || (isAuthenticated && (me === undefined || access === undefined))) return <Page><p className="muted">{t("common.loading")}</p></Page>;
+  // List prices are not confirmed until an agent confirms them, so the shop is for staff only.
+  if (!access?.staff) return <Page signedIn={Boolean(me?.signedIn)}><StaffOnly /></Page>;
   return <Page signedIn={Boolean(me?.signedIn)}><Shop /></Page>;
+}
+
+function StaffOnly() {
+  const t = useT();
+  return (
+    <section className="shop-staff-only">
+      <h1>{t("shop.staffOnlyTitle")}</h1>
+      <p>{t("shop.staffOnlyText")}</p>
+      <div className="hero-actions">
+        <Link className="button" href="/request-item">{t("home.itemTitle")}</Link>
+        <Link className="button button-secondary" href="/sign-in">{t("shop.staffSignIn")}</Link>
+      </div>
+    </section>
+  );
 }
 
 export default function ShopPage() {

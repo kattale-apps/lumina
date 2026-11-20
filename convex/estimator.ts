@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { findViewerProfile, requireTenantMembership } from "./lib/auth";
@@ -22,7 +22,7 @@ import { categoryRateMinor, CUSTOMER_CATEGORIES } from "./lib/tariff";
 import { currencyExponent, toMinorUnits } from "./lib/money";
 import { buildCandidates, computeRequirements, type CatalogueItem } from "./lib/sizing";
 import { withSafeEstimates } from "./lib/specEstimate";
-import { validateLine } from "./lib/load";
+import { validateLine, type LoadLine } from "./lib/load";
 import { optionalText, validateOptionalEmail, validatePhone } from "./lib/crm";
 import { requireText } from "./lib/validation";
 import { requesterAccount } from "./lib/requester";
@@ -43,11 +43,24 @@ const DAY = 24 * HOUR;
 const SETTINGS_ADMINS = ["super_admin"] as const;
 const SETTINGS_READERS = ["super_admin", "sales_manager"] as const;
 
-const gridArg = v.union(v.literal("none"), v.literal("unreliable"), v.literal("reliable"));
+export const gridArg = v.union(v.literal("none"), v.literal("unreliable"), v.literal("reliable"));
 
-const categoryArg = v.optional(
+export const categoryArg = v.optional(
   v.union(v.literal("residential"), v.literal("commercial_small"), v.literal("commercial_medium"), v.literal("industrial"))
 );
+
+/** One appliance on a customer's list. */
+export const applianceItem = v.object({
+  name: v.string(),
+  quantity: v.number(),
+  hoursPerDay: v.number(),
+  // Guide entry and size the customer picked, when they picked one.
+  guideKey: v.optional(v.string()),
+  size: v.optional(v.string()),
+  // The customer's own wattage, e.g. from the label. Otherwise the typical figure is used.
+  powerW: v.optional(v.number())
+});
+type ApplianceItem = typeof applianceItem.type;
 
 const estimateInput = v.union(
   v.object({
@@ -61,18 +74,7 @@ const estimateInput = v.union(
   v.object({
     mode: v.literal("appliances"),
     category: categoryArg,
-    items: v.array(
-      v.object({
-        name: v.string(),
-        quantity: v.number(),
-        hoursPerDay: v.number(),
-        // Guide entry and size the customer picked, when they picked one.
-        guideKey: v.optional(v.string()),
-        size: v.optional(v.string()),
-        // The customer's own wattage, e.g. from the label. Otherwise the typical figure is used.
-        powerW: v.optional(v.number())
-      })
-    ),
+    items: v.array(applianceItem),
     // Optional: the customer's own price per kWh instead of the company default.
     ratePerKwh: v.optional(v.number())
   })
@@ -91,9 +93,9 @@ export async function publicCompany(ctx: QueryCtx) {
   return { settings, tenant };
 }
 
-type LibraryAppliance = ApplianceInput & { category: string };
+export type LibraryAppliance = ApplianceInput & { category: string };
 
-async function libraryFor(ctx: QueryCtx, tenant: Doc<"tenants">): Promise<LibraryAppliance[]> {
+export async function libraryFor(ctx: QueryCtx, tenant: Doc<"tenants">): Promise<LibraryAppliance[]> {
   const rows = await ctx.db
     .query("appliances")
     .withIndex("by_tenant", (q) => q.eq("tenantId", tenant._id))
@@ -112,6 +114,41 @@ async function libraryFor(ctx: QueryCtx, tenant: Doc<"tenants">): Promise<Librar
       currentType: a.currentType
     }))
     .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+}
+
+/** Turns the customer's appliance list into sizing inputs, checking every figure. */
+export function applianceInputs(list: ApplianceItem[], library: LibraryAppliance[]): ApplianceInput[] {
+  if (list.length === 0) throw new ConvexError("Choose at least one appliance.");
+  if (list.length > MAX_ITEMS) throw new ConvexError(`Choose at most ${MAX_ITEMS} appliances.`);
+  const byName = new Map(library.map((a) => [a.name.toLowerCase(), a]));
+  return list.map((item) => {
+    const name = item.name.trim().slice(0, MAX_NAME);
+    if (!name) throw new ConvexError("Give each appliance a name.");
+    const guide = guideByKey(item.guideKey);
+    const size = guide ? guide.sizes.find((s) => s.label === item.size) ?? guide.sizes[guide.defaultSize] : undefined;
+    const base = byName.get(name.toLowerCase());
+    const label = size && guide && guide.sizes.length > 1 ? `${name}, ${size.label}` : name;
+    if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 100) {
+      throw new ConvexError(`${label}: how many must be a whole number from 1 to 100.`);
+    }
+    const hours = positive(item.hoursPerDay, `${label}: hours per day`, 24);
+    const powerW =
+      item.powerW !== undefined
+        ? positive(item.powerW, `${label}: power`, MAX_APPLIANCE_W)
+        : size?.powerW ?? base?.powerW;
+    if (powerW === undefined) throw new ConvexError(`${label}: enter its power in watts (W). It is on the label.`);
+    const surgeRatio = guide?.surgeRatio ?? (base?.surgeW ? base.surgeW / base.powerW : undefined);
+    return {
+      name: label,
+      quantity: item.quantity,
+      hoursPerDay: hours,
+      powerW,
+      surgeW: surgeRatio ? Math.round(powerW * surgeRatio) : undefined,
+      powerFactor: guide?.powerFactor ?? base?.powerFactor ?? 0.9,
+      currentType: base?.currentType ?? "ac",
+      duty: guide?.duty
+    };
+  });
 }
 
 function positive(n: number, label: string, max: number) {
@@ -138,38 +175,7 @@ async function compute(
     const amountMinor = input.amount === undefined ? undefined : toMinorUnits(positive(input.amount, "Amount", 1e10), currency);
     built = summariseBill({ units, days, amountMinor }, defaultRate);
   } else {
-    if (input.items.length === 0) throw new ConvexError("Choose at least one appliance.");
-    if (input.items.length > MAX_ITEMS) throw new ConvexError(`Choose at most ${MAX_ITEMS} appliances.`);
-    const library = await libraryFor(ctx, tenant);
-    const byName = new Map(library.map((a) => [a.name.toLowerCase(), a]));
-    const items: ApplianceInput[] = input.items.map((item) => {
-      const name = item.name.trim().slice(0, MAX_NAME);
-      if (!name) throw new ConvexError("Give each appliance a name.");
-      const guide = guideByKey(item.guideKey);
-      const size = guide ? guide.sizes.find((s) => s.label === item.size) ?? guide.sizes[guide.defaultSize] : undefined;
-      const base = byName.get(name.toLowerCase());
-      const label = size && guide && guide.sizes.length > 1 ? `${name}, ${size.label}` : name;
-      if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 100) {
-        throw new ConvexError(`${label}: how many must be a whole number from 1 to 100.`);
-      }
-      const hours = positive(item.hoursPerDay, `${label}: hours per day`, 24);
-      const powerW =
-        item.powerW !== undefined
-          ? positive(item.powerW, `${label}: power`, MAX_APPLIANCE_W)
-          : size?.powerW ?? base?.powerW;
-      if (powerW === undefined) throw new ConvexError(`${label}: enter its power in watts (W). It is on the label.`);
-      const surgeRatio = guide?.surgeRatio ?? (base?.surgeW ? base.surgeW / base.powerW : undefined);
-      return {
-        name: label,
-        quantity: item.quantity,
-        hoursPerDay: hours,
-        powerW,
-        surgeW: surgeRatio ? Math.round(powerW * surgeRatio) : undefined,
-        powerFactor: guide?.powerFactor ?? base?.powerFactor ?? 0.9,
-        currentType: base?.currentType ?? "ac",
-        duty: guide?.duty
-      };
-    });
+    const items = applianceInputs(input.items, await libraryFor(ctx, tenant));
     const rate =
       input.ratePerKwh === undefined
         ? defaultRate
@@ -181,29 +187,7 @@ async function compute(
     if (problem) throw new ConvexError(problem);
   }
 
-  const categories = await ctx.db
-    .query("productCategories")
-    .withIndex("by_tenant", (q) => q.eq("tenantId", tenant._id))
-    .collect();
-  const keyOf = new Map(categories.map((c) => [c._id, c.key]));
-  const products = await ctx.db
-    .query("products")
-    .withIndex("by_tenant", (q) => q.eq("tenantId", tenant._id))
-    .collect();
-  const active = products.filter((p) => p.status === "active");
-  const catalogue: CatalogueItem[] = withSafeEstimates(active
-    .map((p) => ({
-      id: p._id as string,
-      sku: p.sku,
-      name: p.name,
-      categoryKey: keyOf.get(p.categoryId) ?? "",
-      specSchemaVersion: p.specSchemaVersion,
-      specValues: p.specValues
-    }))
-    .sort((a, b) => a.sku.localeCompare(b.sku)));
-  const labels = new Map<string, ProductLabel>(
-    active.map((p) => [p._id as string, { name: p.name, brand: p.brand, model: p.model }])
-  );
+  const { catalogue, labels } = await sizingCatalogue(ctx, tenant._id);
 
   const options: PublicOption[] = [];
   const unavailable: string[] = [];
@@ -242,6 +226,52 @@ async function compute(
     lines: built.lines,
     optionInputs
   };
+}
+
+/** The active products the sizing engine can choose from, with the names customers see. */
+export async function sizingCatalogue(ctx: QueryCtx, tenantId: Id<"tenants">) {
+  const categories = await ctx.db
+    .query("productCategories")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .collect();
+  const keyOf = new Map(categories.map((c) => [c._id, c.key]));
+  const products = await ctx.db
+    .query("products")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .collect();
+  const active = products.filter((p) => p.status === "active");
+  const catalogue: CatalogueItem[] = withSafeEstimates(active
+    .map((p) => ({
+      id: p._id as string,
+      sku: p.sku,
+      name: p.name,
+      categoryKey: keyOf.get(p.categoryId) ?? "",
+      specSchemaVersion: p.specSchemaVersion,
+      specValues: p.specValues
+    }))
+    .sort((a, b) => a.sku.localeCompare(b.sku)));
+  const labels = new Map<string, ProductLabel>(
+    active.map((p) => [p._id as string, { name: p.name, brand: p.brand, model: p.model }])
+  );
+  return { catalogue, labels, active };
+}
+
+/** Public request limits: a few a day per phone number, and a cap on everyone together. */
+export async function assertRequestRoom(ctx: QueryCtx, tenantId: Id<"tenants">, phone: string, now: number) {
+  const recent = await ctx.db
+    .query("quoteRequests")
+    .withIndex("by_tenant_phone_time", (q) => q.eq("tenantId", tenantId).eq("phone", phone).gte("createdAt", now - DAY))
+    .collect();
+  if (recent.length >= MAX_REQUESTS_PER_PHONE_PER_DAY) {
+    throw new ConvexError("We already have your requests. Our team will contact you.");
+  }
+  const lastHour = await ctx.db
+    .query("quoteRequests")
+    .withIndex("by_tenant_time", (q) => q.eq("tenantId", tenantId).gte("createdAt", now - HOUR))
+    .collect();
+  if (lastHour.length >= MAX_REQUESTS_PER_HOUR) {
+    throw new ConvexError("We are receiving a lot of requests. Please try again later.");
+  }
 }
 
 /** What the public page needs to start: company name, currency and the appliance list. */
@@ -376,20 +406,8 @@ export const submitRequest = mutation({
       autonomyDays: sizing.autonomyDays,
       optionKey: option.key,
       optionTitle: option.title,
-      components: option.components,
-      lines: result.lines.map((l) => ({
-        name: l.name,
-        quantity: l.quantity,
-        powerW: l.powerW,
-        powerSource: "estimate" as const,
-        powerFactor: l.powerFactor,
-        surgeW: l.surgeW,
-        dutyFactor: l.dutyFactor,
-        dutyJustification: l.dutyFactor !== undefined ? "Customer-reported hours per day." : undefined,
-        currentType: l.currentType,
-        critical: false,
-        windows: l.windows
-      })),
+      components: option.components as Doc<"quoteRequests">["components"],
+      lines: requestLines(result.lines),
       status: "new",
       createdAt: now,
       updatedAt: now
@@ -398,6 +416,23 @@ export const submitRequest = mutation({
     return { ok: true as const, requestId: id, hasAccount: claimToken === undefined, claimToken: claimToken ?? null };
   }
 });
+
+/** Load lines as a request stores them, so a conversion starts from the same numbers. */
+export function requestLines(lines: LoadLine[]) {
+  return lines.map((l) => ({
+    name: l.name,
+    quantity: l.quantity,
+    powerW: l.powerW,
+    powerSource: "estimate" as const,
+    powerFactor: l.powerFactor,
+    surgeW: l.surgeW,
+    dutyFactor: l.dutyFactor,
+    dutyJustification: l.dutyFactor !== undefined ? "Customer-reported hours per day." : undefined,
+    currentType: l.currentType,
+    critical: false,
+    windows: l.windows
+  }));
+}
 
 /** 128 random bits as hex. Convex seeds the generator per call, so clients cannot predict it. */
 export function newClaimToken() {

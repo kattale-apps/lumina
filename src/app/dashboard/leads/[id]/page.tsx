@@ -205,6 +205,8 @@ function Specs({ lead }: { lead: Lead }) {
         </p>
       </section>
 
+      {lead.budget ? <BudgetSpecs lead={lead} budget={lead.budget} /> : null}
+
       {lead.isUpgrade ? <UpgradeSpecs lead={lead} /> : (
       <>
       <section className="lead-block">
@@ -258,6 +260,42 @@ function Specs({ lead }: { lead: Lead }) {
       </>
       )}
     </>
+  );
+}
+
+/** "What can my money buy?": the budget, the system they chose, and how today's prices compare. */
+function BudgetSpecs({ lead, budget }: { lead: Lead; budget: NonNullable<Lead["budget"]> }) {
+  const total = budget.equipmentMinor;
+  const diff = total === null ? null : budget.amountMinor - total;
+  return (
+    <section className="lead-block lead-budget">
+      <h2>💰 Budget: {money(budget.amountMinor, lead.exponent, lead.currency)}</h2>
+      <p className="hint">For the main equipment only (inverter, batteries, panels). Installation is not included. The customer was shown no prices.</p>
+      {lead.components.length ? (
+        <>
+          <p><strong>Chose:</strong> {lead.optionTitle}</p>
+          <ul className="lead-appliances">
+            {lead.components.map((c, i) => (
+              <li key={i}>
+                <strong>{c.quantity} × {c.role}</strong>
+                <span>{[c.brand, c.model ?? c.name].filter(Boolean).join(" ")}{c.detail ? ` · ${c.detail}` : ""}{c.estimated ? " (specs estimated — verify)" : ""}</span>
+              </li>
+            ))}
+          </ul>
+          {budget.leavesOut.length ? <p className="lead-budget-out">Leaves out to fit the budget: {budget.leavesOut.join(", ")}</p> : null}
+          {total === null ? (
+            <p className="lead-budget-note">One of these parts has no list price today. Price it before you respond.</p>
+          ) : (
+            <p className={diff! >= 0 ? "lead-budget-note lead-budget-ok" : "lead-budget-note lead-budget-over"}>
+              Equipment at today&apos;s list prices: <strong>{money(total, lead.exponent, lead.currency)}</strong>{" "}
+              {diff! >= 0 ? `(${money(diff!, lead.exponent, lead.currency)} within the budget)` : `(${money(-diff!, lead.exponent, lead.currency)} above the budget)`}
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="lead-budget-note">They did not choose a system: advise what this budget can buy for the appliances below.</p>
+      )}
+    </section>
   );
 }
 

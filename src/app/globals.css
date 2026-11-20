@@ -1759,3 +1759,29 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 .lead-photos img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; border: 1px solid #d7e0db; }
 .lead-photos figcaption { font-size: 13px; color: var(--muted); }
 .nameplate-need { margin: 0; padding: 6px 10px; border-radius: 8px; background: #fff7e8; color: #8a5a00; font-size: 13px; font-weight: 600; }
+
+/* "What can my money buy?" */
+.landing-choice-budget { background: #b86a00; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.budget-amount { font-size: 22px; font-weight: 700; letter-spacing: 0.5px; }
+.budget-note { margin: 0; padding: 10px 14px; border: 1px solid #e3c36b; border-radius: 10px; background: #fff7e0; color: #6b4a00; line-height: 1.5; }
+.budget-note p { margin: 0; }
+.budget-note p + p { margin-top: 6px; }
+.budget-nothing { margin: 0; padding: 14px 16px; border: 1px solid #e0a3a3; border-radius: 12px; background: #fdf0f0; color: #7a1f1f; }
+.budget-nothing p { margin: 0; }
+.budget-nothing .hint { margin-top: 6px; color: #7a1f1f; }
+.budget-spare { margin: 0; padding: 10px 14px; border-radius: 10px; background: #e5f5ec; color: #0f5a3a; font-weight: 600; }
+.budget-group { display: grid; gap: 8px; }
+.budget-group > h2 { margin: 12px 0 0; }
+.budget-group > .hint { margin: 0; }
+.budget-group-closest .option-card { border-color: var(--green); box-shadow: 0 0 0 2px #cfe9dc; }
+.budget-group-above .option-card { border-style: dashed; }
+.budget-card .pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.budget-runs { margin: 0; color: #0f5a3a; font-size: 14px; }
+.budget-out { margin: 0; color: #8a2b2b; font-size: 14px; font-weight: 600; }
+.pill-budget { background: #fff1d6; color: #7a4a00; }
+.lead-budget { border-left: 4px solid #b86a00; }
+.lead-budget-out { color: #8a2b2b; font-weight: 600; }
+.lead-budget-note { padding: 8px 12px; border-radius: 8px; background: #f4f6f5; }
+.lead-budget-ok { background: #e5f5ec; color: #0f5a3a; }
+.lead-budget-over { background: #fdf0f0; color: #7a1f1f; }

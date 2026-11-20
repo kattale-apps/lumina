@@ -95,6 +95,21 @@ async function presentResponse(ctx: Ctx, response: Doc<"requestResponses">) {
 }
 
 /** Everything a technician needs to design a system for one request. */
+/** The requested parts at today's list prices, or null when one has no price (or no catalogue link). */
+async function equipmentPrice(ctx: QueryCtx, lead: Doc<"quoteRequests">, tenant: Doc<"tenants">) {
+  if (lead.components.length === 0) return null;
+  let total = 0;
+  for (const c of lead.components) {
+    const product = c.productId ? await ctx.db.get(c.productId) : null;
+    if (!product) return null;
+    const cost = await currentCost(ctx, product._id);
+    const rule = await resolveMarginRule(ctx, product);
+    if (!cost || !rule || cost.currency !== tenant.defaultCurrency) return null;
+    total += priceFrom(cost, rule.rule).listMinor * c.quantity;
+  }
+  return total;
+}
+
 export const getLead = query({
   args: { leadId: v.id("quoteRequests") },
   handler: async (ctx, args) => {
@@ -120,6 +135,8 @@ export const getLead = query({
       optionTitle: lead.optionTitle,
       isRecommendation: lead.optionKey === "recommendation",
       isUpgrade: lead.inputMode === "existing_system",
+      // "What can my money buy?": the budget for equipment, and the chosen parts at today's list prices.
+      budget: lead.budget ? { ...lead.budget, equipmentMinor: await equipmentPrice(ctx, lead, tenant) } : null,
       upgradeStudyId: lead.upgradeStudyId ?? null,
       components: lead.components,
       dailyKwh: lead.dailyKwh,

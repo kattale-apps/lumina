@@ -111,6 +111,7 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
                 </span>
                 <span className="pill-row">
                   <span className={l.status === "new" ? "pill pill-warn" : "pill pill-info"}>{l.status}</span>
+                  {l.budgetMinor !== null ? <span className="pill pill-budget">💰 Budget {currency} {l.budgetMinor.toLocaleString("en-US")}</span> : null}
                   {l.responseStatus === "sent" ? <span className="pill pill-ok">Recommendation sent</span> : null}
                   {l.responseStatus === "draft" ? <span className="pill pill-warn">Draft response</span> : null}
                   {l.customerChose ? <span className="pill pill-ok">Customer chose an option</span> : null}

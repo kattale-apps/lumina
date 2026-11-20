@@ -42,6 +42,13 @@ function CustomerHome({ name }: { name: string }) {
               <small>{t("home.existingHint")}</small>
             </span>
           </Link>
+          <Link className="landing-choice landing-choice-budget" href="/estimate/budget">
+            <span className="landing-choice-icon" aria-hidden="true">💰</span>
+            <span>
+              <strong>{t("home.budgetTitle")}</strong>
+              <small>{t("home.budgetHint")}</small>
+            </span>
+          </Link>
           <Link className="landing-choice landing-choice-recs" href="/my-requests">
             <span className="landing-choice-icon" aria-hidden="true">📋</span>
             <span>
@@ -98,6 +105,13 @@ function Landing() {
               <span>
                 <strong>{t("home.existingTitle")}</strong>
                 <small>{t("home.existingHint")}</small>
+              </span>
+            </Link>
+            <Link className="landing-choice landing-choice-budget" href="/estimate/budget">
+              <span className="landing-choice-icon" aria-hidden="true">💰</span>
+              <span>
+                <strong>{t("home.budgetTitle")}</strong>
+                <small>{t("home.budgetHint")}</small>
               </span>
             </Link>
             <Link className="landing-choice landing-choice-item" href="/request-item">

@@ -38,43 +38,44 @@ async function setup() {
   return { t, tenantId, asOwner, productId, asCustomer: t.withIdentity({ subject: customer.subject }) };
 }
 
-describe("customer shop", () => {
-  test("anyone sees the catalogue with list prices, without an account; never cost or margin", async () => {
-    const { t, asCustomer } = await setup();
-    const cat = await t.query(api.shop.catalogue, {});
+describe("shop (staff only)", () => {
+  test("list prices are for staff only: not the public, not customers; never cost or margin", async () => {
+    const { t, asOwner, asCustomer, productId } = await setup();
+    // Prices are not confirmed until an agent confirms them, so nobody outside the team sees them.
+    expect(await t.query(api.shop.shopAccess, {})).toEqual({ staff: false });
+    await expect(t.query(api.shop.catalogue, {})).rejects.toThrow(/staff only/);
+    await expect(t.query(api.shop.catalogueDetails, { ids: [productId] })).rejects.toThrow(/staff only/);
+    await asCustomer.mutation(api.shop.registerCustomer, { name: "Buyer", phone: "+256 700 000000" });
+    expect(await asCustomer.query(api.shop.shopAccess, {})).toEqual({ staff: false });
+    await expect(asCustomer.query(api.shop.catalogue, {})).rejects.toThrow(/staff only/);
+    await expect(asCustomer.query(api.shop.catalogueDetails, { ids: [productId] })).rejects.toThrow(/staff only/);
+
+    expect(await asOwner.query(api.shop.shopAccess, {})).toEqual({ staff: true });
+    const cat = await asOwner.query(api.shop.catalogue, {});
     expect(cat.products).toHaveLength(1);
-    const details = await t.query(api.shop.catalogueDetails, { ids: [cat.products[0].id] });
+    const details = await asOwner.query(api.shop.catalogueDetails, { ids: [cat.products[0].id] });
     expect(details[0].priceMinor).toBe(125_000);
     expect(JSON.stringify(cat) + JSON.stringify(details)).not.toMatch(/cost|margin|floor/i);
-    // Signed in without a customer account: the same.
-    expect((await asCustomer.query(api.shop.catalogue, {})).products).toHaveLength(1);
   });
 
-  test("a guest orders with a name and phone; the price is set by the server", async () => {
-    const { t, asOwner, tenantId, productId } = await setup();
-    await expect(t.mutation(api.shop.placeOrder, { items: [{ productId, quantity: 1 }], deliveryLocation: "Jinja" })).rejects.toThrow(/Name/);
-    const placed = await t.mutation(api.shop.placeOrder, { items: [{ productId, quantity: 3 }], deliveryLocation: "Jinja", name: "Guest Buyer", phone: "+256 700 000222" });
+  test("only staff place orders, and the server sets the price", async () => {
+    const { t, asOwner, asCustomer, tenantId, productId } = await setup();
+    await expect(
+      t.mutation(api.shop.placeOrder, { items: [{ productId, quantity: 1 }], deliveryLocation: "Jinja", name: "Guest", phone: "+256 700 000222" })
+    ).rejects.toThrow(/staff only/);
+    await asCustomer.mutation(api.shop.registerCustomer, { name: "Buyer", phone: "+256 700 000000" });
+    await expect(asCustomer.mutation(api.shop.placeOrder, { items: [{ productId, quantity: 1 }], deliveryLocation: "Jinja" })).rejects.toThrow(/staff only/);
+
+    const placed = await asOwner.mutation(api.shop.placeOrder, { items: [{ productId, quantity: 3 }], deliveryLocation: "Jinja", name: "Owner", phone: "+256 700 000222" });
     expect(placed.orderId).toBeTruthy();
     const orders = await asOwner.query(api.shop.listOrders, { tenantId });
-    expect(orders[0]).toMatchObject({ customerName: "Guest Buyer", customerPhone: "+256 700 000222", deliveryLocation: "Jinja", totalMinor: 375_000 });
-    expect(await t.mutation(api.shop.placeOrder, { items: [{ productId, quantity: 1 }], deliveryLocation: "x", name: "Bot", phone: "+256 700 000223", website: "spam" })).toEqual({ orderId: null });
-  });
+    expect(orders[0]).toMatchObject({ deliveryLocation: "Jinja", totalMinor: 375_000 });
+    expect(await asOwner.mutation(api.shop.placeOrder, { items: [{ productId, quantity: 1 }], deliveryLocation: "x", website: "spam" })).toEqual({ orderId: null });
+    await expect(asOwner.mutation(api.shop.placeOrder, { items: [{ productId, quantity: 0 }], deliveryLocation: "x" })).rejects.toThrow();
 
-  test("an order is priced by the server and staff can confirm it", async () => {
-    const { asCustomer, asOwner, tenantId, productId } = await setup();
-    await asCustomer.mutation(api.shop.registerCustomer, { name: "Buyer", phone: "+256 700 000000" });
-    await asCustomer.mutation(api.shop.placeOrder, { items: [{ productId, quantity: 2 }], deliveryLocation: "Kampala" });
-    const mine = await asCustomer.query(api.shop.myOrders, {});
-    expect(mine[0].totalMinor).toBe(250_000);
-
-    const staff = await asOwner.query(api.shop.listOrders, { tenantId });
-    expect(staff).toHaveLength(1);
-    await asOwner.mutation(api.shop.setOrderStatus, { tenantId, orderId: staff[0].id, status: "confirmed" });
-    expect((await asCustomer.query(api.shop.myOrders, {}))[0].status).toBe("confirmed");
+    await asOwner.mutation(api.shop.setOrderStatus, { tenantId, orderId: orders[0].id, status: "confirmed" });
+    expect((await asOwner.query(api.shop.listOrders, { tenantId }))[0].status).toBe("confirmed");
     // A customer is not staff.
     await expect(asCustomer.query(api.shop.listOrders, { tenantId })).rejects.toThrow();
-    await expect(
-      asCustomer.mutation(api.shop.placeOrder, { items: [{ productId, quantity: 0 }], deliveryLocation: "x" })
-    ).rejects.toThrow();
   });
 });

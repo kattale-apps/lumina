@@ -800,7 +800,9 @@ export default defineSchema({
         quantity: v.number(),
         detail: v.optional(v.string()),
         // Some of this part's figures were safe estimates, pending technician verification.
-        estimated: v.optional(v.boolean())
+        estimated: v.optional(v.boolean()),
+        // The catalogue product, so staff can price the request.
+        productId: v.optional(v.id("products"))
       })
     ),
     // The load lines the estimate used, so a conversion starts from the same numbers.
@@ -817,6 +819,9 @@ export default defineSchema({
     // Set for "existing_system" requests: the system the person described and what they want from it.
     upgrade: v.optional(v.object({ system: existingSystem, needs: upgradeNeeds })),
     upgradeStudyId: v.optional(v.id("upgradeStudies")),
+    // Set for "What can my money buy?" requests: the budget for equipment (installation not included),
+    // and the appliances the chosen system leaves out to fit it.
+    budget: v.optional(v.object({ amountMinor: v.number(), leavesOut: v.array(v.string()) })),
     // Where the power is needed (home, business, industry), when the person said.
     category: v.optional(
       v.union(v.literal("residential"), v.literal("commercial_small"), v.literal("commercial_medium"), v.literal("industrial"))

@@ -186,6 +186,9 @@ export function WorkspaceHeader({ role }: { role?: string }) {
               <Link href="/estimate/upgrade" className="menu-link" onClick={() => setMenuOpen(false)}>
                 <span>Upgrade or fix my system</span>
               </Link>
+              <Link href="/estimate/budget" className="menu-link" onClick={() => setMenuOpen(false)}>
+                <span>What can my money buy?</span>
+              </Link>
               <Link href="/my-requests" className="menu-link" onClick={() => setMenuOpen(false)}>
                 <span>My recommendations</span>
               </Link>

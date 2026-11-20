@@ -97,6 +97,34 @@ export const registerCustomer = mutation({
  * The company whose catalogue is shown. Anyone may browse it with list prices: a customer sees
  * their own company's, everyone else the company whose public side is open.
  */
+/**
+ * The company, for a signed-in staff member of it. List prices are not confirmed until an agent
+ * confirms them, so the shop and its prices are for staff only; null for everyone else.
+ */
+async function staffTenant(ctx: QueryCtx) {
+  const viewer = await findViewerProfile(ctx);
+  if (!viewer?.profile || viewer.profile.status !== "active") return null;
+  const tenant = await openCompany(ctx);
+  if (!tenant) return null;
+  const membership = await ctx.db
+    .query("memberships")
+    .withIndex("by_user_tenant", (q) => q.eq("userId", viewer.profile!._id).eq("tenantId", tenant._id))
+    .unique();
+  return membership && membership.status === "active" ? tenant : null;
+}
+
+async function requireShopStaff(ctx: QueryCtx) {
+  const tenant = await staffTenant(ctx);
+  if (!tenant) throw new ConvexError("The shop is for staff only. Please sign in with your staff account.");
+  return tenant;
+}
+
+/** Whether the viewer may open the shop (staff only). */
+export const shopAccess = query({
+  args: {},
+  handler: async (ctx) => ({ staff: (await staffTenant(ctx)) !== null })
+});
+
 async function customerTenant(ctx: QueryCtx) {
   const found = await viewerCustomer(ctx);
   const tenant = found ? await ctx.db.get(found.account.tenantId) : await openCompany(ctx);
@@ -113,7 +141,7 @@ async function customerTenant(ctx: QueryCtx) {
 export const catalogue = query({
   args: {},
   handler: async (ctx) => {
-    const tenant = await customerTenant(ctx);
+    const tenant = await requireShopStaff(ctx);
     const products = await ctx.db
       .query("products")
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenant._id))
@@ -154,7 +182,7 @@ export const catalogueDetails = query({
   args: { ids: v.array(v.id("products")) },
   handler: async (ctx, args) => {
     if (args.ids.length > MAX_DETAILS) throw new ConvexError(`At most ${MAX_DETAILS} products at a time.`);
-    const tenant = await customerTenant(ctx);
+    const tenant = await requireShopStaff(ctx);
     const out = [];
     for (const id of args.ids) {
       const product = await ctx.db.get(id);
@@ -194,9 +222,8 @@ export const placeOrder = mutation({
   },
   handler: async (ctx, args) => {
     if (args.website) return { orderId: null };
-    const tenant = await customerTenant(ctx);
-    // Anyone can order: a customer as themselves, a signed-in person once their details are
-    // saved, and anyone else as a guest with a name and phone.
+    const tenant = await requireShopStaff(ctx);
+    // Staff place orders for customers, with the customer's name and phone.
     const viewer = await findViewerProfile(ctx);
     const signedIn = viewer?.profile && viewer.profile.status === "active" ? viewer.profile : null;
     const account = await requesterAccount(ctx, tenant._id, signedIn, { name: args.name, phone: args.phone });
