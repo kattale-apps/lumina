@@ -9,6 +9,7 @@
  */
 
 import type * as academy from "../academy.js";
+import type * as access from "../access.js";
 import type * as admin from "../admin.js";
 import type * as appliances from "../appliances.js";
 import type * as assessments from "../assessments.js";
@@ -22,6 +23,7 @@ import type * as files from "../files.js";
 import type * as http from "../http.js";
 import type * as i18n from "../i18n.js";
 import type * as inbox from "../inbox.js";
+import type * as itemRequests from "../itemRequests.js";
 import type * as leads from "../leads.js";
 import type * as lib_academy from "../lib/academy.js";
 import type * as lib_academyContent from "../lib/academyContent.js";
@@ -41,6 +43,7 @@ import type * as lib_crm from "../lib/crm.js";
 import type * as lib_estimate from "../lib/estimate.js";
 import type * as lib_files from "../lib/files.js";
 import type * as lib_finance from "../lib/finance.js";
+import type * as lib_itemTypes from "../lib/itemTypes.js";
 import type * as lib_languages from "../lib/languages.js";
 import type * as lib_load from "../lib/load.js";
 import type * as lib_money from "../lib/money.js";
@@ -84,6 +87,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   academy: typeof academy;
+  access: typeof access;
   admin: typeof admin;
   appliances: typeof appliances;
   assessments: typeof assessments;
@@ -97,6 +101,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   i18n: typeof i18n;
   inbox: typeof inbox;
+  itemRequests: typeof itemRequests;
   leads: typeof leads;
   "lib/academy": typeof lib_academy;
   "lib/academyContent": typeof lib_academyContent;
@@ -116,6 +121,7 @@ declare const fullApi: ApiFromModules<{
   "lib/estimate": typeof lib_estimate;
   "lib/files": typeof lib_files;
   "lib/finance": typeof lib_finance;
+  "lib/itemTypes": typeof lib_itemTypes;
   "lib/languages": typeof lib_languages;
   "lib/load": typeof lib_load;
   "lib/money": typeof lib_money;

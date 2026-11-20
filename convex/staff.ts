@@ -67,9 +67,21 @@ export const grantAccess = mutation({
       .withIndex("by_email", (q) => q.eq("email", email))
       .take(2);
     if (matches.length === 0) {
-      throw new ConvexError(
-        `No Solar Switch account exists for ${email}. Ask them to create an account at the sign-in page first.`
-      );
+      // No account yet: invite the address. Signing up with it gives this access straight away.
+      const pending = (
+        await ctx.db.query("staffInvites").withIndex("by_email", (q) => q.eq("email", email)).collect()
+      ).find((i) => i.tenantId === args.tenantId && !i.acceptedAt);
+      const inviteId = pending
+        ? (await ctx.db.patch(pending._id, { role: args.role }), pending._id)
+        : await ctx.db.insert("staffInvites", { tenantId: args.tenantId, email, role: args.role, createdAt: Date.now(), createdBy: actor.authSubject });
+      await recordAudit(ctx, actor, {
+        tenantId: args.tenantId,
+        action: "membership.invited",
+        entityType: "staffInvites",
+        entityId: inviteId,
+        summary: `${email} invited as ${args.role}.`
+      });
+      return { invited: true as const };
     }
     if (matches.length > 1) {
       throw new ConvexError(`More than one account uses ${email}; contact support.`);

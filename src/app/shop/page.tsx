@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { useT } from "@/lib/i18n";
 import { Pager, pageFor } from "@/components/Pager";
 import { SearchSuggest } from "@/components/SearchSuggest";
+import { requestReference, WhatsAppSend } from "@/components/WhatsAppSend";
 import { countInto, matchesWords, searchWords, type Suggestion } from "@/lib/search";
 import { byPartOrder } from "../../../convex/lib/shopParts";
 
@@ -72,7 +73,11 @@ function Shop() {
   const [location, setLocation] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
-  const [placed, setPlaced] = useState(false);
+  // After an order: the WhatsApp message for it (null when WhatsApp is not set up).
+  const [placed, setPlaced] = useState<null | { whatsappText: string | null }>(null);
+  const me = useQuery(api.shop.myAccount, {});
+  const account = me?.signedIn ? me.account : null;
+  const [guest, setGuest] = useState({ name: "", phone: "", website: "" });
   const [busy, setBusy] = useState(false);
   const [paging, setPaging] = useState({ key: "", page: 1 });
   const [known, setKnown] = useState<Record<string, Detail>>({});
@@ -163,13 +168,32 @@ function Shop() {
     setError("");
     setBusy(true);
     try {
-      await place({
+      const sent = await place({
         items: lines.map((l) => ({ productId: l.id as Id<"products">, quantity: l.qty })),
         deliveryLocation: location,
-        note: note || undefined
+        note: note || undefined,
+        name: account ? undefined : guest.name,
+        phone: account ? undefined : guest.phone,
+        website: guest.website || undefined
       });
+      const who = account ?? guest;
+      const text = sent.orderId
+        ? [
+            `Hello ${data!.companyName}, I have placed an order:`,
+            "",
+            ...lines.map((l, i) => `${i + 1}. ${l.qty} × ${l.p.brand} ${l.p.name} (${l.p.model}) - ${money((l.d.priceMinor ?? 0) * l.qty, data!.exponent, l.d.currency ?? currency)}`),
+            "",
+            `Total: ${money(total, data!.exponent, currency)}`,
+            `Name: ${who.name}`,
+            `Phone: ${who.phone}`,
+            `Deliver to: ${location}`,
+            note.trim() ? `Note: ${note.trim()}` : "",
+            `Reference: ${requestReference(sent.orderId)}`
+          ].filter((line, i, all) => line !== "" || all[i - 1] !== "").join("\n")
+        : null;
       setCart({});
-      setPlaced(true);
+      setPlaced({ whatsappText: text });
+      setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
     } catch (err) {
       setError(msg(err, t("common.genericError")));
     } finally {
@@ -184,7 +208,10 @@ function Shop() {
       <p className="muted">{t("shop.intro")}</p>
 
       {placed ? (
-        <p className="form-success" role="status">{t("shop.thanks")}</p>
+        <>
+          <p className="form-success" role="status">{t("shop.thanks")}</p>
+          {data.whatsappNumber && placed.whatsappText ? <WhatsAppSend number={data.whatsappNumber} text={placed.whatsappText} /> : null}
+        </>
       ) : null}
 
       <SearchSuggest
@@ -261,7 +288,7 @@ function Shop() {
                               <button type="button" className="chip" aria-label={t("shop.more", { name: `${p.brand} ${p.name}` })} onClick={() => setCart((c) => ({ ...c, [p.id]: Math.min(1000, c[p.id] + 1) }))}>+</button>
                             </div>
                           ) : (
-                            <button type="button" className="button button-small" onClick={() => { setPlaced(false); setCart((c) => ({ ...c, [p.id]: 1 })); }}>
+                            <button type="button" className="button button-small" onClick={() => { setPlaced(null); setCart((c) => ({ ...c, [p.id]: 1 })); }}>
                               {t("shop.add")}
                             </button>
                           )
@@ -296,6 +323,18 @@ function Shop() {
             ))}
           </ul>
           <p className="stat-value">{t("shop.total", { amount: money(total, data.exponent, currency) })}</p>
+          {account ? null : (
+            <>
+              <label htmlFor="o-name">{t("estimate.yourName")}</label>
+              <input id="o-name" required maxLength={100} autoComplete="name" value={guest.name} onChange={(e) => setGuest({ ...guest, name: e.target.value })} />
+              <label htmlFor="o-phone">{t("estimate.phone")}</label>
+              <input id="o-phone" required type="tel" maxLength={20} autoComplete="tel" placeholder="+256 700 000000" value={guest.phone} onChange={(e) => setGuest({ ...guest, phone: e.target.value })} />
+            </>
+          )}
+          <div className="honeypot" aria-hidden="true">
+            <label htmlFor="o-site">Website</label>
+            <input id="o-site" tabIndex={-1} autoComplete="off" value={guest.website} onChange={(e) => setGuest({ ...guest, website: e.target.value })} />
+          </div>
           <label htmlFor="o-loc">{t("shop.delivery")}</label>
           <input id="o-loc" required maxLength={200} value={location} onChange={(e) => setLocation(e.target.value)} />
           <label htmlFor="o-note">{t("shop.note")}</label>
@@ -337,20 +376,8 @@ function Gate() {
   }, [ready, router]);
 
   if (isLoading || (isAuthenticated && me === undefined)) return <Page><p className="muted">{t("common.loading")}</p></Page>;
-  if (!isAuthenticated || !me?.signedIn) {
-    return (
-      <Page>
-        <h1>{t("shop.signedOutTitle")}</h1>
-        <p className="muted">{t("shop.signedOutText")}</p>
-        <div className="hero-actions">
-          <Link className="button" href="/sign-up">{t("requests.createAccount")}</Link>
-          <Link className="button button-secondary" href="/sign-in">{t("common.signIn")}</Link>
-        </div>
-      </Page>
-    );
-  }
-  if (!me.account) return <Page signedIn><CompleteAccount /></Page>;
-  return <Page signedIn><Shop /></Page>;
+  // The shop, with prices, is open to everyone; ordering asks a guest for a name and phone.
+  return <Page signedIn={Boolean(me?.signedIn)}><Shop /></Page>;
 }
 
 export default function ShopPage() {

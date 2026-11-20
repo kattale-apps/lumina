@@ -2,6 +2,7 @@ import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
 import type { DataModel } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
+import { acceptInvites, assertSignUpAllowed } from "./access";
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [
@@ -17,7 +18,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
     })
   ],
   callbacks: {
-    async afterUserCreatedOrUpdated(ctx: MutationCtx, { userId, profile }) {
+    async afterUserCreatedOrUpdated(ctx: MutationCtx, { userId, profile, existingUserId }) {
       const authSubject = String(userId);
       const existing = await ctx.db
         .query("userProfiles")
@@ -43,7 +44,10 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
           updatedAt: Date.now()
         });
       } else {
-        await ctx.db.insert("userProfiles", {
+        // A brand-new account: only invited staff (or anyone, if public sign-up is on). Refusing
+        // here undoes the whole sign-up, so no account is left behind.
+        if (existingUserId === null) await assertSignUpAllowed(ctx, email);
+        const profileId = await ctx.db.insert("userProfiles", {
           authSubject,
           email,
           displayName,
@@ -51,6 +55,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
           createdAt: Date.now(),
           updatedAt: Date.now()
         });
+        await acceptInvites(ctx, (await ctx.db.get(profileId))!);
       }
     }
   }

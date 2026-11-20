@@ -1724,3 +1724,21 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 .pdf-ready p { margin: 0; color: var(--muted); font-size: 14px; }
 .pdf-ready .button { text-align: center; }
 .pdf-ready-close { position: absolute; top: 6px; right: 8px; width: 32px; height: 32px; border: 0; background: none; font-size: 22px; line-height: 1; cursor: pointer; color: var(--muted); }
+
+/* "Request an item": kinds of item as big tiles, then sizes as buttons or typed. */
+.item-request { gap: 12px; }
+.item-step-title { margin: 6px 0 0; font-size: 18px; }
+.item-kinds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 4px; }
+@media (min-width: 560px) { .item-kinds { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.item-kinds .pick { padding-right: 10px; }
+.item-editor { display: grid; gap: 10px; padding: 14px; border: 1px solid #f0d9a6; border-left: 6px solid #c27c0e; border-radius: 14px; background: #fff7e8; }
+.item-spec { display: grid; gap: 6px; }
+.item-spec-typed { display: flex; align-items: center; gap: 8px; max-width: 220px; }
+.item-spec-typed input { flex: 1; min-width: 0; background: white; }
+.item-matches { display: grid; gap: 6px; }
+.item-matches .chip { white-space: normal; text-align: left; }
+.item-qty { display: flex; align-items: center; gap: 8px; }
+.item-qty input { width: 72px; text-align: center; background: white; }
+.item-qty .chip { min-width: 44px; font-size: 20px; font-weight: 800; }
+.landing-choice-item { background: #6d45b0; }
+.item-request-items { margin: 6px 0; padding-left: 20px; line-height: 1.5; }

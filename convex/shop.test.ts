@@ -39,17 +39,25 @@ async function setup() {
 }
 
 describe("customer shop", () => {
-  test("only registered customers see the catalogue", async () => {
+  test("anyone sees the catalogue with list prices, without an account; never cost or margin", async () => {
     const { t, asCustomer } = await setup();
-    await expect(t.query(api.shop.catalogue, {})).rejects.toThrow();
-    await expect(asCustomer.query(api.shop.catalogue, {})).rejects.toThrow(/account/i);
-    await asCustomer.mutation(api.shop.registerCustomer, { name: "Buyer", phone: "+256 700 000000" });
-    const cat = await asCustomer.query(api.shop.catalogue, {});
+    const cat = await t.query(api.shop.catalogue, {});
     expect(cat.products).toHaveLength(1);
-    const details = await asCustomer.query(api.shop.catalogueDetails, { ids: [cat.products[0].id] });
+    const details = await t.query(api.shop.catalogueDetails, { ids: [cat.products[0].id] });
     expect(details[0].priceMinor).toBe(125_000);
     expect(JSON.stringify(cat) + JSON.stringify(details)).not.toMatch(/cost|margin|floor/i);
-    await expect(t.query(api.shop.catalogueDetails, { ids: [cat.products[0].id] })).rejects.toThrow();
+    // Signed in without a customer account: the same.
+    expect((await asCustomer.query(api.shop.catalogue, {})).products).toHaveLength(1);
+  });
+
+  test("a guest orders with a name and phone; the price is set by the server", async () => {
+    const { t, asOwner, tenantId, productId } = await setup();
+    await expect(t.mutation(api.shop.placeOrder, { items: [{ productId, quantity: 1 }], deliveryLocation: "Jinja" })).rejects.toThrow(/Name/);
+    const placed = await t.mutation(api.shop.placeOrder, { items: [{ productId, quantity: 3 }], deliveryLocation: "Jinja", name: "Guest Buyer", phone: "+256 700 000222" });
+    expect(placed.orderId).toBeTruthy();
+    const orders = await asOwner.query(api.shop.listOrders, { tenantId });
+    expect(orders[0]).toMatchObject({ customerName: "Guest Buyer", customerPhone: "+256 700 000222", deliveryLocation: "Jinja", totalMinor: 375_000 });
+    expect(await t.mutation(api.shop.placeOrder, { items: [{ productId, quantity: 1 }], deliveryLocation: "x", name: "Bot", phone: "+256 700 000223", website: "spam" })).toEqual({ orderId: null });
   });
 
   test("an order is priced by the server and staff can confirm it", async () => {

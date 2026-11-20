@@ -202,6 +202,7 @@ function Mine() {
   const inbox = useQuery(api.inbox.myInbox, ready ? {} : "skip");
   useMarkSeen("customer", mine !== undefined && mine !== null, inbox?.customer);
   const config = useQuery(api.estimator.publicConfig, {});
+  const signUp = useQuery(api.access.signUpStatus, {});
   const contactPhone = config?.enabled ? config.contactPhone ?? null : null;
 
   if (me === undefined) return <Page><p className="muted">{t("common.loading")}</p></Page>;
@@ -211,7 +212,7 @@ function Mine() {
         <h1>{t("requests.title")}</h1>
         <p>{t("requests.signedOut")}</p>
         <div className="hero-actions">
-          <Link className="button" href="/sign-up?next=/my-requests">{t("requests.createAccount")}</Link>
+          {signUp?.publicSignUpOpen ? <Link className="button" href="/sign-up?next=/my-requests">{t("requests.createAccount")}</Link> : null}
           <Link className="button button-secondary" href="/sign-in">{t("common.signIn")}</Link>
         </div>
       </Page>

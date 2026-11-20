@@ -9,7 +9,7 @@ import { DraftNotice, LanguagePicker, Rich, useT } from "@/lib/i18n";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
 import { STILL_SIGNING_IN } from "../../../convex/lib/signup";
@@ -136,6 +136,31 @@ function SignUpUnavailable() {
 
 function SignUpScreen() {
   const t = useT();
+  const status = useQuery(api.access.signUpStatus, {});
+  // For now accounts are for invited staff only: customers use everything without one.
+  if (status && !status.publicSignUpOpen) {
+    return (
+      <main className="auth-shell">
+        <section className="auth-card">
+          <div className="auth-top">
+            <AuthHome />
+            <LanguagePicker />
+          </div>
+          <DraftNotice />
+          <h1>{t("signup.closedTitle")}</h1>
+          <p>{t("signup.closedText")}</p>
+          <div className="hero-actions">
+            <Link className="button" href="/estimate">{t("home.newTitle")}</Link>
+            <Link className="button button-secondary" href="/shop">{t("home.shopTitle")}</Link>
+            <Link className="button button-secondary" href="/request-item">{t("home.itemTitle")}</Link>
+          </div>
+          <p className="hint">
+            <Rich text={t("signup.closedStaff")} link={(label) => <Link href="/sign-in"><u>{label}</u></Link>} />
+          </p>
+        </section>
+      </main>
+    );
+  }
   return (
     <main className="auth-shell">
       <section className="auth-card">

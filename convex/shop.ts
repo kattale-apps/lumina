@@ -6,8 +6,10 @@ import { findViewerProfile, requireTenantMembership } from "./lib/auth";
 import { validatePhone } from "./lib/crm";
 import { currencyExponent } from "./lib/money";
 import { currentCost, priceFrom, resolveMarginRule } from "./lib/pricing";
+import { partType } from "./lib/shopParts";
 import { STILL_SIGNING_IN } from "./lib/signup";
 import { requireText } from "./lib/validation";
+import { requesterAccount } from "./lib/requester";
 
 const MAX_LISTED = 3000;
 // Prices and photos are looked up for one page of cards (plus the basket) at a time.
@@ -91,29 +93,17 @@ export const registerCustomer = mutation({
 });
 
 /** The signed-in customer's company, or an error a customer can act on. */
+/**
+ * The company whose catalogue is shown. Anyone may browse it with list prices: a customer sees
+ * their own company's, everyone else the company whose public side is open.
+ */
 async function customerTenant(ctx: QueryCtx) {
   const found = await viewerCustomer(ctx);
-  if (!found) throw new ConvexError("Create a customer account to see the catalogue.");
-  const tenant = await ctx.db.get(found.account.tenantId);
+  const tenant = found ? await ctx.db.get(found.account.tenantId) : await openCompany(ctx);
   if (!tenant || tenant.status !== "active") throw new ConvexError("The catalogue is not available right now.");
   return tenant;
 }
 
-/**
- * The shop's "part" filter. Batteries are split by chemistry because customers shop for lithium
- * and gel batteries as different things. The chemistry spec is used when set; otherwise the
- * product name decides, since this only sorts the catalogue and is never a specification.
- */
-function partType(category: Doc<"productCategories">, product: Doc<"products">) {
-  if (category.key !== "battery") return category.name;
-  const chemistry = product.specValues.chemistry;
-  const text = `${typeof chemistry === "string" ? chemistry : ""} ${product.name} ${product.model}`.toLowerCase();
-  if (/lifepo|lithium|li-ion|lfp/.test(text)) return "Lithium batteries";
-  if (/\bgel\b/.test(text)) return "Gel batteries";
-  if (/\bagm\b/.test(text)) return "AGM batteries";
-  if (/flooded|lead[- ]acid|tubular/.test(text)) return "Lead-acid batteries";
-  return "Other batteries";
-}
 
 
 /**
@@ -146,8 +136,13 @@ export const catalogue = query({
         warrantyMonths: product.warrantyMonths ?? null
       });
     }
+    const settings = await ctx.db
+      .query("publicEstimatorSettings")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenant._id))
+      .unique();
     return {
       companyName: tenant.name,
+      whatsappNumber: settings?.whatsappNumber ?? null,
       exponent: currencyExponent(tenant.defaultCurrency),
       products: items.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
     };
@@ -190,14 +185,23 @@ export const placeOrder = mutation({
   args: {
     items: v.array(v.object({ productId: v.id("products"), quantity: v.number() })),
     deliveryLocation: v.string(),
-    note: v.optional(v.string())
+    note: v.optional(v.string()),
+    // Only for someone without a customer account; a customer's own details are used otherwise.
+    name: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    // Real people leave this empty; bots tend to fill every field.
+    website: v.optional(v.string())
   },
   handler: async (ctx, args) => {
-    const found = await viewerCustomer(ctx);
-    if (!found) throw new ConvexError("Create a customer account to place an order.");
-    const { account } = found;
-    const tenant = await ctx.db.get(account.tenantId);
-    if (!tenant || tenant.status !== "active") throw new ConvexError("Orders are not open right now.");
+    if (args.website) return { orderId: null };
+    const tenant = await customerTenant(ctx);
+    // Anyone can order: a customer as themselves, a signed-in person once their details are
+    // saved, and anyone else as a guest with a name and phone.
+    const viewer = await findViewerProfile(ctx);
+    const signedIn = viewer?.profile && viewer.profile.status === "active" ? viewer.profile : null;
+    const account = await requesterAccount(ctx, tenant._id, signedIn, { name: args.name, phone: args.phone });
+    const customerName = requireText(account?.name ?? args.name ?? "", "Name", 100);
+    const customerPhone = validatePhone(account?.phone ?? args.phone ?? "");
 
     if (args.items.length === 0) throw new ConvexError("Add at least one product to your order.");
     if (args.items.length > MAX_LINES) throw new ConvexError(`An order can have at most ${MAX_LINES} products.`);
@@ -207,7 +211,7 @@ export const placeOrder = mutation({
     const now = Date.now();
     const recent = await ctx.db
       .query("shopOrders")
-      .withIndex("by_customer_time", (q) => q.eq("customerAccountId", account._id).gte("createdAt", now - DAY))
+      .withIndex("by_tenant_phone_time", (q) => q.eq("tenantId", tenant._id).eq("customerPhone", customerPhone).gte("createdAt", now - DAY))
       .collect();
     if (recent.length >= MAX_ORDERS_PER_DAY) throw new ConvexError("You have placed many orders today. Please contact us.");
 
@@ -247,9 +251,9 @@ export const placeOrder = mutation({
 
     const id = await ctx.db.insert("shopOrders", {
       tenantId: tenant._id,
-      customerAccountId: account._id,
-      customerName: account.name,
-      customerPhone: account.phone,
+      customerAccountId: account?._id,
+      customerName,
+      customerPhone,
       deliveryLocation,
       note,
       currency: currency!,

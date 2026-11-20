@@ -97,6 +97,7 @@ function EstimatorForm({ tenantId }: { tenantId: Id<"tenants"> }) {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [publicSignUp, setPublicSignUp] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -107,6 +108,7 @@ function EstimatorForm({ tenantId }: { tenantId: Id<"tenants"> }) {
     setPhone(settings.contactPhone);
     setEmail(settings.contactEmail);
     setWhatsapp(settings.whatsappNumber ? `+${settings.whatsappNumber}` : "");
+    setPublicSignUp(settings.publicSignUp);
   }, [settings]);
 
   if (!settings) return null;
@@ -116,7 +118,7 @@ function EstimatorForm({ tenantId }: { tenantId: Id<"tenants"> }) {
     setBusy(true);
     setNotice(null);
     try {
-      await update({ tenantId, enabled, tariffPerKwh: Number(tariff || 0), contactPhone: phone, contactEmail: email, whatsappNumber: whatsapp });
+      await update({ tenantId, enabled, tariffPerKwh: Number(tariff || 0), contactPhone: phone, contactEmail: email, whatsappNumber: whatsapp, publicSignUp });
       setNotice({ ok: true, text: "Power check settings saved." });
     } catch (error) {
       setNotice({ ok: false, text: errorMessage(error) });
@@ -148,6 +150,15 @@ function EstimatorForm({ tenantId }: { tenantId: Id<"tenants"> }) {
       <p className="hint">
         When set, customers who ask for a recommendation or an upgrade can also send it to this number on WhatsApp,
         with their details and a link that opens the request in the app. Leave empty to switch this off.
+      </p>
+      <label htmlFor="pc-signup">
+        <input id="pc-signup" type="checkbox" checked={publicSignUp} onChange={(e) => setPublicSignUp(e.target.checked)} />{" "}
+        Let the public create accounts
+      </label>
+      <p className="hint">
+        Off: only staff you invite on the Staff page can create an account. Customers can still check their needs,
+        see the shop with prices, order and send requests without an account. People who already have an account can
+        always sign in.
       </p>
       {notice ? <p className={notice.ok ? "form-success" : "auth-message"} role="status">{notice.text}</p> : null}
       <button className="button" type="submit" disabled={busy}>{busy ? "Saving…" : "Save power check settings"}</button>

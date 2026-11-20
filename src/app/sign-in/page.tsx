@@ -8,7 +8,8 @@ import { AuthHome } from "@/components/AuthHome";
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvexAuth } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { DraftNotice, LanguagePicker, Rich, useT } from "@/lib/i18n";
 
 function SignInForm() {
@@ -19,6 +20,7 @@ function SignInForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
+  const signUp = useQuery(api.access.signUpStatus, {});
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const login = useSavedLogin();
@@ -48,11 +50,13 @@ function SignInForm() {
       await attempt(details, mode);
       await login.afterSuccess(details);
       // Stay on "Please wait…" until the redirect to the workspace happens.
-    } catch {
+    } catch (e) {
+      // A new account for an email nobody invited is refused by the server.
+      const refused = /for staff only/i.test(String((e as { data?: unknown })?.data ?? (e as Error)?.message ?? ""));
       setMessage(
         mode === "signIn"
           ? t("auth.signInFailed")
-          : t("auth.registerFailed")
+          : refused ? t("auth.notInvited") : t("auth.registerFailed")
       );
       setBusy(false);
     }
@@ -132,10 +136,12 @@ function SignInForm() {
       >
         {mode === "signIn" ? t("auth.staffRegister") : t("auth.alreadyRegistered")}
       </button>
-      {mode === "signIn" ? (
+      {mode === "signIn" && signUp?.publicSignUpOpen ? (
         <p className="auth-note">
           <Rich text={t("auth.customerNote")} link={(label) => <Link href="/sign-up"><u>{label}</u></Link>} />
         </p>
+      ) : mode === "signUp" ? (
+        <p className="auth-note">{t("auth.inviteOnly")}</p>
       ) : null}
       {mode === "signUp" ? (
         <p className="auth-note">

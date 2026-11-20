@@ -77,6 +77,8 @@ function Estimator() {
   const goBack = useGoBack("/");
   const convex = useConvex();
   const config = useQuery(api.estimator.publicConfig, {});
+  // Public sign-up is off for now: the request reaches the team without an account.
+  const signUpOpen = useQuery(api.access.signUpStatus, {})?.publicSignUpOpen ?? false;
   // Use the same customer-account lookup as the customer dashboard, not staff/profile state.
   const customer = useQuery(api.shop.myAccount, {});
   const submit = useMutation(api.estimator.submitRequest);
@@ -339,6 +341,11 @@ function Estimator() {
             <p>{t("estimate.inAccountText")}</p>
             <Link className="button" href="/my-requests">{t("estimate.goToRecommendations")}</Link>
           </div>
+        ) : !signUpOpen ? (
+          <div className="next-step">
+            <strong>{t("estimate.noAccountTitle")}</strong>
+            <p>{t("estimate.noAccountText")}</p>
+          </div>
         ) : (
           <div className="next-step">
             <strong>{t("estimate.signUpTitle")}</strong>
@@ -472,11 +479,7 @@ function Estimator() {
           <h2>{t("estimate.optionsTitle")}</h2>
           <p className="estimate-banner">{t("estimate.banner")}</p>
           <p className="price-note">
-            {hasCustomerAccount ? (
-              <Rich text={t("estimate.pricesShop")} link={(label) => <Link href="/shop"><u>{label}</u></Link>} />
-            ) : (
-              <Rich text={t("estimate.pricesAccount")} link={(label) => <Link href="/sign-up?next=/my-requests"><u>{label}</u></Link>} />
-            )}
+            <Rich text={t("estimate.pricesShop")} link={(label) => <Link href="/shop"><u>{label}</u></Link>} />
           </p>
           {result.options.length === 0 ? <p className="muted">{t("estimate.noOptionsYet")}</p> : null}
 

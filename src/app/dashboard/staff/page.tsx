@@ -52,8 +52,14 @@ function AddStaff({ tenantId }: { tenantId: Id<"tenants"> }) {
     setBusy(true);
     setNotice(null);
     try {
-      await grant({ tenantId, email, role });
-      setNotice({ ok: true, text: `Access granted to ${email.trim().toLowerCase()}.` });
+      const result = await grant({ tenantId, email, role });
+      const who = email.trim().toLowerCase();
+      setNotice({
+        ok: true,
+        text: result && "invited" in result
+          ? `Invitation saved for ${who}. Ask them to open the app, tap Staff sign in, then "Create your staff account" with this email. They get access as soon as they sign up.`
+          : `Access granted to ${who}.`
+      });
       setEmail("");
     } catch (error) {
       setNotice({ ok: false, text: errorMessage(error) });
@@ -66,7 +72,8 @@ function AddStaff({ tenantId }: { tenantId: Id<"tenants"> }) {
     <form className="panel-form" onSubmit={submit}>
       <h2>Add a staff member</h2>
       <p className="hint">
-        They must first create an account on the sign-in page. Then enter the same email here.
+        Enter their work email and role. If they already have an account they get access now; if not, the email is
+        invited and only an invited email can create an account. Accounts are for staff only for now.
       </p>
       <label htmlFor="staff-email">Work email</label>
       <input
@@ -85,9 +92,33 @@ function AddStaff({ tenantId }: { tenantId: Id<"tenants"> }) {
         </p>
       ) : null}
       <button className="button" type="submit" disabled={busy}>
-        {busy ? "Adding…" : "Grant access"}
+        {busy ? "Adding…" : "Grant access or invite"}
       </button>
+      <PendingInvites tenantId={tenantId} />
     </form>
+  );
+}
+
+/** Invited emails that have not created their account yet. */
+function PendingInvites({ tenantId }: { tenantId: Id<"tenants"> }) {
+  const invites = useQuery(api.access.listInvites, { tenantId });
+  const cancel = useMutation(api.access.cancelInvite);
+  if (!invites || invites.length === 0) return null;
+  return (
+    <div className="pending-invites">
+      <span className="response-label">Waiting to sign up ({invites.length})</span>
+      <ul className="component-list">
+        {invites.map((i) => (
+          <li key={i.id}>
+            <strong>{i.email}</strong>
+            <span>
+              {i.role.replace(/_/g, " ")} · invited {new Date(i.createdAt).toLocaleDateString("en-GB")} ·{" "}
+              <button type="button" className="link-button" onClick={() => void cancel({ inviteId: i.id })}>Cancel</button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

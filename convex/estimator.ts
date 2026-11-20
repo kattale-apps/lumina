@@ -417,7 +417,8 @@ export const getEstimatorSettings = query({
       tariffMinorPerKwh: row?.tariffMinorPerKwh ?? 0,
       contactPhone: row?.contactPhone ?? "",
       contactEmail: row?.contactEmail ?? "",
-      whatsappNumber: row?.whatsappNumber ?? ""
+      whatsappNumber: row?.whatsappNumber ?? "",
+      publicSignUp: row?.publicSignUp ?? false
     };
   }
 });
@@ -431,7 +432,9 @@ export const updateEstimatorSettings = mutation({
     contactPhone: v.optional(v.string()),
     contactEmail: v.optional(v.string()),
     // Optional WhatsApp number that public requests can be sent to.
-    whatsappNumber: v.optional(v.string())
+    whatsappNumber: v.optional(v.string()),
+    // Let the public create accounts. Off (the default): only invited staff can.
+    publicSignUp: v.optional(v.boolean())
   },
   handler: async (ctx, args) => {
     const { profile, tenant } = await requireTenantMembership(ctx, args.tenantId, SETTINGS_ADMINS);
@@ -466,6 +469,7 @@ export const updateEstimatorSettings = mutation({
       contactPhone: optionalText(contactPhone, "Phone", 30),
       contactEmail,
       whatsappNumber: whatsappNumber ?? undefined,
+      publicSignUp: args.publicSignUp ?? existing?.publicSignUp ?? false,
       updatedAt: Date.now(),
       updatedBy: profile.authSubject
     };

@@ -47,6 +47,8 @@ function UpgradeCheck() {
   const goBack = useGoBack("/");
   const convex = useConvex();
   const config = useQuery(api.upgrades.publicConfig, {});
+  // Public sign-up is off for now: the request reaches the team without an account.
+  const signUpOpen = useQuery(api.access.signUpStatus, {})?.publicSignUpOpen ?? false;
   const customer = useQuery(api.shop.myAccount, {});
   const submit = useMutation(api.upgrades.submitUpgradeRequest);
 
@@ -213,6 +215,11 @@ function UpgradeCheck() {
             <p>{t("estimate.inAccountText")}</p>
             <Link className="button" href="/my-requests">{t("estimate.goToRecommendations")}</Link>
           </div>
+        ) : !signUpOpen ? (
+          <div className="next-step">
+            <strong>{t("estimate.noAccountTitle")}</strong>
+            <p>{t("estimate.noAccountText")}</p>
+          </div>
         ) : (
           <div className="next-step">
             <strong>{t("estimate.signUpTitle")}</strong>
@@ -282,11 +289,7 @@ function UpgradeCheck() {
                   {pdfBusy ? t("estimate.preparingPdf") : t("upgrade.downloadPdf")}
                 </button>
                 <p className="price-note">
-                  {hasCustomerAccount ? (
-                    <Rich text={t("estimate.pricesShop")} link={(label) => <Link href="/shop"><u>{label}</u></Link>} />
-                  ) : (
-                    <Rich text={t("estimate.pricesAccount")} link={(label) => <Link href="/sign-up?next=/shop"><u>{label}</u></Link>} />
-                  )}
+                  <Rich text={t("estimate.pricesShop")} link={(label) => <Link href="/shop"><u>{label}</u></Link>} />
                 </p>
               </div>
 

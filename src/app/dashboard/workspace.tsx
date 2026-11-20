@@ -72,7 +72,7 @@ export function SignOutButton({ className = "button button-secondary" }: { class
 
 export function WorkspaceHeader({ role }: { role?: string }) {
   const inbox = useQuery(api.inbox.myInbox, role ? {} : "skip");
-  const unread: Record<string, number> = { "/dashboard/leads": inbox?.staff ?? 0 };
+  const unread: Record<string, number> = { "/dashboard/leads": inbox?.staff ?? 0, "/dashboard/item-requests": inbox?.items ?? 0 };
   const me = useQuery(api.profile.myProfile, {});
   const path = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -90,6 +90,7 @@ export function WorkspaceHeader({ role }: { role?: string }) {
     { group: "Sales", href: "/dashboard", label: "Home", show: true },
     { group: "Sales", href: "/dashboard/field", label: "Field work", show: crm },
     { group: "Sales", href: "/dashboard/leads", label: "Quote requests", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" || role === "technician" },
+    { group: "Sales", href: "/dashboard/item-requests", label: "Item requests", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" || role === "technician" },
     { group: "Sales", href: "/dashboard/orders", label: "Orders", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" },
     { group: "Sales", href: "/dashboard/customers", label: "Customers", show: crm },
     { group: "Sales", href: "/dashboard/assessments", label: "Assessments", show: crm },

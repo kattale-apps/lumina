@@ -198,11 +198,10 @@ describe("staff administration", () => {
     expect(view).toMatchObject({ state: "active", companies: [{ role: "technician" }] });
   });
 
-  test("refuses unknown emails and users who already have access", async () => {
+  test("invites emails without an account, and refuses users who already have access", async () => {
     const { tenantId, asOwner } = await setup([{ email: "agent@acme.ug", role: "sales_agent" }]);
-    await expect(
-      asOwner.mutation(api.staff.grantAccess, { tenantId, email: "ghost@acme.ug", role: "sales_agent" })
-    ).rejects.toThrow(/No Solar Switch account/);
+    expect(await asOwner.mutation(api.staff.grantAccess, { tenantId, email: "Ghost@acme.ug", role: "sales_agent" })).toEqual({ invited: true });
+    expect(await asOwner.query(api.access.listInvites, { tenantId })).toMatchObject([{ email: "ghost@acme.ug", role: "sales_agent" }]);
     await expect(
       asOwner.mutation(api.staff.grantAccess, { tenantId, email: "agent@acme.ug", role: "technician" })
     ).rejects.toThrow(/already has access/);

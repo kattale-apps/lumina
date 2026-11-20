@@ -76,12 +76,36 @@ async function staffUnread(ctx: Ctx, profile: Doc<"userProfiles">) {
   return count;
 }
 
+// Who handles "Request an item": sales staff, managers, admins and technicians.
+const ITEM_HANDLERS = ["super_admin", "sales_manager", "sales_agent", "technician"];
+
+/** Item requests still marked new, for the badge on Item requests; it clears as they are handled. */
+async function newItemRequests(ctx: Ctx, profile: Doc<"userProfiles">) {
+  const memberships = await ctx.db
+    .query("memberships")
+    .withIndex("by_user", (q) => q.eq("userId", profile._id))
+    .collect();
+  let count = 0;
+  for (const m of memberships) {
+    if (m.status !== "active" || !ITEM_HANDLERS.includes(m.role)) continue;
+    const recent = await ctx.db
+      .query("itemRequests")
+      .withIndex("by_tenant_time", (q) => q.eq("tenantId", m.tenantId).gt("createdAt", Date.now() - 30 * 24 * 60 * 60 * 1000))
+      .order("desc")
+      .take(200);
+    count += recent.filter((r) => r.status === "new").length;
+  }
+  return count;
+}
+
 async function inboxFor(ctx: Ctx, profile: Doc<"userProfiles">) {
   const staff = await staffUnread(ctx, profile);
   const customer = await customerUnread(ctx, profile);
+  const items = await newItemRequests(ctx, profile);
   return {
-    isStaff: staff !== null,
+    isStaff: staff !== null || items > 0,
     staff: Math.min(staff ?? 0, CAP),
+    items: Math.min(items, CAP),
     customer: Math.min(customer, CAP)
   };
 }
@@ -170,8 +194,16 @@ export const forDevice = internalQuery({
     const profile = await ctx.db.get(device.userId);
     if (!profile || profile.status !== "active") return null;
     const inbox = await inboxFor(ctx, profile);
-    const count = inbox.staff + inbox.customer;
+    const count = inbox.staff + inbox.items + inbox.customer;
     // Kept generic: the notification can be seen on a locked screen.
+    if (inbox.items > 0 && inbox.staff === 0) {
+      return {
+        count,
+        title: "Solar Switch",
+        body: inbox.items === 1 ? "1 new item request" : `${inbox.items} new item requests`,
+        path: "/dashboard/item-requests"
+      };
+    }
     if (inbox.staff > 0) {
       return {
         count,

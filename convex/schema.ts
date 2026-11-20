@@ -230,6 +230,18 @@ export default defineSchema({
     .index("by_photo", ["photoStorageId"])
     .index("by_email", ["email"]),
 
+  // Staff invited by email before they have an account. Signing up with that email gives the access.
+  staffInvites: defineTable({
+    tenantId: v.id("tenants"),
+    email: v.string(),
+    role: appRole,
+    createdAt: v.number(),
+    createdBy: v.string(),
+    acceptedAt: v.optional(v.number())
+  })
+    .index("by_email", ["email"])
+    .index("by_tenant", ["tenantId"]),
+
   memberships: defineTable({
     tenantId: v.id("tenants"),
     userId: v.id("userProfiles"),
@@ -750,6 +762,8 @@ export default defineSchema({
     contactEmail: v.optional(v.string()),
     // Where public requests for a recommendation can also be sent on WhatsApp, international digits.
     whatsappNumber: v.optional(v.string()),
+    // Whether the public may create accounts. Off: only invited staff can sign up.
+    publicSignUp: v.optional(v.boolean()),
     updatedAt: v.number(),
     updatedBy: v.string()
   })
@@ -925,6 +939,34 @@ export default defineSchema({
     expiresAt: v.number()
   }).index("by_created", ["createdAt"]),
 
+  // "Request an item": parts a member of the public asked for, by type and size.
+  itemRequests: defineTable({
+    tenantId: v.id("tenants"),
+    customerAccountId: v.optional(v.id("customerAccounts")),
+    name: v.string(),
+    phone: v.string(),
+    email: v.optional(v.string()),
+    location: v.string(),
+    note: v.optional(v.string()),
+    items: v.array(
+      v.object({
+        // Keys from convex/lib/itemTypes.ts.
+        type: v.string(),
+        subtype: v.optional(v.string()),
+        specs: v.array(v.object({ key: v.string(), value: v.string(), unit: v.string() })),
+        description: v.optional(v.string()),
+        productName: v.optional(v.string()),
+        quantity: v.number()
+      })
+    ),
+    status: v.union(v.literal("new"), v.literal("contacted"), v.literal("closed")),
+    handledByUserId: v.optional(v.id("userProfiles")),
+    createdAt: v.number(),
+    updatedAt: v.number()
+  })
+    .index("by_tenant_time", ["tenantId", "createdAt"])
+    .index("by_tenant_phone_time", ["tenantId", "phone", "createdAt"]),
+
   customerAccounts: defineTable({
     tenantId: v.id("tenants"),
     userId: v.id("userProfiles"),
@@ -938,7 +980,8 @@ export default defineSchema({
   // An order placed by a customer. Prices are the list prices at the time; staff confirm the final order.
   shopOrders: defineTable({
     tenantId: v.id("tenants"),
-    customerAccountId: v.id("customerAccounts"),
+    // Empty for a guest order placed without an account.
+    customerAccountId: v.optional(v.id("customerAccounts")),
     customerName: v.string(),
     customerPhone: v.string(),
     deliveryLocation: v.string(),
@@ -961,7 +1004,8 @@ export default defineSchema({
     updatedAt: v.number()
   })
     .index("by_tenant_time", ["tenantId", "createdAt"])
-    .index("by_customer_time", ["customerAccountId", "createdAt"]),
+    .index("by_customer_time", ["customerAccountId", "createdAt"])
+    .index("by_tenant_phone_time", ["tenantId", "customerPhone", "createdAt"]),
   operationsSettings: defineTable({
     tenantId: v.id("tenants"),
     // Commission as basis points of the pre-tax value of a won deal. 0 = none.
