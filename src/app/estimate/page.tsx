@@ -16,6 +16,7 @@ import { clearPendingEstimate, savePendingEstimate } from "../../lib/pendingEsti
 import { Rich, useT, type MessageKey } from "@/lib/i18n";
 import { en } from "@/lib/i18n/en";
 import { StepButtons, StepProgress, useGoBack } from "@/components/StepNav";
+import { requestReference, WhatsAppSend } from "@/components/WhatsAppSend";
 import { PublicShell } from "@/components/PublicShell";
 
 const STEPS = 4;
@@ -108,7 +109,7 @@ function Estimator() {
   const signedInCustomer = customer?.signedIn === true;
   const hasCustomerAccount = signedInCustomer && customer.account !== null;
   // After sending: whether the request already went to a signed-in customer account.
-  const [done, setDone] = useState<null | { hasAccount: boolean }>(null);
+  const [done, setDone] = useState<null | { hasAccount: boolean; whatsappText: string | null }>(null);
 
   function runQuery(input: FunctionArgs<typeof api.estimator.recommend>) {
     return convex.query(api.estimator.recommend, input);
@@ -255,12 +256,39 @@ function Estimator() {
           notes: o.notes
         }))
       });
-      await savePdf(bytes, `energy-usage-estimate-${new Date().toISOString().slice(0, 10)}.pdf`, "Energy usage estimate");
+      await savePdf(bytes, `energy-usage-estimate-${new Date().toISOString().slice(0, 10)}.pdf`, "Energy usage estimate", { ready: t("pdf.ready"), open: t("pdf.open"), hint: t("pdf.hint"), close: t("pdf.close") });
     } catch (e) {
       setError(e instanceof AppUpdateNeeded ? e.message : t("estimate.errPdf"));
     } finally {
       setPdfBusy(false);
     }
+  }
+
+  /** The request as a WhatsApp message to the company, in English for the technician. */
+  function whatsappMessage(requestId: string) {
+    if (!result || !config?.enabled) return null;
+    const who = hasCustomerAccount ? customer.account! : { name: form.name, phone: form.phone };
+    const fmt = (minor: number | null) => (minor === null ? null : money(minor, result.exponent, result.currency));
+    const appliances = (snapshot?.lines ?? []).slice(0, 15).map((l) => `• ${l.quantity} × ${l.name} (${l.hoursPerDay} h a day)`);
+    const more = (snapshot?.lines.length ?? 0) > 15 ? [`• …and ${(snapshot?.lines.length ?? 0) - 15} more`] : [];
+    const chosenTitle = chosen === RECOMMENDATION ? "A system recommendation and quotation" : result.options.find((o) => o.key === chosen)?.title ?? "";
+    const month = fmt(result.summary.costPerMonthMinor);
+    return [
+      `Hello ${config.companyName}, I would like a solar recommendation.`,
+      "",
+      `Name: ${who.name}`,
+      `Phone: ${who.phone}`,
+      `Location: ${form.location}`,
+      `Type: ${en[`estimate.cat.${snapshot?.category ?? category}` as MessageKey] ?? ""}`,
+      grid ? `Electricity: ${en[`estimate.grid.${grid}` as MessageKey]}` : "",
+      `Energy use: about ${result.summary.dailyKwh} kWh a day${month ? ` (about ${month} a month)` : ""}`,
+      `Busiest moment: about ${result.summary.peakW.toLocaleString("en-US")} W`,
+      ...(appliances.length ? ["", "Appliances:", ...appliances, ...more] : []),
+      "",
+      `Interested in: ${chosenTitle}`,
+      `Reference: ${requestReference(requestId)}`,
+      `Open in the app: ${window.location.origin}/dashboard/leads/${requestId}`
+    ].filter((line, i, all) => line !== "" || all[i - 1] !== "").join("\n");
   }
 
   async function request(event: FormEvent) {
@@ -284,7 +312,7 @@ function Estimator() {
       if (sent.claimToken) rememberPendingRequest(sent.claimToken);
       // Sent: nothing is left waiting to be carried over.
       clearPendingEstimate();
-      setDone({ hasAccount: sent.hasAccount });
+      setDone({ hasAccount: sent.hasAccount, whatsappText: sent.requestId ? whatsappMessage(sent.requestId) : null });
     } catch (e) {
       setError(message(e, t("common.genericError")));
     } finally {
@@ -304,6 +332,7 @@ function Estimator() {
         <p>
           <Rich text={t("estimate.thanksText", { phone: hasCustomerAccount ? customer.account!.phone : form.phone })} />
         </p>
+        {config.whatsappNumber && done.whatsappText ? <WhatsAppSend number={config.whatsappNumber} text={done.whatsappText} /> : null}
         {done.hasAccount ? (
           <div className="next-step next-step-ok">
             <strong>{t("estimate.inAccountTitle")}</strong>
@@ -513,8 +542,6 @@ function Estimator() {
               </p>
               {customer === undefined ? (
                 <p className="hint">{t("estimate.checkingAccount")}</p>
-              ) : signedInCustomer && !hasCustomerAccount ? (
-                <p className="hint"><Rich text={t("estimate.accountIncomplete")} link={(label) => <Link href="/shop"><u>{label}</u></Link>} /></p>
               ) : hasCustomerAccount ? (
                 <div className="signed-in-request">
                   <strong>{t("estimate.requestingAs", { name: customer.account!.name })}</strong>
@@ -525,12 +552,17 @@ function Estimator() {
                 </div>
               ) : (
                 <>
+                  {signedInCustomer ? <p className="hint">{t("estimate.signedInNoAccount")}</p> : null}
                   <label htmlFor="rq-name">{t("estimate.yourName")}</label>
                   <input id="rq-name" className={glowIf("name")} required maxLength={100} autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
                   <label htmlFor="rq-phone">{t("estimate.phone")}</label>
                   <input id="rq-phone" className={glowIf("phone")} required type="tel" maxLength={20} autoComplete="tel" placeholder="+256 700 000000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-                  <label htmlFor="rq-email">{t("estimate.emailOptional")}</label>
-                  <input id="rq-email" type="email" maxLength={120} autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                  {signedInCustomer ? null : (
+                    <>
+                      <label htmlFor="rq-email">{t("estimate.emailOptional")}</label>
+                      <input id="rq-email" type="email" maxLength={120} autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                    </>
+                  )}
                   <label htmlFor="rq-loc">{t("estimate.location")}</label>
                   <input id="rq-loc" className={glowIf("location")} required maxLength={200} autoComplete="address-level2" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
                 </>
@@ -540,7 +572,7 @@ function Estimator() {
                 <input id="rq-site" tabIndex={-1} autoComplete="off" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
               </div>
               {error ? <p className="auth-message" role="alert">{error}</p> : null}
-              <button className={`button${firstEmpty ? "" : " guide-glow"}`} type="submit" disabled={busy || customer === undefined || (signedInCustomer && !hasCustomerAccount)}>{busy ? t("estimate.sending") : t("estimate.send")}</button>
+              <button className={`button${firstEmpty ? "" : " guide-glow"}`} type="submit" disabled={busy || customer === undefined}>{busy ? t("estimate.sending") : t("estimate.send")}</button>
             </form>
           ) : null}
         </section>

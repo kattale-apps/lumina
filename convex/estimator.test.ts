@@ -277,6 +277,21 @@ describe("public power check", () => {
     const stranger = t.withIdentity({ subject: (await registerUser(t, "x@x.ug")).subject });
     await expect(stranger.mutation(api.estimator.updateEstimatorSettings, args)).rejects.toThrow();
   });
+
+  test("a WhatsApp number for requests is stored in international form and shown to the public check", async () => {
+    const { t, tenantId, asOwner } = await setup();
+    await expect(asOwner.mutation(api.estimator.updateEstimatorSettings, { tenantId, enabled: true, tariffPerKwh: 800, whatsappNumber: "12345" }))
+      .rejects.toThrow(/country code/);
+    await asOwner.mutation(api.estimator.updateEstimatorSettings, { tenantId, enabled: true, tariffPerKwh: 800, whatsappNumber: "0782 872796" });
+    expect((await asOwner.query(api.estimator.getEstimatorSettings, { tenantId })).whatsappNumber).toBe("256782872796");
+    const config = await t.query(api.estimator.publicConfig, {});
+    expect(config.enabled && config.whatsappNumber).toBe("256782872796");
+    expect((await t.query(api.upgrades.publicConfig, {})) ).toMatchObject({ whatsappNumber: "256782872796" });
+    // Clearing it switches WhatsApp off.
+    await asOwner.mutation(api.estimator.updateEstimatorSettings, { tenantId, enabled: true, tariffPerKwh: 800, whatsappNumber: "" });
+    const off = await t.query(api.estimator.publicConfig, {});
+    expect(off.enabled && off.whatsappNumber).toBeNull();
+  });
 });
 
 describe("recommendations follow the need", () => {

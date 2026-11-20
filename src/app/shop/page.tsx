@@ -12,6 +12,8 @@ import { readPendingEstimate } from "@/lib/pendingEstimate";
 import { useRouter } from "next/navigation";
 import { useT } from "@/lib/i18n";
 import { Pager, pageFor } from "@/components/Pager";
+import { SearchSuggest } from "@/components/SearchSuggest";
+import { countInto, matchesWords, searchWords, type Suggestion } from "@/lib/search";
 import { byPartOrder } from "../../../convex/lib/shopParts";
 
 const CARDS_PER_PAGE = 12;
@@ -82,15 +84,25 @@ function Shop() {
     [data, part]
   );
 
+  // What the search box offers as you type: part groups, brands and product names.
+  const searchOptions = useMemo<Suggestion[]>(() => {
+    const products = data?.products ?? [];
+    return [
+      ...countInto("category", products.map((p) => ({ value: p.type }))),
+      ...countInto("brand", products.map((p) => ({ value: p.brand }))),
+      ...countInto("product", products.map((p) => ({ value: p.name })))
+    ];
+  }, [data]);
+
   // The same item from different brands is one card, with each brand’s price as an option.
   const grouped = useMemo(() => {
     if (!data) return [];
-    const term = search.trim().toLowerCase();
+    const words = searchWords(search);
     const map = new Map<string, Map<string, typeof data.products>>();
     for (const p of data.products) {
       if (part && p.type !== part) continue;
       if (brand && p.brand !== brand) continue;
-      if (term && !`${p.name} ${p.brand} ${p.model} ${p.description} ${p.category} ${p.type}`.toLowerCase().includes(term)) continue;
+      if (words.length && !matchesWords(`${p.name} ${p.brand} ${p.model} ${p.description} ${p.category} ${p.type}`, words)) continue;
       const cards = map.get(p.type) ?? new Map<string, typeof data.products>();
       const key = p.name.trim().toLowerCase();
       cards.set(key, [...(cards.get(key) ?? []), p]);
@@ -128,9 +140,22 @@ function Shop() {
   const total = lines.reduce((sum, l) => sum + (l.d.priceMinor ?? 0) * l.qty, 0);
   const currency = lines[0]?.d.currency ?? "";
 
+  /** After a filter or page change, bring the first product into view (not the top of the page). */
+  function toProducts() {
+    requestAnimationFrame(() => document.getElementById("shop-products")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
   function goTo(next: number) {
     setPaging({ key: filterKey, page: next });
-    document.getElementById("shop-search")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    toProducts();
+  }
+  function pickPart(next: string) {
+    setPart(next);
+    setBrand("");
+    toProducts();
+  }
+  function pickBrand(next: string) {
+    setBrand(next);
+    toProducts();
   }
 
   async function submit(e: FormEvent) {
@@ -162,27 +187,42 @@ function Shop() {
         <p className="form-success" role="status">{t("shop.thanks")}</p>
       ) : null}
 
-      <label className="visually-hidden" htmlFor="shop-search">{t("shop.search")}</label>
-      <input id="shop-search" className="shop-search" type="search" placeholder={t("shop.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
+      <SearchSuggest
+        id="shop-search"
+        className="shop-search"
+        label={t("shop.search")}
+        placeholder={t("shop.searchPlaceholder")}
+        value={search}
+        onChange={setSearch}
+        suggestions={searchOptions}
+        kindLabels={{ category: t("shop.kind.category"), brand: t("shop.kind.brand"), supplier: "", product: t("shop.kind.product") }}
+        onPick={(s) => {
+          // A group or brand becomes the matching chip; a product name searches for that item.
+          if (s.kind === "category") { setSearch(""); pickPart(s.value); }
+          else if (s.kind === "brand") { setSearch(""); setPart(""); pickBrand(s.value); }
+          else { setSearch(s.value); toProducts(); }
+        }}
+      />
 
       {parts.length > 1 ? (
         <div className="quick-row shop-parts" role="group" aria-label={t("shop.part")}>
-          <button type="button" className={`chip${part === "" ? " chip-on" : ""}`} aria-pressed={part === ""} onClick={() => { setPart(""); setBrand(""); }}>{t("shop.allParts")}</button>
+          <button type="button" className={`chip${part === "" ? " chip-on" : ""}`} aria-pressed={part === ""} onClick={() => pickPart("")}>{t("shop.allParts")}</button>
           {parts.map((x) => (
-            <button key={x} type="button" className={`chip${part === x ? " chip-on" : ""}`} aria-pressed={part === x} onClick={() => { setPart(x); setBrand(""); }}>{x}</button>
+            <button key={x} type="button" className={`chip${part === x ? " chip-on" : ""}`} aria-pressed={part === x} onClick={() => pickPart(x)}>{x}</button>
           ))}
         </div>
       ) : null}
 
       {brands.length > 1 ? (
         <div className="quick-row shop-brands" role="group" aria-label={t("shop.brand")}>
-          <button type="button" className={`chip${brand === "" ? " chip-on" : ""}`} aria-pressed={brand === ""} onClick={() => setBrand("")}>{t("shop.allBrands")}</button>
+          <button type="button" className={`chip${brand === "" ? " chip-on" : ""}`} aria-pressed={brand === ""} onClick={() => pickBrand("")}>{t("shop.allBrands")}</button>
           {brands.map((b) => (
-            <button key={b} type="button" className={`chip${brand === b ? " chip-on" : ""}`} aria-pressed={brand === b} onClick={() => setBrand(b)}>{b}</button>
+            <button key={b} type="button" className={`chip${brand === b ? " chip-on" : ""}`} aria-pressed={brand === b} onClick={() => pickBrand(b)}>{b}</button>
           ))}
         </div>
       ) : null}
 
+      <div id="shop-products" className="scroll-anchor" />
       {grouped.length === 0 ? <p className="muted">{t("shop.none")}</p> : null}
       {pageGroups.map(([category, items]) => (
         <section key={category} className="workspace-section">

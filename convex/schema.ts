@@ -748,6 +748,8 @@ export default defineSchema({
     tariffMinorPerKwh: v.number(),
     contactPhone: v.optional(v.string()),
     contactEmail: v.optional(v.string()),
+    // Where public requests for a recommendation can also be sent on WhatsApp, international digits.
+    whatsappNumber: v.optional(v.string()),
     updatedAt: v.number(),
     updatedBy: v.string()
   })
@@ -830,7 +832,8 @@ export default defineSchema({
         key: v.string(),
         title: v.string(),
         description: v.string(),
-        components: v.array(v.object({ name: v.string(), quantity: v.number() })),
+        // productId links a part to the catalogue; parts from outside it have none.
+        components: v.array(v.object({ name: v.string(), quantity: v.number(), productId: v.optional(v.id("products")) })),
         priceMinor: v.optional(v.number())
       })
     ),
@@ -912,6 +915,16 @@ export default defineSchema({
 
 
   // A customer who signed up to browse the catalogue and place orders. Not staff.
+  // Short-lived links for PDFs some devices cannot save from the page (see pdfLinks.ts).
+  pdfLinks: defineTable({
+    storageId: v.id("_storage"),
+    filename: v.string(),
+    // Random secret in the link, so links cannot be guessed.
+    token: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number()
+  }).index("by_created", ["createdAt"]),
+
   customerAccounts: defineTable({
     tenantId: v.id("tenants"),
     userId: v.id("userProfiles"),

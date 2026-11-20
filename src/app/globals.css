@@ -1684,3 +1684,43 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 .landing-choice-shop { background: #8a5a12; }
 .customer-home { justify-content: flex-start; padding-top: 8px; }
 .customer-home h1 { font-size: clamp(30px, 8vw, 48px); }
+.scroll-anchor { scroll-margin-top: 12px; }
+
+/* Recommendation editor: picking parts from the catalogue. */
+.catalogue-picker { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--green); border-radius: 12px; background: #f6fbf8; }
+.catalogue-results { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 360px; overflow-y: auto; }
+.catalogue-results li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px; border-radius: 10px; background: white; border: 1px solid #e3e8e5; }
+.catalogue-results li > div { flex: 1 1 14rem; min-width: 0; display: grid; }
+.catalogue-price { font-weight: 700; white-space: nowrap; }
+.part-linked { flex: 1; min-width: 0; padding: 6px 0; }
+.catalogue-total { margin: 4px 0 0; }
+
+/* Menu section headings, each in its own colour (same palette as the energy-check questions). */
+.menu-group-title[class*="menu-tone-"] { display: flex; align-items: center; gap: 8px; margin: 4px 0 6px; padding: 7px 10px; border-radius: 9px; border-left: 4px solid; letter-spacing: .07em; }
+.menu-tone-1 { color: #1f8a52; background: #effaf3; border-left-color: #1f8a52; }
+.menu-tone-2 { color: #2369b3; background: #eef5fd; border-left-color: #2369b3; }
+.menu-tone-3 { color: #a0650a; background: #fff7e8; border-left-color: #c27c0e; }
+.menu-tone-4 { color: #6d45b0; background: #f5f0fc; border-left-color: #6d45b0; }
+.part-source { display: grid; gap: 8px; margin-top: 8px; padding: 12px; border-radius: 12px; border: 1px solid; }
+.part-source-title { margin: 0; font-size: 14px; font-weight: 800; }
+.part-source-catalogue { background: #eef5fd; border-color: #c4dbf3; }
+.part-source-catalogue .part-source-title { color: #2369b3; }
+.part-source-outside { background: #fff7e8; border-color: #f0d9a6; }
+.part-source-outside .part-source-title { color: #a0650a; }
+.outside-part { display: grid; gap: 6px; }
+.outside-part-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.outside-part-row input:first-child { flex: 1 1 16rem; min-width: 0; background: white; border: 2px solid #e1b866; }
+.outside-part-row .part-qty { width: 64px; flex: none; }
+.filter-row .search-suggest { flex: 1 1 18rem; min-width: 12rem; }
+
+/* WhatsApp: the green send card after a request, and share buttons. */
+.whatsapp-send { border-color: #25d366; background: #effcf3; }
+.button-whatsapp { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #1fa855; border-color: #1fa855; color: white; }
+.button-whatsapp:hover { background: #178a45; border-color: #178a45; }
+.share-recommendation { display: grid; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px dashed #c9d6cf; }
+
+/* "Your PDF is ready" card, for devices that cannot save a PDF straight from the page. */
+.pdf-ready { position: fixed; z-index: 1000; left: 12px; right: 12px; bottom: 16px; max-width: 420px; margin: 0 auto; display: grid; gap: 8px; padding: 16px 16px 14px; border: 2px solid var(--green); border-radius: 16px; background: white; box-shadow: 0 10px 30px rgba(16, 37, 31, .25); }
+.pdf-ready p { margin: 0; color: var(--muted); font-size: 14px; }
+.pdf-ready .button { text-align: center; }
+.pdf-ready-close { position: absolute; top: 6px; right: 8px; width: 32px; height: 32px; border: 0; background: none; font-size: 22px; line-height: 1; cursor: pointer; color: var(--muted); }

@@ -186,3 +186,96 @@ describe("app icon badge", () => {
     expect(bad.status).toBe(400);
   });
 });
+
+describe("recommendation parts from the catalogue", () => {
+  test("a technician finds products with list prices (never cost), links them, and mixes in their own parts", async () => {
+    const { t, tenantId, asOwner, tech } = await setup();
+    await t.mutation(internal.catalogueImport.importProducts, {
+      tenantSlug: "acme", source: "test",
+      items: [
+        { categoryKey: "battery", sku: "B-1", name: "Lithium battery 48V 100Ah", brand: "DEYE", model: "SE-G5.1",
+          specValues: { chemistry: "LiFePO4", nominal_voltage: 51.2, capacity_ah: 100, usable_energy: 5.12, has_bms: true }, cost: 1_000_000 },
+        { categoryKey: "battery", sku: "B-2", name: "Lithium battery 12V 100Ah", brand: "YACHU", model: "12.8V 100AH",
+          specValues: { chemistry: "LiFePO4", nominal_voltage: 12.8, capacity_ah: 100, usable_energy: 1.28, has_bms: true } }
+      ]
+    });
+    const sent = await t.mutation(api.estimator.submitRequest, { input: appliances, grid: "unreliable", optionKey: "recommendation", ...person });
+    const leadId = sent.requestId as Id<"quoteRequests">;
+
+    const found = await tech.query(api.responses.searchCatalogue, { leadId, term: "deye 48v" });
+    expect(found.results.map((p) => p.sku)).toEqual(["B-1"]);
+    expect(found.results[0].listPriceMinor).toBe(1_200_000); // 20% default margin on top of cost
+    expect(JSON.stringify(found)).not.toMatch(/cost|margin|floor/i);
+    const all = await tech.query(api.responses.searchCatalogue, { leadId, term: "" });
+    expect(all.results.find((p) => p.sku === "B-2")?.listPriceMinor).toBeNull();
+
+    const productId = found.results[0].id;
+    await tech.mutation(api.responses.saveResponse, {
+      leadId, message: "Hello", send: false,
+      options: [{ key: "opta1", title: "5 kWh backup", description: "", price: undefined,
+        components: [{ name: "DEYE Lithium battery 48V 100Ah", quantity: 2, productId }, { name: "Installation", quantity: 1 }] }]
+    });
+    const lead = await tech.query(api.responses.getLead, { leadId });
+    expect(lead.response?.options[0].components).toEqual([
+      { name: "DEYE Lithium battery 48V 100Ah", quantity: 2, productId },
+      { name: "Installation", quantity: 1, productId: null }
+    ]);
+    expect(await tech.query(api.responses.catalogueParts, { leadId, ids: [productId] })).toEqual({ [productId]: 1_200_000 });
+
+    // A product from another company cannot be linked.
+    await registerUser(t, "boss@other.ug");
+    const { tenantId: otherTenant } = await t.mutation(internal.admin.bootstrapTenant, { companyName: "Other", slug: "other", adminEmail: "boss@other.ug" });
+    const other = await t.run(async (ctx) => {
+      const tenant = otherTenant;
+      const category = await ctx.db.query("productCategories").withIndex("by_tenant", (q) => q.eq("tenantId", tenantId)).first();
+      return await ctx.db.insert("products", {
+        tenantId: tenant, categoryId: category!._id, name: "X", brand: "X", model: "X", sku: "X-1", specValues: {},
+        specSchemaVersion: 1, status: "active", createdAt: Date.now(), createdBy: "x", updatedAt: Date.now()
+      });
+    });
+    await expect(tech.mutation(api.responses.saveResponse, {
+      leadId, message: "Hello", send: false,
+      options: [{ key: "opta1", title: "T", description: "", components: [{ name: "X", quantity: 1, productId: other }] }]
+    })).rejects.toThrow(/not in the catalogue/);
+    void asOwner;
+  });
+});
+
+describe("staff asking for recommendations", () => {
+  test("a technician's request reaches their own account, and another technician answers it", async () => {
+    const { t, tech } = await setup();
+    const second = await registerUser(t, "tech2@acme.ug");
+    await t.mutation(internal.admin.grantMembership, { tenantSlug: "acme", email: "tech2@acme.ug", role: "technician" });
+    const tech2 = t.withIdentity({ subject: second.subject });
+
+    // Signed in with no customer account yet: a phone is needed, then the account is made.
+    await expect(tech.mutation(api.estimator.submitRequest, {
+      input: appliances, grid: "unreliable", optionKey: "recommendation", name: "Tech One", location: "Mbarara"
+    })).rejects.toThrow(/phone/);
+    const sent = await tech.mutation(api.estimator.submitRequest, {
+      input: appliances, grid: "unreliable", optionKey: "recommendation", name: "Tech One", phone: "+256 701 111222", location: "Mbarara"
+    });
+    expect(sent).toMatchObject({ hasAccount: true, claimToken: null });
+    const leadId = sent.requestId as Id<"quoteRequests">;
+    expect((await tech.query(api.shop.myAccount, {})).account).toMatchObject({ name: "Tech One", phone: expect.stringContaining("701") });
+
+    // The requester cannot answer it; a colleague can.
+    expect(await tech.query(api.responses.getLead, { leadId })).toMatchObject({ canRespond: false, ownRequest: true });
+    await expect(tech.mutation(api.responses.saveResponse, {
+      leadId, message: "Hello", send: true, options: [option("opta1")]
+    })).rejects.toThrow(/your own request/);
+    expect(await tech2.query(api.responses.getLead, { leadId })).toMatchObject({ canRespond: true, ownRequest: false });
+    await tech2.mutation(api.responses.saveResponse, { leadId, message: "Hello Tech One", send: true, options: [option("opta1")] });
+
+    const mine = await tech.query(api.responses.myRequests, {});
+    expect(mine?.requests).toHaveLength(1);
+    expect(mine?.requests[0].response?.message).toBe("Hello Tech One");
+
+    // The upgrade check uses the same account from now on.
+    const upgrade = await tech.mutation(api.upgrades.submitUpgradeRequest, {
+      system: { systemType: "hybrid", systemVoltage: 24, inverter: { ratedW: 3000, hasSolarInput: true } },
+      needs: { goals: ["battery"] }, grid: "unreliable", optionKeys: [], location: "Mbarara"
+    });
+    expect(upgrade.hasAccount).toBe(true);
+  });
+});

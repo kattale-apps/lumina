@@ -6,6 +6,8 @@ import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { CompanyPage, ConfiguredOnly, errorMessage } from "../workspace";
 import { Pager, pageFor } from "../../../components/Pager";
+import { SearchSuggest } from "../../../components/SearchSuggest";
+import { countInto, matchesWords, searchWords, type Suggestion } from "@/lib/search";
 
 type Categories = NonNullable<ReturnType<typeof useQuery<typeof api.catalogue.listCategories>>>;
 type Category = Categories["categories"][number];
@@ -899,6 +901,13 @@ function Products({ tenantId }: { tenantId: Id<"tenants"> }) {
   const brands = [...new Set(all.map((p) => p.brand))].sort();
   const suppliers = [...new Set(all.map((p) => p.supplier).filter(Boolean))].sort();
   const term = search.trim().toLowerCase();
+  const words = searchWords(search);
+  const searchOptions: Suggestion[] = [
+    ...countInto("category", all.map((p) => ({ value: p.categoryId, label: p.categoryName }))),
+    ...countInto("brand", all.map((p) => ({ value: p.brand }))),
+    ...countInto("supplier", all.map((p) => ({ value: p.supplier }))),
+    ...countInto("product", all.map((p) => ({ value: p.name })))
+  ];
   const from = dayBound(addedFrom);
   const to = dayBound(addedTo, true);
   const now = Date.now();
@@ -907,7 +916,7 @@ function Products({ tenantId }: { tenantId: Id<"tenants"> }) {
       if (filter && p.categoryId !== filter) return false;
       if (brand && p.brand !== brand) return false;
       if (supplier && p.supplier !== supplier) return false;
-      if (term && !`${p.name} ${p.model} ${p.sku}`.toLowerCase().includes(term)) return false;
+      if (words.length && !matchesWords(`${p.name} ${p.brand} ${p.model} ${p.sku} ${p.categoryName} ${p.supplier}`, words)) return false;
       if (from !== null && p.addedAt < from) return false;
       if (to !== null && p.addedAt > to) return false;
       const since = p.pricing?.cost?.since ?? null;
@@ -980,8 +989,22 @@ function Products({ tenantId }: { tenantId: Id<"tenants"> }) {
               </select>
             </>
           ) : null}
-          <label htmlFor="product-search">Search</label>
-          <input id="product-search" type="search" placeholder="Name, model or SKU" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <SearchSuggest
+            id="product-search"
+            label="Search products"
+            placeholder="Search: e.g. solar panel, Deye, 48V"
+            value={search}
+            onChange={setSearch}
+            suggestions={searchOptions}
+            kindLabels={{ category: "Category", brand: "Brand", supplier: "Supplier", product: "Product" }}
+            onPick={(s) => {
+              // A category, brand or supplier becomes that filter; a product name searches for it.
+              if (s.kind === "category") { setSearch(""); setFilter(s.value); }
+              else if (s.kind === "brand") { setSearch(""); setBrand(s.value); }
+              else if (s.kind === "supplier") { setSearch(""); setSupplier(s.value); }
+              else setSearch(s.value);
+            }}
+          />
         </div>
         <div className="filter-row">
           <label htmlFor="added-from">Added from</label>

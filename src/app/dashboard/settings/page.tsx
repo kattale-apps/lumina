@@ -96,6 +96,7 @@ function EstimatorForm({ tenantId }: { tenantId: Id<"tenants"> }) {
   const [tariff, setTariff] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -105,6 +106,7 @@ function EstimatorForm({ tenantId }: { tenantId: Id<"tenants"> }) {
     setTariff(settings.tariffMinorPerKwh ? String(settings.tariffMinorPerKwh / 10 ** settings.exponent) : "");
     setPhone(settings.contactPhone);
     setEmail(settings.contactEmail);
+    setWhatsapp(settings.whatsappNumber ? `+${settings.whatsappNumber}` : "");
   }, [settings]);
 
   if (!settings) return null;
@@ -114,7 +116,7 @@ function EstimatorForm({ tenantId }: { tenantId: Id<"tenants"> }) {
     setBusy(true);
     setNotice(null);
     try {
-      await update({ tenantId, enabled, tariffPerKwh: Number(tariff || 0), contactPhone: phone, contactEmail: email });
+      await update({ tenantId, enabled, tariffPerKwh: Number(tariff || 0), contactPhone: phone, contactEmail: email, whatsappNumber: whatsapp });
       setNotice({ ok: true, text: "Power check settings saved." });
     } catch (error) {
       setNotice({ ok: false, text: errorMessage(error) });
@@ -141,6 +143,12 @@ function EstimatorForm({ tenantId }: { tenantId: Id<"tenants"> }) {
       <input id="pc-phone" type="tel" maxLength={30} value={phone} onChange={(e) => setPhone(e.target.value)} />
       <label htmlFor="pc-email">Contact email (optional)</label>
       <input id="pc-email" type="email" maxLength={120} value={email} onChange={(e) => setEmail(e.target.value)} />
+      <label htmlFor="pc-whatsapp">WhatsApp number for requests (optional)</label>
+      <input id="pc-whatsapp" type="tel" maxLength={30} placeholder="+256 700 000000" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} />
+      <p className="hint">
+        When set, customers who ask for a recommendation or an upgrade can also send it to this number on WhatsApp,
+        with their details and a link that opens the request in the app. Leave empty to switch this off.
+      </p>
       {notice ? <p className={notice.ok ? "form-success" : "auth-message"} role="status">{notice.text}</p> : null}
       <button className="button" type="submit" disabled={busy}>{busy ? "Saving…" : "Save power check settings"}</button>
     </form>

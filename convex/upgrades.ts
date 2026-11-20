@@ -35,6 +35,7 @@ import {
   type UpgradeReport
 } from "./lib/upgrade";
 import { requireText } from "./lib/validation";
+import { requesterAccount } from "./lib/requester";
 import { existingSystem, upgradeNeeds } from "./schema";
 
 type Ctx = QueryCtx | MutationCtx;
@@ -431,7 +432,8 @@ export const publicConfig = query({
     return {
       enabled: true as const,
       companyName: company.tenant.name,
-      contactPhone: company.settings.contactPhone ?? null
+      contactPhone: company.settings.contactPhone ?? null,
+      whatsappNumber: company.settings.whatsappNumber ?? null
     };
   }
 });
@@ -469,9 +471,8 @@ export const submitUpgradeRequest = mutation({
 
     const viewer = await findViewerProfile(ctx);
     const signedIn = viewer?.profile && viewer.profile.status === "active" ? viewer.profile : null;
-    const account = signedIn
-      ? await ctx.db.query("customerAccounts").withIndex("by_user", (q) => q.eq("userId", signedIn._id)).first()
-      : null;
+    // Anyone signed in may ask, staff included; their request goes to their own account.
+    const account = await requesterAccount(ctx, tenant._id, signedIn, { name: args.name, phone: args.phone });
     const name = requireText(account?.name ?? signedIn?.displayName ?? args.name ?? "", "Name", 100);
     const phone = validatePhone(account?.phone ?? args.phone ?? "");
     const email = validateOptionalEmail(signedIn?.email ?? args.email);

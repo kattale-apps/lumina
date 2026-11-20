@@ -15,6 +15,8 @@ import { findViewerProfile, requireTenantMembership } from "./lib/auth";
 import { MAX_IMAGE_BYTES, sniffFile } from "./lib/files";
 import { computeLoad, scheduledHours } from "./lib/load";
 import { currencyExponent, toMinorUnits } from "./lib/money";
+import { currentCost, priceFrom, resolveMarginRule } from "./lib/pricing";
+import { matchesWords, searchWords } from "./lib/search";
 import { LEAD_MANAGERS, LEAD_VIEWERS } from "./leads";
 
 /** Who may prepare and send a recommendation: the technical side and the managers. */
@@ -26,6 +28,9 @@ const MAX_IMAGES_PER_OPTION = 4;
 const MAX_MESSAGE = 2000;
 const MAX_DESCRIPTION = 1000;
 const HEAD_BYTES = 16;
+// Products shown per catalogue search, and how many are read to find them.
+const PICK_RESULTS = 25;
+const PICK_SCAN = 3000;
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -38,6 +43,16 @@ async function visibleLead(ctx: Ctx, leadId: Id<"quoteRequests">, roles: readonl
   const seesAll = (LEAD_MANAGERS as readonly string[]).includes(role) || role === "technician";
   if (!seesAll && lead.assignedToUserId !== access.profile._id) throw new ConvexError("Request not found.");
   return { lead, ...access };
+}
+
+/**
+ * True when the request was made by this staff member themselves. Another colleague answers it,
+ * so nobody recommends a system to themselves (the super admin may, in a one-person company).
+ */
+async function ownRequest(ctx: Ctx, lead: Doc<"quoteRequests">, profileId: Id<"userProfiles">, role: string) {
+  if (role === "super_admin" || !lead.customerAccountId) return false;
+  const account = await ctx.db.get(lead.customerAccountId);
+  return account?.userId === profileId;
 }
 
 async function responseFor(ctx: Ctx, requestId: Id<"quoteRequests">) {
@@ -74,7 +89,7 @@ async function presentResponse(ctx: Ctx, response: Doc<"requestResponses">) {
       key: o.key,
       title: o.title,
       description: o.description,
-      components: o.components,
+      components: o.components.map((c) => ({ name: c.name, quantity: c.quantity, productId: c.productId ?? null })),
       priceMinor: o.priceMinor ?? null,
       images: (images.get(o.key) ?? []).filter((i) => i.url).map((i) => ({ id: i.id, url: i.url as string }))
     }))
@@ -111,6 +126,7 @@ export const getLead = query({
       components: lead.components,
       dailyKwh: lead.dailyKwh,
       costPerMonthMinor: lead.costPerMonthMinor ?? null,
+      companyName: tenant.name,
       currency: tenant.defaultCurrency,
       exponent: currencyExponent(tenant.defaultCurrency),
       load: {
@@ -134,7 +150,9 @@ export const getLead = query({
         };
       }),
       hasAccount: Boolean(lead.customerAccountId),
-      canRespond: (RESPONDERS as readonly string[]).includes(role),
+      canRespond: (RESPONDERS as readonly string[]).includes(role) && !(await ownRequest(ctx, lead, profile._id, role)),
+      // The viewer asked for this one themselves, so a colleague answers it.
+      ownRequest: await ownRequest(ctx, lead, profile._id, role),
       assessmentId: lead.assessmentId ?? null,
       response: response
         ? { ...(await presentResponse(ctx, response)), preparedBy: preparedBy?.displayName ?? null }
@@ -148,7 +166,8 @@ const optionArg = v.object({
   key: v.string(),
   title: v.string(),
   description: v.string(),
-  components: v.array(v.object({ name: v.string(), quantity: v.number() })),
+  // productId links a part to the catalogue; parts from outside the catalogue have none.
+  components: v.array(v.object({ name: v.string(), quantity: v.number(), productId: v.optional(v.id("products")) })),
   // Whole currency units as typed (for example UGX 12500000); empty means "price on request".
   price: v.optional(v.number())
 });
@@ -162,8 +181,11 @@ export const saveResponse = mutation({
     send: v.boolean()
   },
   handler: async (ctx, args) => {
-    const { lead, profile, tenant } = await visibleLead(ctx, args.leadId, RESPONDERS);
+    const { lead, profile, tenant, membership } = await visibleLead(ctx, args.leadId, RESPONDERS);
     if (lead.status === "closed") throw new ConvexError("This request is closed.");
+    if (await ownRequest(ctx, lead, profile._id, membership.role as string)) {
+      throw new ConvexError("This is your own request. Another technician prepares your recommendation.");
+    }
 
     const message = args.message.trim();
     if (message.length > MAX_MESSAGE) throw new ConvexError(`The message must be ${MAX_MESSAGE} characters or fewer.`);
@@ -172,7 +194,8 @@ export const saveResponse = mutation({
     if (args.send && !message) throw new ConvexError("Write a short message to the customer before sending.");
 
     const keys = new Set<string>();
-    const options = args.options.map((o, i) => {
+    const options = [];
+    for (const [i, o] of args.options.entries()) {
       const label = `Option ${i + 1}`;
       if (!/^[a-z0-9]{4,32}$/i.test(o.key) || keys.has(o.key)) throw new ConvexError("Invalid option.");
       keys.add(o.key);
@@ -185,9 +208,13 @@ export const saveResponse = mutation({
       }
       if (o.components.length > MAX_COMPONENTS) throw new ConvexError(`${label}: list at most ${MAX_COMPONENTS} parts.`);
       const components = o.components
-        .map((c) => ({ name: c.name.trim(), quantity: c.quantity }))
+        .map((c) => ({ name: c.name.trim(), quantity: c.quantity, ...(c.productId ? { productId: c.productId } : {}) }))
         .filter((c) => c.name);
       for (const c of components) {
+        if (c.productId) {
+          const product = await ctx.db.get(c.productId);
+          if (!product || product.tenantId !== lead.tenantId) throw new ConvexError(`${label}: "${c.name}" is not in the catalogue.`);
+        }
         if (c.name.length > 100) throw new ConvexError(`${label}: part names must be 100 characters or fewer.`);
         if (!Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 1000) {
           throw new ConvexError(`${label}: "${c.name}" needs a whole quantity from 1 to 1000.`);
@@ -196,8 +223,8 @@ export const saveResponse = mutation({
       if (args.send && components.length === 0) throw new ConvexError(`${label}: list the main parts before sending.`);
       const priceMinor = o.price === undefined ? undefined : toMinorUnits(o.price, tenant.defaultCurrency);
       if (priceMinor === 0) throw new ConvexError(`${label}: leave the price empty instead of zero.`);
-      return { key: o.key, title, description, components, priceMinor };
-    });
+      options.push({ key: o.key, title, description, components, priceMinor });
+    }
 
     const now = Date.now();
     const existing = await responseFor(ctx, lead._id);
@@ -239,6 +266,99 @@ export const saveResponse = mutation({
       });
     }
     return { status };
+  }
+});
+
+/** List price of a product as customers see it, or null when it has no cost or margin yet. */
+async function listPriceMinor(ctx: Ctx, product: Doc<"products">) {
+  const cost = await currentCost(ctx, product._id);
+  const rule = cost ? await resolveMarginRule(ctx, product) : null;
+  return cost && rule ? priceFrom(cost, rule.rule).listMinor : null;
+}
+
+/**
+ * Catalogue products a technician can add to a recommendation, with the list price customers
+ * see in the shop (never cost or margin). Narrowed by words and an optional category.
+ */
+export const searchCatalogue = query({
+  args: { leadId: v.id("quoteRequests"), term: v.string(), categoryId: v.optional(v.id("productCategories")) },
+  handler: async (ctx, args) => {
+    const { lead } = await visibleLead(ctx, args.leadId, RESPONDERS);
+    const categories = (
+      await ctx.db.query("productCategories").withIndex("by_tenant", (q) => q.eq("tenantId", lead.tenantId)).collect()
+    ).filter((c) => c.status === "active");
+    const categoryName = new Map(categories.map((c) => [c._id, c.name]));
+
+    const words = searchWords(args.term);
+    const products = await ctx.db
+      .query("products")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", lead.tenantId))
+      .take(PICK_SCAN);
+    const matches = products
+      .filter((p) => p.status === "active" && categoryName.has(p.categoryId))
+      .filter((p) => !args.categoryId || p.categoryId === args.categoryId)
+      .filter((p) => matchesWords(`${p.name} ${p.brand} ${p.model} ${p.sku} ${categoryName.get(p.categoryId)}`, words))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.brand.localeCompare(b.brand));
+
+    const results = [];
+    for (const p of matches.slice(0, PICK_RESULTS)) {
+      results.push({
+        id: p._id,
+        name: p.name,
+        brand: p.brand,
+        model: p.model,
+        sku: p.sku,
+        categoryName: categoryName.get(p.categoryId) ?? "",
+        listPriceMinor: await listPriceMinor(ctx, p)
+      });
+    }
+    return {
+      categories: categories.map((c) => ({ id: c._id, name: c.name })).sort((a, b) => a.name.localeCompare(b.name)),
+      total: matches.length,
+      results
+    };
+  }
+});
+
+/** Groups, brands and product names for the dropdown under the catalogue search box. */
+export const catalogueNames = query({
+  args: { leadId: v.id("quoteRequests") },
+  handler: async (ctx, args) => {
+    const { lead } = await visibleLead(ctx, args.leadId, RESPONDERS);
+    const categories = (
+      await ctx.db.query("productCategories").withIndex("by_tenant", (q) => q.eq("tenantId", lead.tenantId)).collect()
+    ).filter((c) => c.status === "active");
+    const active = new Set(categories.map((c) => c._id));
+    const products = (
+      await ctx.db.query("products").withIndex("by_tenant", (q) => q.eq("tenantId", lead.tenantId)).take(PICK_SCAN)
+    ).filter((p) => p.status === "active" && active.has(p.categoryId));
+    const tally = (values: string[]) => {
+      const out = new Map<string, number>();
+      for (const value of values) out.set(value, (out.get(value) ?? 0) + 1);
+      return [...out.entries()].map(([value, count]) => ({ value, count }));
+    };
+    const perCategory = new Map(tally(products.map((p) => p.categoryId)).map((c) => [c.value, c.count]));
+    return {
+      categories: categories.map((c) => ({ id: c._id, name: c.name, count: perCategory.get(c._id) ?? 0 })).filter((c) => c.count > 0),
+      brands: tally(products.map((p) => p.brand)),
+      names: tally(products.map((p) => p.name))
+    };
+  }
+});
+
+/** List prices of the catalogue parts already in a recommendation, for a running total. */
+export const catalogueParts = query({
+  args: { leadId: v.id("quoteRequests"), ids: v.array(v.id("products")) },
+  handler: async (ctx, args) => {
+    const { lead } = await visibleLead(ctx, args.leadId, RESPONDERS);
+    if (args.ids.length > MAX_OPTIONS * MAX_COMPONENTS) throw new ConvexError("Too many parts.");
+    const out: Record<string, number | null> = {};
+    for (const id of new Set(args.ids)) {
+      const product = await ctx.db.get(id);
+      if (!product || product.tenantId !== lead.tenantId) continue;
+      out[id] = await listPriceMinor(ctx, product);
+    }
+    return out;
   }
 });
 

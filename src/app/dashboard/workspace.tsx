@@ -153,9 +153,9 @@ export function WorkspaceHeader({ role }: { role?: string }) {
         <>
           <button type="button" className="menu-backdrop" aria-label="Close the menu" onClick={() => setMenuOpen(false)} />
           <nav id="workspace-menu" className="workspace-menu" aria-label="Workspace">
-            {groups.map((group) => (
+            {groups.map((group, gi) => (
               <div key={group} className="menu-group">
-                <p className="menu-group-title">{group}</p>
+                <p className={`menu-group-title menu-tone-${(gi % 3) + 1}`}>{group}</p>
                 {visible
                   .filter((link) => link.group === group)
                   .map((link) => (
@@ -173,9 +173,19 @@ export function WorkspaceHeader({ role }: { role?: string }) {
               </div>
             ))}
             <div className="menu-group">
-              <p className="menu-group-title">Me</p>
+              <p className="menu-group-title menu-tone-4">Me</p>
               <Link href="/profile" className={path === "/profile" ? "menu-link menu-link-on" : "menu-link"} onClick={() => setMenuOpen(false)}>
                 <span>My profile</span>
+              </Link>
+              {/* Staff can check their own energy needs or system and ask for a recommendation, like any customer. */}
+              <Link href="/estimate" className="menu-link" onClick={() => setMenuOpen(false)}>
+                <span>Check my energy needs</span>
+              </Link>
+              <Link href="/estimate/upgrade" className="menu-link" onClick={() => setMenuOpen(false)}>
+                <span>Upgrade or fix my system</span>
+              </Link>
+              <Link href="/my-requests" className="menu-link" onClick={() => setMenuOpen(false)}>
+                <span>My recommendations</span>
               </Link>
               <SignOutButton className="menu-link menu-signout" />
             </div>

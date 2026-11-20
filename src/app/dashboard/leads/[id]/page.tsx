@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../../../convex/_generated/api";
@@ -11,13 +11,21 @@ import { CompanyPage, ConfiguredOnly, errorMessage } from "../../workspace";
 import { shrinkImage } from "@/lib/shrinkImage";
 import { describeNeeds, describeSystem } from "../../../estimate/upgrade/describe";
 import { UpgradeReport } from "../../../estimate/upgrade/UpgradeReport";
+import { SearchSuggest } from "@/components/SearchSuggest";
+import type { Suggestion } from "@/lib/search";
+import { AppUpdateNeeded, savePdf } from "@/lib/savePdf";
+import { sharePdf } from "@/lib/sharePdf";
+import { whatsappDigits } from "@/lib/whatsapp";
+import { requestReference } from "@/components/WhatsAppSend";
+import type { PdfOption } from "./recommendationPdf";
 
 type Lead = FunctionReturnType<typeof api.responses.getLead>;
 type EditOption = {
   key: string;
   title: string;
   description: string;
-  components: { name: string; quantity: string }[];
+  /** productId is set when the part was picked from the catalogue. */
+  components: { name: string; quantity: string; productId?: Id<"products"> }[];
   price: string;
 };
 
@@ -36,14 +44,127 @@ const blankOption = (n: number): EditOption => ({
   key: newKey(),
   title: n === 0 ? "Recommended system" : `Option ${n + 1}`,
   description: "",
-  components: [{ name: "", quantity: "1" }],
+  components: [],
   price: ""
 });
+
+/** A clearly labelled box for a part the company sources from outside its catalogue. */
+function OutsidePart({ optionKey, onAdd }: { optionKey: string; onAdd: (name: string, quantity: string) => void }) {
+  const [name, setName] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  function add() {
+    if (!name.trim()) return;
+    onAdd(name.trim(), quantity || "1");
+    setName("");
+    setQuantity("1");
+  }
+  return (
+    <div className="outside-part">
+      <label htmlFor={`op-${optionKey}`}>Part name</label>
+      <div className="outside-part-row">
+        <input
+          id={`op-${optionKey}`}
+          maxLength={100}
+          placeholder="Type the part, e.g. 6 mm² solar cable, 30 m"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+        />
+        <input aria-label="How many" className="part-qty" inputMode="numeric" value={quantity} onChange={(e) => setQuantity(e.target.value.replace(/\D/g, ""))} />
+        <button type="button" className="button button-small" disabled={!name.trim()} onClick={add}>+ Add part</button>
+      </div>
+    </div>
+  );
+}
 
 function money(minor: number, exponent: number, currency: string) {
   return `${currency} ${(minor / 10 ** exponent).toLocaleString("en-US", { maximumFractionDigits: exponent })}`;
 }
 const kw = (w: number) => (w >= 1000 ? `${(w / 1000).toFixed(w >= 10_000 ? 0 : 1)} kW` : `${Math.round(w)} W`);
+
+/** Search box over the company catalogue; tapping a product adds it to the option as a part. */
+function CataloguePicker({ leadId, onPick, onClose, currency, exponent }: {
+  leadId: Id<"quoteRequests">;
+  onPick: (p: { id: Id<"products">; label: string }) => void;
+  onClose: () => void;
+  currency: string;
+  exponent: number;
+}) {
+  const [term, setTerm] = useState("");
+  const [query, setQuery] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [added, setAdded] = useState<string[]>([]);
+  const names = useQuery(api.responses.catalogueNames, { leadId });
+  const suggestions: Suggestion[] = names
+    ? [
+        ...names.categories.map((c) => ({ kind: "category" as const, value: c.id, label: c.name, count: c.count })),
+        ...names.brands.map((b) => ({ kind: "brand" as const, value: b.value, label: b.value, count: b.count })),
+        ...names.names.map((n) => ({ kind: "product" as const, value: n.value, label: n.value, count: n.count }))
+      ]
+    : [];
+  // Wait for a pause in typing before searching.
+  useEffect(() => {
+    const id = setTimeout(() => setQuery(term), 250);
+    return () => clearTimeout(id);
+  }, [term]);
+  const found = useQuery(api.responses.searchCatalogue, {
+    leadId,
+    term: query,
+    categoryId: categoryId ? (categoryId as Id<"productCategories">) : undefined
+  });
+
+  return (
+    <div className="catalogue-picker">
+      <div className="filter-row">
+        <SearchSuggest
+          id={`cp-${leadId}`}
+          label="Search the catalogue"
+          autoFocus
+          placeholder="Type, e.g. solar, battery 48V, Deye 5kW"
+          value={term}
+          onChange={setTerm}
+          suggestions={suggestions}
+          kindLabels={{ category: "Category", brand: "Brand", supplier: "Supplier", product: "Product" }}
+          onPick={(s) => {
+            // A category narrows the list to it; a brand or product name searches for it.
+            if (s.kind === "category") { setCategoryId(s.value); setTerm(""); }
+            else setTerm(s.value);
+          }}
+        />
+        <select aria-label="Category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+          <option value="">All categories</option>
+          {(found?.categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <button type="button" className="button button-secondary button-small" onClick={onClose}>Done</button>
+      </div>
+      {found === undefined ? <p className="muted">Searching…</p> : found.results.length === 0 ? (
+        <p className="muted">Nothing in the catalogue matches. Type the part below instead.</p>
+      ) : (
+        <>
+          <ul className="catalogue-results">
+            {found.results.map((p) => {
+              const label = `${p.brand} ${p.name}${p.model && !p.name.includes(p.model) ? ` (${p.model})` : ""}`.slice(0, 100);
+              const count = added.filter((x) => x === p.id).length;
+              return (
+                <li key={p.id}>
+                  <div>
+                    <strong>{p.name}</strong>
+                    <span className="record-meta">{p.brand} {p.model} · {p.categoryName}</span>
+                  </div>
+                  <span className="catalogue-price">{p.listPriceMinor !== null ? money(p.listPriceMinor, exponent, currency) : "No price yet"}</span>
+                  <button type="button" className="button button-small" onClick={() => { onPick({ id: p.id, label }); setAdded((a) => [...a, p.id]); }}>
+                    {count ? `Added ${count} · add again` : "+ Add"}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {found.total > found.results.length ? <p className="hint">Showing {found.results.length} of {found.total}. Type more words to narrow it down.</p> : null}
+        </>
+      )}
+    </div>
+  );
+}
 
 /**
  * Rules of thumb so a technician starts from sensible sizes. They are a starting point, not a design:
@@ -71,7 +192,7 @@ function Specs({ lead }: { lead: Lead }) {
     <>
       <section className="lead-block lead-contact">
         <h2>{lead.name}</h2>
-        <p className="muted">{lead.location} · sent {new Date(lead.createdAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</p>
+        <p className="muted">{lead.location} · sent {new Date(lead.createdAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })} · reference <strong>{requestReference(lead.id)}</strong></p>
         <div className="lead-contact-actions">
           <a className="button button-small" href={`tel:${phoneDigits}`}>📞 Call {lead.phone}</a>
           <a className="button button-small button-secondary" href={`https://wa.me/${whatsapp}`} target="_blank" rel="noreferrer">WhatsApp</a>
@@ -191,13 +312,31 @@ function ResponseEditor({ lead }: { lead: Lead }) {
           key: o.key,
           title: o.title,
           description: o.description,
-          components: o.components.map((c) => ({ name: c.name, quantity: String(c.quantity) })),
+          components: o.components.map((c) => ({ name: c.name, quantity: String(c.quantity), productId: c.productId ?? undefined })),
           price: o.priceMinor !== null ? String(o.priceMinor / 10 ** lead.exponent) : ""
         }))
       : [blankOption(0)]
   );
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  // Which option has the catalogue search open.
+  const [picking, setPicking] = useState<string | null>(null);
+  const linked = [...new Set(options.flatMap((o) => o.components.map((c) => c.productId).filter((id): id is Id<"products"> => Boolean(id))))];
+  const partPrices = useQuery(api.responses.catalogueParts, linked.length ? { leadId: lead.id, ids: linked } : "skip");
+  /** List-price total of an option's catalogue parts, and whether any part has no price. */
+  function catalogueTotal(o: EditOption) {
+    let total = 0;
+    let parts = 0;
+    let unpriced = 0;
+    for (const c of o.components) {
+      if (!c.productId) continue;
+      parts++;
+      const unit = partPrices?.[c.productId];
+      if (unit === null || unit === undefined) unpriced++;
+      else total += unit * (Number(c.quantity) || 0);
+    }
+    return { total, parts, unpriced };
+  }
   const images = new Map((existing?.options ?? []).map((o) => [o.key, o.images]));
   const sent = existing?.status === "sent";
 
@@ -210,7 +349,7 @@ function ResponseEditor({ lead }: { lead: Lead }) {
       description: o.description,
       components: o.components
         .filter((c) => c.name.trim())
-        .map((c) => ({ name: c.name, quantity: Number(c.quantity) })),
+        .map((c) => ({ name: c.name, quantity: Number(c.quantity), ...(c.productId ? { productId: c.productId } : {}) })),
       price: o.price.trim() ? Number(o.price.replace(/[,\s]/g, "")) : undefined
     }));
   }
@@ -280,20 +419,60 @@ function ResponseEditor({ lead }: { lead: Lead }) {
           <textarea id={`d-${o.key}`} rows={3} maxLength={1000} placeholder="e.g. Runs the fridge, TV and lights day and night, with about 8 hours of backup during outages." value={o.description} onChange={(e) => update(i, { description: e.target.value })} />
 
           <span className="response-label">Main parts</span>
+          {o.components.length === 0 ? <p className="hint">No parts yet. Add them from the catalogue or type them below.</p> : null}
           {o.components.map((c, ci) => (
             <div key={ci} className="part-row">
               <input aria-label="Quantity" inputMode="numeric" className="part-qty" value={c.quantity} onChange={(e) => update(i, { components: o.components.map((x, xi) => (xi === ci ? { ...x, quantity: e.target.value.replace(/\D/g, "") } : x)) })} />
               <span aria-hidden="true">×</span>
-              <input aria-label="Part" maxLength={100} placeholder="e.g. 550 W solar panel" value={c.name} onChange={(e) => update(i, { components: o.components.map((x, xi) => (xi === ci ? { ...x, name: e.target.value } : x)) })} />
+              {c.productId ? (
+                <span className="part-linked" title="From the catalogue">
+                  <span className="pill">Catalogue</span> {c.name}
+                  {partPrices?.[c.productId] != null ? <span className="record-meta"> · {money(partPrices[c.productId]!, lead.exponent, lead.currency)} each</span> : null}
+                </span>
+              ) : (
+                <input aria-label="Part" maxLength={100} placeholder="e.g. 550 W solar panel" value={c.name} onChange={(e) => update(i, { components: o.components.map((x, xi) => (xi === ci ? { ...x, name: e.target.value } : x)) })} />
+              )}
               <button type="button" className="part-remove" aria-label={`Remove ${c.name || "part"}`} onClick={() => update(i, { components: o.components.filter((_, xi) => xi !== ci) })}>✕</button>
             </div>
           ))}
+          <div className="part-source part-source-catalogue">
+            <p className="part-source-title">From the catalogue</p>
+          {picking === o.key ? (
+            <CataloguePicker
+              leadId={lead.id}
+              currency={lead.currency}
+              exponent={lead.exponent}
+              onClose={() => setPicking(null)}
+              onPick={(p) => update(i, { components: [...o.components.filter((c) => c.name.trim()), { name: p.label, quantity: "1", productId: p.id }] })}
+            />
+          ) : (
+            <button type="button" className="button button-secondary button-small" onClick={() => setPicking(o.key)}>🔎 Search the catalogue</button>
+          )}
+          </div>
+          <div className="part-source part-source-outside">
+            <p className="part-source-title">Not in the catalogue? Type it here</p>
+            <OutsidePart optionKey={o.key} onAdd={(name, quantity) => update(i, { components: [...o.components.filter((c) => c.name.trim()), { name, quantity }] })} />
+            <p className="hint">Or tap a common part:</p>
           <div className="quick-parts">
             {QUICK_PARTS.map((p) => (
               <button type="button" key={p} className="chip" onClick={() => update(i, { components: [...o.components.filter((c) => c.name.trim()), { name: p, quantity: "1" }] })}>+ {p}</button>
             ))}
           </div>
+          </div>
 
+          {(() => {
+            const ct = catalogueTotal(o);
+            if (!ct.parts) return null;
+            return (
+              <p className="hint catalogue-total">
+                Catalogue parts at list price: <strong>{money(ct.total, lead.exponent, lead.currency)}</strong>
+                {ct.unpriced ? ` (${ct.unpriced} part${ct.unpriced === 1 ? " has" : "s have"} no price yet)` : ""}. Add installation and other parts on top.{" "}
+                {ct.total > 0 ? (
+                  <button type="button" className="link-button" onClick={() => update(i, { price: String(ct.total / 10 ** lead.exponent) })}>Use as the price</button>
+                ) : null}
+              </p>
+            );
+          })()}
           <label htmlFor={`p-${o.key}`}>Estimated price, {lead.currency} (optional)</label>
           <input id={`p-${o.key}`} inputMode="numeric" placeholder="Leave empty to discuss the price" value={o.price} onChange={(e) => update(i, { price: e.target.value.replace(/[^\d,]/g, "") })} />
 
@@ -339,7 +518,92 @@ function ResponseEditor({ lead }: { lead: Lead }) {
           {busy === "send" ? "Sending…" : sent ? "Update what the customer sees" : "Send to customer"}
         </button>
       </div>
+      <ShareRecommendation
+        lead={lead}
+        message={message}
+        preparedBy={existing?.preparedBy ?? null}
+        options={options.map((o) => ({
+          title: o.title,
+          description: o.description,
+          parts: o.components.filter((c) => c.name.trim()).map((c) => ({ name: c.name, quantity: Number(c.quantity) || 1 })),
+          price: o.price.trim() ? money(Number(o.price.replace(/[,\s]/g, "")) * 10 ** lead.exponent, lead.exponent, lead.currency) : null,
+          photoUrls: (images.get(o.key) ?? []).map((i) => i.url)
+        }))}
+      />
     </section>
+  );
+}
+
+/**
+ * Download the recommendation as a PDF, or share it straight to the customer on WhatsApp.
+ * Built from what is on screen, so it matches the editor even before saving.
+ */
+function ShareRecommendation({ lead, message, options, preparedBy }: { lead: Lead; message: string; options: PdfOption[]; preparedBy: string | null }) {
+  const [busy, setBusy] = useState<"pdf" | "share" | null>(null);
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const customerWhatsapp = whatsappDigits(lead.phone);
+  const reference = requestReference(lead.id);
+  const filename = `solar-recommendation-${lead.name.split(" ")[0].toLowerCase().replace(/[^a-z0-9]+/g, "") || "customer"}-${reference}.pdf`;
+
+  async function build() {
+    const { buildRecommendationPdf } = await import("./recommendationPdf");
+    return await buildRecommendationPdf({
+      companyName: lead.companyName,
+      customerName: lead.name,
+      location: lead.location,
+      phone: lead.phone,
+      reference,
+      preparedBy,
+      needs: lead.isUpgrade || !lead.dailyKwh ? null : `about ${lead.dailyKwh} kWh a day, busiest moment about ${kw(lead.load.peakW)}`,
+      message,
+      options
+    });
+  }
+
+  async function run(kind: "pdf" | "share") {
+    if (!options.some((o) => o.title.trim())) {
+      setNotice({ ok: false, text: "Add at least one option before making the PDF." });
+      return;
+    }
+    setBusy(kind);
+    setNotice(null);
+    try {
+      const bytes = await build();
+      if (kind === "pdf") {
+        await savePdf(bytes, filename, "Solar recommendation");
+        setNotice({ ok: true, text: "PDF ready." });
+      } else {
+        const outcome = await sharePdf(bytes, filename, "Solar recommendation", {
+          to: customerWhatsapp,
+          text: `Hello ${lead.name.split(" ")[0]}, here is your solar recommendation from ${lead.companyName} (reference ${reference}).`
+        });
+        setNotice(
+          outcome === "downloaded"
+            ? { ok: true, text: customerWhatsapp ? "The PDF downloaded and WhatsApp opened to the customer's chat. Attach the PDF there and send." : "The PDF downloaded. The customer's phone number does not work for WhatsApp, so send it to them yourself." }
+            : outcome === "shared" ? { ok: true, text: "Choose WhatsApp and the customer's chat to send it." } : null
+        );
+      }
+    } catch (e) {
+      setNotice({ ok: false, text: e instanceof AppUpdateNeeded ? e.message : "The PDF could not be made. Please try again." });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="share-recommendation">
+      <span className="response-label">Share with the customer</span>
+      <div className="response-actions">
+        <button type="button" className="button button-secondary" disabled={busy !== null} onClick={() => run("pdf")}>
+          {busy === "pdf" ? "Making the PDF…" : "⬇ Download recommendation (PDF)"}
+        </button>
+        <button type="button" className="button button-whatsapp" disabled={busy !== null} onClick={() => run("share")}>
+          {busy === "share" ? "Making the PDF…" : "💬 Share PDF on WhatsApp"}
+        </button>
+      </div>
+      <p className="hint">The PDF shows the message, each option with its parts, estimated price and photos. Customer: {lead.phone}.</p>
+      {notice ? <p className={notice.ok ? "form-success" : "auth-message"} role="status">{notice.text}</p> : null}
+    </div>
   );
 }
 
@@ -348,6 +612,12 @@ function ReadOnlyResponse({ lead }: { lead: Lead }) {
   return (
     <section className="lead-block">
       <h2>Recommendation</h2>
+      {lead.ownRequest ? (
+        <p className="hint">
+          This is your own request, so a colleague prepares the recommendation. You will see it under{" "}
+          <Link href="/my-requests"><u>My recommendations</u></Link>.
+        </p>
+      ) : null}
       {!r ? <p className="muted">A technician has not responded yet.</p> : (
         <>
           <p className="hint">{r.status === "sent" ? "Sent to the customer." : "Draft, not sent yet."}</p>
@@ -360,6 +630,18 @@ function ReadOnlyResponse({ lead }: { lead: Lead }) {
               {o.priceMinor !== null ? <p><strong>{money(o.priceMinor, lead.exponent, lead.currency)}</strong></p> : null}
             </div>
           ))}
+          <ShareRecommendation
+            lead={lead}
+            message={r.message}
+            preparedBy={r.preparedBy}
+            options={r.options.map((o) => ({
+              title: o.title,
+              description: o.description,
+              parts: o.components.map((c) => ({ name: c.name, quantity: c.quantity })),
+              price: o.priceMinor !== null ? money(o.priceMinor, lead.exponent, lead.currency) : null,
+              photoUrls: o.images.map((i) => i.url)
+            }))}
+          />
         </>
       )}
     </section>

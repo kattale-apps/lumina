@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
 import { hashKey, KEY_PATTERN } from "./inbox";
+import { download, preflight, upload } from "./pdfLinks";
 
 const http = httpRouter();
 auth.addHttpRoutes(http);
@@ -27,5 +28,10 @@ http.route({
     return Response.json(result);
   })
 });
+
+// PDFs some devices cannot save from the page: upload for a short-lived link, then open it.
+http.route({ path: "/pdf-link", method: "POST", handler: upload });
+http.route({ path: "/pdf-link", method: "OPTIONS", handler: preflight });
+http.route({ path: "/pdf-link", method: "GET", handler: download });
 
 export default http;

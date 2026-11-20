@@ -25,6 +25,8 @@ import { withSafeEstimates } from "./lib/specEstimate";
 import { validateLine } from "./lib/load";
 import { optionalText, validateOptionalEmail, validatePhone } from "./lib/crm";
 import { requireText } from "./lib/validation";
+import { requesterAccount } from "./lib/requester";
+import { whatsappDigits } from "./lib/whatsapp";
 
 /** Public, unauthenticated limits. Convex gives no IP address, so limits are per phone and overall. */
 const MAX_ITEMS = 40;
@@ -262,6 +264,7 @@ export const publicConfig = query({
       ) as Record<(typeof CUSTOMER_CATEGORIES)[number], number | null>,
       contactPhone: company.settings.contactPhone ?? null,
       contactEmail: company.settings.contactEmail ?? null,
+      whatsappNumber: company.settings.whatsappNumber ?? null,
       appliances: library.map((a) => ({
         name: a.name,
         category: a.category,
@@ -303,9 +306,8 @@ export const submitRequest = mutation({
 
     const viewer = await findViewerProfile(ctx);
     const signedIn = viewer?.profile && viewer.profile.status === "active" ? viewer.profile : null;
-    const account = signedIn
-      ? await ctx.db.query("customerAccounts").withIndex("by_user", (q) => q.eq("userId", signedIn._id)).first()
-      : null;
+    // Anyone signed in may ask, staff included; their request goes to their own account.
+    const account = await requesterAccount(ctx, tenant._id, signedIn, { name: args.name, phone: args.phone });
     const name = requireText(account?.name ?? signedIn?.displayName ?? args.name ?? "", "Name", 100);
     const phone = validatePhone(account?.phone ?? args.phone ?? "");
     const email = validateOptionalEmail(signedIn?.email ?? args.email);
@@ -414,7 +416,8 @@ export const getEstimatorSettings = query({
       enabled: row?.enabled ?? false,
       tariffMinorPerKwh: row?.tariffMinorPerKwh ?? 0,
       contactPhone: row?.contactPhone ?? "",
-      contactEmail: row?.contactEmail ?? ""
+      contactEmail: row?.contactEmail ?? "",
+      whatsappNumber: row?.whatsappNumber ?? ""
     };
   }
 });
@@ -426,10 +429,16 @@ export const updateEstimatorSettings = mutation({
     // Whole currency units per kWh as typed by the admin.
     tariffPerKwh: v.number(),
     contactPhone: v.optional(v.string()),
-    contactEmail: v.optional(v.string())
+    contactEmail: v.optional(v.string()),
+    // Optional WhatsApp number that public requests can be sent to.
+    whatsappNumber: v.optional(v.string())
   },
   handler: async (ctx, args) => {
     const { profile, tenant } = await requireTenantMembership(ctx, args.tenantId, SETTINGS_ADMINS);
+    const whatsappNumber = args.whatsappNumber?.trim() ? whatsappDigits(args.whatsappNumber) : undefined;
+    if (args.whatsappNumber?.trim() && !whatsappNumber) {
+      throw new ConvexError("Enter the WhatsApp number with its country code, e.g. +256 700 000000.");
+    }
     const tariffMinorPerKwh = toMinorUnits(args.tariffPerKwh, tenant.defaultCurrency);
     if (args.enabled && tariffMinorPerKwh <= 0) {
       throw new ConvexError("Set the price per kWh before switching the power check on.");
@@ -456,6 +465,7 @@ export const updateEstimatorSettings = mutation({
       tariffMinorPerKwh,
       contactPhone: optionalText(contactPhone, "Phone", 30),
       contactEmail,
+      whatsappNumber: whatsappNumber ?? undefined,
       updatedAt: Date.now(),
       updatedBy: profile.authSubject
     };

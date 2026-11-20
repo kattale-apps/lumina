@@ -11,8 +11,10 @@ import { describeNeeds, describeSystem, type ExistingSystem, type UpgradeNeeds }
 import { blankUpgradeForm, stepProblem, toPayload, UpgradeForm } from "./UpgradeForm";
 import { StepButtons, StepProgress, useGoBack } from "@/components/StepNav";
 import { PublicShell } from "@/components/PublicShell";
+import { requestReference, WhatsAppSend } from "@/components/WhatsAppSend";
 import { toggleOption, UpgradeReport, type Report } from "./UpgradeReport";
-import { Rich, useT } from "@/lib/i18n";
+import { Rich, useT, type MessageKey } from "@/lib/i18n";
+import { en } from "@/lib/i18n/en";
 
 type Grid = "none" | "unreliable" | "reliable";
 const GRID_CHOICES: Grid[] = ["reliable", "unreliable", "none"];
@@ -62,7 +64,7 @@ function UpgradeCheck() {
   const [busy, setBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<null | { hasAccount: boolean }>(null);
+  const [done, setDone] = useState<null | { hasAccount: boolean; whatsappText: string | null }>(null);
 
   const signedInCustomer = customer?.signedIn === true;
   const hasCustomerAccount = signedInCustomer && customer.account !== null;
@@ -133,12 +135,37 @@ function UpgradeCheck() {
         report: checked.report,
         selected
       });
-      await savePdf(bytes, `solar-upgrade-report-${new Date().toISOString().slice(0, 10)}.pdf`, "Solar upgrade report");
+      await savePdf(bytes, `solar-upgrade-report-${new Date().toISOString().slice(0, 10)}.pdf`, "Solar upgrade report", { ready: t("pdf.ready"), open: t("pdf.open"), hint: t("pdf.hint"), close: t("pdf.close") });
     } catch (e) {
       setError(e instanceof AppUpdateNeeded ? e.message : t("estimate.errPdf"));
     } finally {
       setPdfBusy(false);
     }
+  }
+
+  /** The request as a WhatsApp message to the company, in English for the technician. */
+  function whatsappMessage(requestId: string) {
+    if (!checked || !config?.enabled) return null;
+    const who = hasCustomerAccount ? customer.account! : { name: contact.name, phone: contact.phone };
+    const titles = checked.report.sections.flatMap((s) => s.options).filter((o) => selected.includes(o.key)).map((o) => `• ${o.title}`);
+    return [
+      `Hello ${config.companyName}, I would like help with my existing solar system.`,
+      "",
+      `Name: ${who.name}`,
+      `Phone: ${who.phone}`,
+      `Location: ${contact.location}`,
+      grid ? `Electricity: ${en[`estimate.grid.${grid}` as MessageKey]}` : "",
+      "",
+      "My system:",
+      ...describeSystem(checked.system).map((l) => `• ${l}`),
+      "",
+      "What I want:",
+      ...describeNeeds(checked.needs).map((l) => `• ${l}`),
+      ...(titles.length ? ["", "Options I chose:", ...titles] : ["", "Please recommend what fits."]),
+      "",
+      `Reference: ${requestReference(requestId)}`,
+      `Open in the app: ${window.location.origin}/dashboard/leads/${requestId}`
+    ].filter((line, i, all) => line !== "" || all[i - 1] !== "").join("\n");
   }
 
   async function request(event: FormEvent) {
@@ -164,7 +191,7 @@ function UpgradeCheck() {
         website: contact.website || undefined
       });
       if (sent.claimToken) rememberPendingRequest(sent.claimToken);
-      setDone({ hasAccount: sent.hasAccount });
+      setDone({ hasAccount: sent.hasAccount, whatsappText: sent.requestId ? whatsappMessage(sent.requestId) : null });
     } catch (e) {
       setError(message(e, t("common.genericError")));
     } finally {
@@ -179,6 +206,7 @@ function UpgradeCheck() {
         <p>
           <Rich text={t("upgrade.thanksText", { phone: hasCustomerAccount ? customer.account!.phone : contact.phone })} />
         </p>
+        {config.whatsappNumber && done.whatsappText ? <WhatsAppSend number={config.whatsappNumber} text={done.whatsappText} /> : null}
         {done.hasAccount ? (
           <div className="next-step next-step-ok">
             <strong>{t("estimate.inAccountTitle")}</strong>
@@ -290,8 +318,6 @@ function UpgradeCheck() {
               </div>
               {customer === undefined ? (
                 <p className="hint">{t("estimate.checkingAccount")}</p>
-              ) : signedInCustomer && !hasCustomerAccount ? (
-                <p className="hint"><Rich text={t("estimate.accountIncomplete")} link={(label) => <Link href="/shop"><u>{label}</u></Link>} /></p>
               ) : hasCustomerAccount ? (
                 <div className="signed-in-request">
                   <strong>{t("estimate.requestingAs", { name: customer.account!.name })}</strong>
@@ -301,12 +327,17 @@ function UpgradeCheck() {
                 </div>
               ) : (
                 <>
+                  {signedInCustomer ? <p className="hint">{t("estimate.signedInNoAccount")}</p> : null}
                   <label htmlFor="rq-name">{t("estimate.yourName")}</label>
                   <input id="rq-name" required maxLength={100} autoComplete="name" value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} />
                   <label htmlFor="rq-phone">{t("estimate.phone")}</label>
                   <input id="rq-phone" required type="tel" maxLength={20} autoComplete="tel" placeholder="+256 700 000000" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} />
-                  <label htmlFor="rq-email">{t("estimate.emailOptional")}</label>
-                  <input id="rq-email" type="email" maxLength={120} autoComplete="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} />
+                  {signedInCustomer ? null : (
+                    <>
+                      <label htmlFor="rq-email">{t("estimate.emailOptional")}</label>
+                      <input id="rq-email" type="email" maxLength={120} autoComplete="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} />
+                    </>
+                  )}
                   <label htmlFor="rq-loc">{t("upgrade.location")}</label>
                   <input id="rq-loc" required maxLength={200} autoComplete="address-level2" value={contact.location} onChange={(e) => setContact({ ...contact, location: e.target.value })} />
                 </>
@@ -316,7 +347,7 @@ function UpgradeCheck() {
                 <input id="rq-site" tabIndex={-1} autoComplete="off" value={contact.website} onChange={(e) => setContact({ ...contact, website: e.target.value })} />
               </div>
               {error ? <p className="auth-message" role="alert">{error}</p> : null}
-              <button className="button" type="submit" disabled={busy || customer === undefined || (signedInCustomer && !hasCustomerAccount)}>{busy ? t("estimate.sending") : t("estimate.send")}</button>
+              <button className="button" type="submit" disabled={busy || customer === undefined}>{busy ? t("estimate.sending") : t("estimate.send")}</button>
             </form>
           ) : error && checked ? (
             <p className="auth-message" role="alert">{error}</p>
