@@ -62,7 +62,7 @@ function RequestItem() {
   // Which list entry the editor is changing, if any.
   const [editing, setEditing] = useState<number | null>(null);
   const [list, setList] = useState<Draft[]>([]);
-  const [form, setForm] = useState({ name: "", phone: "", email: "", location: "", note: "", website: "" });
+  const [form, setForm] = useState({ name: "", phone: "", location: "", website: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<null | { whatsappText: string | null; phone: string; name: string }>(null);
@@ -133,7 +133,6 @@ function RequestItem() {
       `Name: ${who.name}`,
       `Phone: ${who.phone}`,
       `Location: ${form.location}`,
-      form.note.trim() ? `Note: ${form.note.trim()}` : "",
       `Reference: ${requestReference(requestId)}`,
       `Open in the app: ${window.location.origin}/dashboard/item-requests`
     ].filter((line, i, all) => line !== "" || all[i - 1] !== "").join("\n");
@@ -155,9 +154,7 @@ function RequestItem() {
         items,
         name: account ? undefined : form.name,
         phone: account ? undefined : form.phone,
-        email: signedIn ? undefined : form.email || undefined,
         location: form.location,
-        note: form.note || undefined,
         website: form.website || undefined
       });
       setDone({
@@ -184,7 +181,7 @@ function RequestItem() {
         {hints.whatsappNumber && done.whatsappText ? <WhatsAppSend number={hints.whatsappNumber} text={done.whatsappText} /> : null}
         {hints.contactPhone ? <p className="muted">{t("common.questionsCall", { phone: hints.contactPhone })}</p> : null}
         <div className="hero-actions">
-          <button type="button" className="button button-secondary" onClick={() => { setDone(null); setList([]); setDraft(blankDraft()); setForm((f) => ({ ...f, note: "" })); }}>
+          <button type="button" className="button button-secondary" onClick={() => { setDone(null); setList([]); setDraft(blankDraft()); }}>
             {t("item.another")}
           </button>
           <Link className="button button-secondary" href="/">{t("estimate.backHome")}</Link>
@@ -335,18 +332,10 @@ function RequestItem() {
               <input id="ir-name" className={glowIf("name")} required maxLength={100} autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               <label htmlFor="ir-phone">{t("estimate.phone")}</label>
               <input id="ir-phone" className={glowIf("phone")} required type="tel" maxLength={20} autoComplete="tel" placeholder="+256 700 000000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-              {signedIn ? null : (
-                <>
-                  <label htmlFor="ir-email">{t("estimate.emailOptional")}</label>
-                  <input id="ir-email" type="email" maxLength={120} autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-                </>
-              )}
             </>
           )}
           <label htmlFor="ir-loc">{t("item.location")}</label>
           <input id="ir-loc" className={glowIf("location")} required maxLength={200} autoComplete="address-level2" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-          <label htmlFor="ir-note">{t("shop.note")}</label>
-          <input id="ir-note" maxLength={500} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
           <div className="honeypot" aria-hidden="true">
             <label htmlFor="ir-site">Website</label>
             <input id="ir-site" tabIndex={-1} autoComplete="off" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
