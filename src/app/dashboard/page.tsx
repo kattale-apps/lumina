@@ -12,11 +12,24 @@ import {
   WorkspaceHeader
 } from "./workspace";
 
-const UPCOMING_MODULES = [
-  { title: "System designer", phase: "Phase 3" },
-  { title: "Products & inventory", phase: "Phase 1" },
-  { title: "Quotations & approvals", phase: "Phase 4" }
-];
+type Role = string | undefined;
+const SALES = ["super_admin", "sales_manager", "sales_agent"];
+const REQUEST_HANDLERS = [...SALES, "technician"];
+
+/** Live sales tools on the home page, by role (the same rules as the menu). */
+function salesModules(role: Role) {
+  const crm = role !== undefined && role !== "inventory_admin";
+  return [
+    { href: "/dashboard/leads", title: "Quote requests", text: "Energy and upgrade checks from customers", show: REQUEST_HANDLERS.includes(role ?? "") },
+    { href: "/dashboard/item-requests", title: "Item price requests", text: "Parts people asked prices for", show: REQUEST_HANDLERS.includes(role ?? "") },
+    { href: "/dashboard/orders", title: "Orders", text: "Orders placed in the shop", show: SALES.includes(role ?? "") },
+    { href: "/dashboard/quotations", title: "Quotations", text: "Priced quotations and approvals", show: crm },
+    { href: "/dashboard/installations", title: "Installations", text: "Jobs from order to handover", show: crm },
+    { href: "/dashboard/commissions", title: "Commissions", text: "What each agent has earned", show: SALES.includes(role ?? "") },
+    { href: "/dashboard/overview", title: "Overview", text: "Sales and pipeline at a glance", show: role === "super_admin" || role === "sales_manager" },
+    { href: "/shop", title: "Shop", text: "Products with list prices, as customers order them", show: true }
+  ].filter((m) => m.show);
+}
 
 function Workspace() {
   const router = useRouter();
@@ -29,9 +42,9 @@ function Workspace() {
     if (!isLoading && !isAuthenticated) router.replace("/sign-in");
   }, [isLoading, isAuthenticated, router]);
 
-  // Customers have no company role; send them to the shop instead of the staff workspace.
+  // Customers have no company role; send them to their own home page instead of the staff workspace.
   useEffect(() => {
-    if (viewer?.state === "awaiting_access" && customer?.signedIn && customer.account) router.replace("/shop");
+    if (viewer?.state === "awaiting_access" && customer?.signedIn && customer.account) router.replace("/");
   }, [viewer, customer, router]);
 
   if (isLoading || !isAuthenticated || viewer === undefined) {
@@ -80,9 +93,6 @@ function Workspace() {
             your administrator can recognise you.
           </p>
         ) : null}
-        <p>
-          Here to order products instead? <Link href="/shop"><u>Go to the customer catalogue</u></Link>.
-        </p>
         <SignOutButton />
       </StatusCard>
     );
@@ -190,7 +200,7 @@ function Workspace() {
                 <li>
                   <Link className="module-card module-link" href="/dashboard/settings">
                     <h3>Company settings</h3>
-                    <span className="module-state">Name and currencies</span>
+                    <span className="module-state">Name, currencies, energy check and WhatsApp</span>
                   </Link>
                 </li>
               </>
@@ -200,12 +210,14 @@ function Workspace() {
 
 
         <section aria-labelledby="modules-heading" className="workspace-section">
-          <h2 id="modules-heading">Modules</h2>
+          <h2 id="modules-heading">Sales &amp; requests</h2>
           <ul className="module-grid">
-            {UPCOMING_MODULES.map((module) => (
-              <li className="module-card" key={module.title}>
-                <h3>{module.title}</h3>
-                <span className="module-state">Coming in {module.phase}</span>
+            {salesModules(viewer.companies[0]?.role).map((module) => (
+              <li key={module.href}>
+                <Link className="module-card module-link" href={module.href}>
+                  <h3>{module.title}</h3>
+                  <span className="module-state">{module.text}</span>
+                </Link>
               </li>
             ))}
           </ul>

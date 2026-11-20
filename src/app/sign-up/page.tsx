@@ -18,9 +18,9 @@ import { STILL_SIGNING_IN } from "../../../convex/lib/signup";
 function nextPath() {
   try {
     const next = new URLSearchParams(window.location.search).get("next");
-    return next && next.startsWith("/") && !next.startsWith("//") ? next : "/shop";
+    return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
   } catch {
-    return "/shop";
+    return "/";
   }
 }
 
@@ -151,7 +151,6 @@ function SignUpScreen() {
           <p>{t("signup.closedText")}</p>
           <div className="hero-actions">
             <Link className="button" href="/estimate">{t("home.newTitle")}</Link>
-            <Link className="button button-secondary" href="/shop">{t("home.shopTitle")}</Link>
             <Link className="button button-secondary" href="/request-item">{t("home.itemTitle")}</Link>
           </div>
           <p className="hint">

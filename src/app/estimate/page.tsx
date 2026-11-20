@@ -479,7 +479,7 @@ function Estimator() {
           <h2>{t("estimate.optionsTitle")}</h2>
           <p className="estimate-banner">{t("estimate.banner")}</p>
           <p className="price-note">
-            <Rich text={t("estimate.pricesShop")} link={(label) => <Link href="/shop"><u>{label}</u></Link>} />
+            {t("upgrade.pricesOnRequest")}
           </p>
           {result.options.length === 0 ? <p className="muted">{t("estimate.noOptionsYet")}</p> : null}
 

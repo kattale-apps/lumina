@@ -87,7 +87,7 @@ function RequestItem() {
     return products
       .filter((p) => type.categoryKeys.includes(p.categoryKey) && (!part || p.part === part))
       .filter((p) => matchesWords(p.name.replace(/(\d)\s+(?=[a-z])/gi, "$1"), sizes))
-      .slice(0, 8);
+      .slice(0, 60);
   }, [products, type, draft.type, draft.subtype, draft.specs]);
 
   function chooseType(t2: ItemType) {
@@ -278,12 +278,13 @@ function RequestItem() {
 
             {matching.length && !draft.productName ? (
               <div className="item-matches">
-                <p className="field-label">{t("item.weSell")}</p>
-                <div className="quick-row">
+                <label htmlFor="item-pick" className="field-label">{t("item.weSell")}</label>
+                <select id="item-pick" value="" onChange={(e) => { if (e.target.value) pickProduct(e.target.value); }}>
+                  <option value="">{t("item.pickPlaceholder", { count: matching.length })}</option>
                   {matching.map((p) => (
-                    <button key={p.name} type="button" className="chip" onClick={() => pickProduct(p.name)}>{p.name}</button>
+                    <option key={p.name} value={p.name}>{p.name}</option>
                   ))}
-                </div>
+                </select>
               </div>
             ) : null}
 

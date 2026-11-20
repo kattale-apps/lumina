@@ -56,13 +56,6 @@ function CustomerHome({ name }: { name: string }) {
               <small>{t("home.itemHint")}</small>
             </span>
           </Link>
-          <Link className="landing-choice landing-choice-shop" href="/shop">
-            <span className="landing-choice-icon" aria-hidden="true">🛒</span>
-            <span>
-              <strong>{t("home.shopTitle")}</strong>
-              <small>{t("home.shopHint")}</small>
-            </span>
-          </Link>
         </div>
       </section>
     </CustomerShell>
@@ -114,9 +107,6 @@ function Landing() {
                 <small>{t("home.itemHint")}</small>
               </span>
             </Link>
-            <p className="landing-secondary">
-              <Rich text={t("home.shopOpen")} link={(label) => <Link href="/shop">{label}</Link>} />
-            </p>
           </div>
           <AppDownload />
         </section>

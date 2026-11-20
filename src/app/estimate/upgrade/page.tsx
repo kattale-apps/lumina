@@ -289,7 +289,7 @@ function UpgradeCheck() {
                   {pdfBusy ? t("estimate.preparingPdf") : t("upgrade.downloadPdf")}
                 </button>
                 <p className="price-note">
-                  <Rich text={t("estimate.pricesShop")} link={(label) => <Link href="/shop"><u>{label}</u></Link>} />
+                  {t("upgrade.pricesOnRequest")}
                 </p>
               </div>
 

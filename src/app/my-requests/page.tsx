@@ -222,8 +222,8 @@ function Mine() {
     return (
       <Page signedIn>
         <h1>{t("requests.title")}</h1>
-        <p>{t("requests.finishAccount")}</p>
-        <Link className="button" href="/shop">{t("requests.finishAccountButton")}</Link>
+        <p className="muted">{t("requests.none")}</p>
+        <Link className="button" href="/estimate">{t("requests.checkPower")}</Link>
       </Page>
     );
   }
