@@ -77,7 +77,7 @@ async function staffUnread(ctx: Ctx, profile: Doc<"userProfiles">) {
 }
 
 // Who handles "Request an item": sales staff, managers, admins and technicians.
-const ITEM_HANDLERS = ["super_admin", "sales_manager", "sales_agent", "technician"];
+const ITEM_HANDLERS = ["super_admin", "inventory_admin", "sales_manager", "sales_agent", "technician"];
 
 /** Item requests still marked new, for the badge on Item requests; it clears as they are handled. */
 async function newItemRequests(ctx: Ctx, profile: Doc<"userProfiles">) {

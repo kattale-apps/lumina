@@ -74,7 +74,8 @@ describe("request an item", () => {
     // A size that does not belong to the kind of item is dropped; the description stays.
     expect(rows[0].items[1]).toMatchObject({ type: "other", specs: [], description: "Mounting rails for 6 panels" });
     expect(rows[0]).toMatchObject({ name: "Kats", location: "Kampala", note: "Deliver on Saturday", status: "new" });
-    await expect(stock.query(api.itemRequests.list, { tenantId })).rejects.toThrow(/role/);
+    // Every staff role handles them, the inventory and pricing administrator included.
+    expect(await stock.query(api.itemRequests.list, { tenantId })).toHaveLength(1);
 
     // A technician's menu shows it as new until someone handles it.
     expect((await tech.query(api.inbox.myInbox, {}))?.items).toBe(1);

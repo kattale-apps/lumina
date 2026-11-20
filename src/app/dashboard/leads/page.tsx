@@ -171,7 +171,7 @@ function LeadList({ tenantId, currency }: { tenantId: Id<"tenants">; currency: s
 export default function LeadsPage() {
   return (
     <ConfiguredOnly>
-      <CompanyPage title="Quote requests" allowedRoles={["super_admin", "sales_manager", "sales_agent", "technician"]}>
+      <CompanyPage title="Quote requests" allowedRoles={["super_admin", "inventory_admin", "sales_manager", "sales_agent", "technician"]}>
         {(company) => <LeadList tenantId={company.tenantId} currency={company.defaultCurrency} />}
       </CompanyPage>
     </ConfiguredOnly>

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { type ExistingSystem, type Goal, type UpgradeNeeds } from "./describe";
 import { translateEnglish, useT, type Translate } from "@/lib/i18n";
 
@@ -294,14 +294,25 @@ function Chips({ label, options, value, onChange }: { label: string; options: st
   );
 }
 
+/** The parts of a system a nameplate photo can be of. */
+export type PhotoPart = "inverter" | "controller" | "panels" | "batteries";
+export const PHOTO_PART_LABEL: Record<PhotoPart, string> = {
+  inverter: "Inverter",
+  controller: "Charge controller",
+  panels: "Solar panels",
+  batteries: "Batteries"
+};
+
 /**
  * The questions about an existing solar system. Only the figures needed to
  * start are required; everything else may be left empty and is then flagged
  * for a technician instead of being assumed.
  */
 export function UpgradeForm({
-  state, setState, audience, step
+  state, setState, audience, step, renderPhotos
 }: {
+  /** Optional nameplate photo controls for a part of the system (public check only). */
+  renderPhotos?: (part: PhotoPart) => ReactNode;
   /** Show only this question (1 to 4) and guide the eye to its next empty box. All four when omitted. */
   step?: number;
   state: UpgradeFormState;
@@ -381,6 +392,7 @@ export function UpgradeForm({
               </div>
               <p className="hint">{you ? t("upgradeForm.leaveEmptyYou") : t("upgradeForm.leaveEmptyCustomer")}</p>
             </details>
+            {renderPhotos?.("inverter")}
           </>
         ) : null}
 
@@ -402,6 +414,7 @@ export function UpgradeForm({
               <Num id="up-ctl-v" label={t("upgradeForm.maxSolarVoltage")} unit="V" value={f.controllerPvVoltage} onChange={(v) => set("controllerPvVoltage", v)} placeholder="e.g. 150" />
               <Num id="up-ctl-w" label={t("upgradeForm.maxSolarPower")} unit="W" value={f.controllerPvPowerW} onChange={(v) => set("controllerPvPowerW", v)} />
             </div>
+            {renderPhotos?.("controller")}
           </>
         ) : null}
       </section>
@@ -429,6 +442,7 @@ export function UpgradeForm({
               </div>
               <p className="hint">{t("upgradeForm.panelLabelHint")}</p>
             </details>
+            {renderPhotos?.("panels")}
           </>
         ) : null}
 
@@ -459,6 +473,7 @@ export function UpgradeForm({
                 </button>
               ))}
             </div>
+            {renderPhotos?.("batteries")}
           </>
         ) : null}
       </section>

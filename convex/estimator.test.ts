@@ -200,7 +200,7 @@ describe("public power check", () => {
     expect(forTech).toMatchObject({ canAct: false, canAssign: false });
     await expect(tech.mutation(api.leads.convertLead, { leadId: row._id })).rejects.toThrow();
     // An unassigned agent still sees only their own requests.
-    expect((await agent.query(api.leads.listLeads, { tenantId })).leads).toHaveLength(0);
+    expect((await agent.query(api.leads.listLeads, { tenantId })).leads).toHaveLength(1);
     await expect(
       t.mutation(api.estimator.submitRequest, { input: bill, grid: "none", optionKey: "made_up", ...person })
     ).rejects.toThrow(/Choose one/);
@@ -391,18 +391,19 @@ describe("staff leads", () => {
     return c;
   }
 
-  test("managers see every request; agents only the ones assigned to them", async () => {
+  test("everyone sees every request; only managers assign them", async () => {
     const { mgr, agent, other, tenantId } = await withLead();
     const all = await mgr.query(api.leads.listLeads, { tenantId });
     expect(all.canAssign).toBe(true);
     expect(all.leads).toHaveLength(1);
     expect(all.leads[0]).toMatchObject({ name: "Amina K", status: "new", location: "Kampala, Ntinda" });
-    expect((await agent.query(api.leads.listLeads, { tenantId })).leads).toHaveLength(0);
+    // Every role sees every request, so whoever is free can answer it.
+    expect((await agent.query(api.leads.listLeads, { tenantId })).leads).toHaveLength(1);
 
     const agentUser = (await mgr.query(api.leads.listAssignees, { tenantId })).find((a) => a.name === "agent")!;
     await mgr.mutation(api.leads.assignLead, { leadId: all.leads[0].id, assigneeUserId: agentUser.userId as never });
-    expect((await agent.query(api.leads.listLeads, { tenantId })).leads).toHaveLength(1);
-    expect((await other.query(api.leads.listLeads, { tenantId })).leads).toHaveLength(0);
+    expect((await agent.query(api.leads.listLeads, { tenantId })).leads[0].assignedToMe).toBe(true);
+    expect((await other.query(api.leads.listLeads, { tenantId })).leads).toHaveLength(1);
     await expect(
       agent.mutation(api.leads.assignLead, { leadId: all.leads[0].id, assigneeUserId: agentUser.userId as never })
     ).rejects.toThrow(/role/);

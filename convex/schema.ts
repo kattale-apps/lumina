@@ -967,6 +967,25 @@ export default defineSchema({
     .index("by_tenant_time", ["tenantId", "createdAt"])
     .index("by_tenant_phone_time", ["tenantId", "phone", "createdAt"]),
 
+  // Nameplate photos from the energy and upgrade checks (see requestPhotos.ts).
+  requestPhotos: defineTable({
+    storageId: v.id("_storage"),
+    // Secret given to the uploading page; needed to attach the photo to a request.
+    token: v.string(),
+    // Set when the request is sent.
+    tenantId: v.optional(v.id("tenants")),
+    requestId: v.optional(v.id("quoteRequests")),
+    // What it shows: part ("appliance", "inverter", "panels"…) and a label ("Fridge").
+    part: v.string(),
+    label: v.string(),
+    // Ratings read from the photo later (model, watts, volts…), when that is added.
+    extracted: v.optional(v.record(v.string(), v.union(v.string(), v.number()))),
+    createdAt: v.number(),
+    attachedAt: v.optional(v.number())
+  })
+    .index("by_request", ["requestId"])
+    .index("by_created", ["createdAt"]),
+
   customerAccounts: defineTable({
     tenantId: v.id("tenants"),
     userId: v.id("userProfiles"),

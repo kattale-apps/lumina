@@ -9,21 +9,21 @@ import { insertStudy } from "./upgrades";
 /** Managers and the owner see every request and hand them out; agents see what is assigned to them. */
 export const LEAD_MANAGERS = ["super_admin", "sales_manager"] as const;
 const LEAD_ROLES = CRM_WRITERS;
-/** Technicians read every request so they can design systems; they do not assign or convert. */
-export const LEAD_VIEWERS = [...CRM_WRITERS, "technician"] as const;
+/** Every staff role sees every request and can recommend; only managers assign them. */
+export const LEAD_VIEWERS = ["super_admin", "inventory_admin", "sales_manager", "sales_agent", "technician"] as const;
 
 export const listLeads = query({
   args: { tenantId: v.id("tenants") },
   handler: async (ctx, args) => {
     const { membership, profile } = await requireTenantMembership(ctx, args.tenantId, LEAD_VIEWERS);
     const manager = (LEAD_MANAGERS as readonly string[]).includes(membership.role);
-    const technician = membership.role === "technician";
     const rows = await ctx.db
       .query("quoteRequests")
       .withIndex("by_tenant_time", (q) => q.eq("tenantId", args.tenantId))
       .order("desc")
       .take(200);
-    const visible = manager || technician ? rows : rows.filter((r) => r.assignedToUserId === profile._id);
+    // Everyone sees every request, so whoever is free can answer it.
+    const visible = rows;
 
     const names = new Map<string, string>();
     for (const r of visible) {
@@ -42,7 +42,8 @@ export const listLeads = query({
     }
     return {
       canAssign: manager,
-      canAct: !technician,
+      // Turning a request into a customer record stays with the sales roles.
+      canAct: (CRM_WRITERS as readonly string[]).includes(membership.role),
       leads: visible.map((r) => ({
         id: r._id,
         createdAt: r.createdAt,

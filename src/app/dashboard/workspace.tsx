@@ -89,8 +89,8 @@ export function WorkspaceHeader({ role }: { role?: string }) {
   const links = [
     { group: "Sales", href: "/dashboard", label: "Home", show: true },
     { group: "Sales", href: "/dashboard/field", label: "Field work", show: crm },
-    { group: "Sales", href: "/dashboard/leads", label: "Quote requests", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" || role === "technician" },
-    { group: "Sales", href: "/dashboard/item-requests", label: "Item price requests", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" || role === "technician" },
+    { group: "Sales", href: "/dashboard/leads", label: "Quote requests", show: true },
+    { group: "Sales", href: "/dashboard/item-requests", label: "Item price requests", show: true },
     { group: "Sales", href: "/shop", label: "Shop (prices)", show: true },
     { group: "Sales", href: "/dashboard/orders", label: "Orders", show: role === "super_admin" || role === "sales_manager" || role === "sales_agent" },
     { group: "Sales", href: "/dashboard/customers", label: "Customers", show: crm },

@@ -14,7 +14,8 @@ import {
 
 type Role = string | undefined;
 const SALES = ["super_admin", "sales_manager", "sales_agent"];
-const REQUEST_HANDLERS = [...SALES, "technician"];
+// Every staff role can answer requests.
+const REQUEST_HANDLERS = [...SALES, "technician", "inventory_admin"];
 
 /** Live sales tools on the home page, by role (the same rules as the menu). */
 function salesModules(role: Role) {

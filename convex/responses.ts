@@ -19,8 +19,8 @@ import { currentCost, priceFrom, resolveMarginRule } from "./lib/pricing";
 import { matchesWords, searchWords } from "./lib/search";
 import { LEAD_MANAGERS, LEAD_VIEWERS } from "./leads";
 
-/** Who may prepare and send a recommendation: the technical side and the managers. */
-export const RESPONDERS = ["super_admin", "sales_manager", "technician"] as const;
+/** Who may prepare and send a recommendation: every staff role (nobody answers their own request). */
+export const RESPONDERS = ["super_admin", "inventory_admin", "sales_manager", "sales_agent", "technician"] as const;
 
 const MAX_OPTIONS = 3;
 const MAX_COMPONENTS = 20;
@@ -40,17 +40,15 @@ async function visibleLead(ctx: Ctx, leadId: Id<"quoteRequests">, roles: readonl
   if (!lead) throw new ConvexError("Request not found.");
   const access = await requireTenantMembership(ctx, lead.tenantId, roles as never);
   const role = access.membership.role as string;
-  const seesAll = (LEAD_MANAGERS as readonly string[]).includes(role) || role === "technician";
-  if (!seesAll && lead.assignedToUserId !== access.profile._id) throw new ConvexError("Request not found.");
   return { lead, ...access };
 }
 
 /**
- * True when the request was made by this staff member themselves. Another colleague answers it,
- * so nobody recommends a system to themselves (the super admin may, in a one-person company).
+ * True when the request was made by this staff member themselves, for example an agent doing the
+ * energy check for a client. They may answer it themselves and share the recommendation.
  */
-async function ownRequest(ctx: Ctx, lead: Doc<"quoteRequests">, profileId: Id<"userProfiles">, role: string) {
-  if (role === "super_admin" || !lead.customerAccountId) return false;
+async function ownRequest(ctx: Ctx, lead: Doc<"quoteRequests">, profileId: Id<"userProfiles">) {
+  if (!lead.customerAccountId) return false;
   const account = await ctx.db.get(lead.customerAccountId);
   return account?.userId === profileId;
 }
@@ -150,9 +148,19 @@ export const getLead = query({
         };
       }),
       hasAccount: Boolean(lead.customerAccountId),
-      canRespond: (RESPONDERS as readonly string[]).includes(role) && !(await ownRequest(ctx, lead, profile._id, role)),
-      // The viewer asked for this one themselves, so a colleague answers it.
-      ownRequest: await ownRequest(ctx, lead, profile._id, role),
+      // Nameplate photos the customer added, with what each shows.
+      photos: await Promise.all(
+        (await ctx.db.query("requestPhotos").withIndex("by_request", (q) => q.eq("requestId", lead._id)).collect()).map(async (p) => ({
+          id: p._id,
+          part: p.part,
+          label: p.label,
+          url: await ctx.storage.getUrl(p.storageId),
+          extracted: p.extracted ?? null
+        }))
+      ),
+      canRespond: (RESPONDERS as readonly string[]).includes(role),
+      // The viewer made this request themselves (e.g. for a client) and may answer it.
+      ownRequest: await ownRequest(ctx, lead, profile._id),
       assessmentId: lead.assessmentId ?? null,
       response: response
         ? { ...(await presentResponse(ctx, response)), preparedBy: preparedBy?.displayName ?? null }
@@ -181,11 +189,8 @@ export const saveResponse = mutation({
     send: v.boolean()
   },
   handler: async (ctx, args) => {
-    const { lead, profile, tenant, membership } = await visibleLead(ctx, args.leadId, RESPONDERS);
+    const { lead, profile, tenant } = await visibleLead(ctx, args.leadId, RESPONDERS);
     if (lead.status === "closed") throw new ConvexError("This request is closed.");
-    if (await ownRequest(ctx, lead, profile._id, membership.role as string)) {
-      throw new ConvexError("This is your own request. Another technician prepares your recommendation.");
-    }
 
     const message = args.message.trim();
     if (message.length > MAX_MESSAGE) throw new ConvexError(`The message must be ${MAX_MESSAGE} characters or fewer.`);

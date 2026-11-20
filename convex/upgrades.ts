@@ -36,6 +36,7 @@ import {
 } from "./lib/upgrade";
 import { requireText } from "./lib/validation";
 import { requesterAccount } from "./lib/requester";
+import { attachPhotos, photoArg } from "./requestPhotos";
 import { existingSystem, upgradeNeeds } from "./schema";
 
 type Ctx = QueryCtx | MutationCtx;
@@ -461,7 +462,9 @@ export const submitUpgradeRequest = mutation({
     email: v.optional(v.string()),
     location: v.string(),
     // Real people leave this empty; bots tend to fill every field.
-    website: v.optional(v.string())
+    website: v.optional(v.string()),
+    // Optional nameplate photos, uploaded as they were chosen.
+    photos: v.optional(v.array(photoArg))
   },
   handler: async (ctx, args) => {
     if (args.website) return { ok: true as const, requestId: null, hasAccount: false, claimToken: null };
@@ -544,6 +547,7 @@ export const submitUpgradeRequest = mutation({
       createdAt: now,
       updatedAt: now
     });
+    await attachPhotos(ctx, tenant._id, id, args.photos);
     return { ok: true as const, requestId: id, hasAccount: claimToken === undefined, claimToken: claimToken ?? null };
   }
 });

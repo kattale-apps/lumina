@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import {
   APPLIANCE_GUIDE,
   dailyKwh,
@@ -141,11 +141,14 @@ function Stepper({
 function RowCard({
   row,
   onChange,
-  onRemove
+  onRemove,
+  extra
 }: {
   row: ApplianceRow;
   onChange: (patch: Partial<ApplianceRow>) => void;
   onRemove: () => void;
+  /** Shown at the bottom of the card, e.g. the nameplate photo button. */
+  extra?: ReactNode;
 }) {
   const uid = useId();
   const text = useGuideText();
@@ -215,6 +218,7 @@ function RowCard({
         )}
         {guide ? text.dutyNote(guide) : ""}
       </p>
+      {extra}
     </li>
   );
 }
@@ -223,8 +227,11 @@ export function ApplianceEditor({
   rows,
   setRows,
   library,
-  guide = false
+  guide = false,
+  renderExtra
 }: {
+  /** Something to add to each appliance card, e.g. its nameplate photos. */
+  renderExtra?: (row: ApplianceRow) => ReactNode;
   /** Draw the eye to the appliance picker while nothing has been added yet. */
   guide?: boolean;
   rows: ApplianceRow[];
@@ -401,6 +408,7 @@ export function ApplianceEditor({
                   row={r}
                   onChange={(patch) => setRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, ...patch } : x)))}
                   onRemove={() => setRows((prev) => prev.filter((x) => x.id !== r.id))}
+                  extra={renderExtra?.(r)}
                 />
             ))}
           </ul>

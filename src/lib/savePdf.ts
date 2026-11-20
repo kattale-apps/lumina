@@ -61,7 +61,7 @@ function toBase64(bytes: Uint8Array) {
 }
 
 /** The Convex HTTP address of this deployment (the same rule the app inbox uses). */
-function siteUrl() {
+export function siteUrl() {
   const site = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
   if (site) return site.replace(/\/+$/, "");
   return (process.env.NEXT_PUBLIC_CONVEX_URL ?? "").replace(/\.convex\.cloud\/?$/, ".convex.site");

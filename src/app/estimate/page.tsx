@@ -17,6 +17,7 @@ import { Rich, useT, type MessageKey } from "@/lib/i18n";
 import { en } from "@/lib/i18n/en";
 import { StepButtons, StepProgress, useGoBack } from "@/components/StepNav";
 import { requestReference, WhatsAppSend } from "@/components/WhatsAppSend";
+import { NameplatePhotos, usePhotoSet } from "@/components/NameplatePhotos";
 import { PublicShell } from "@/components/PublicShell";
 
 const STEPS = 4;
@@ -82,6 +83,8 @@ function Estimator() {
   // Use the same customer-account lookup as the customer dashboard, not staff/profile state.
   const customer = useQuery(api.shop.myAccount, {});
   const submit = useMutation(api.estimator.submitRequest);
+  // Optional nameplate photos, one set per appliance card.
+  const photos = usePhotoSet();
 
   const [category, setCategory] = useState<Category>("residential");
   // Most customers have grid power that comes and goes, so that is the starting answer.
@@ -296,6 +299,10 @@ function Estimator() {
   async function request(event: FormEvent) {
     event.preventDefault();
     if (!grid || !chosen) return;
+    if (photos.uploading) {
+      setError(t("photos.wait"));
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -309,7 +316,9 @@ function Estimator() {
         phone: hasCustomerAccount ? undefined : form.phone,
         email: hasCustomerAccount ? undefined : form.email || undefined,
         location: form.location,
-        website: form.website || undefined
+        website: form.website || undefined,
+        // Photos of appliances still in the list.
+        photos: photos.forRequest((key) => rows.some((r) => r.id === key))
       });
       if (sent.claimToken) rememberPendingRequest(sent.claimToken);
       // Sent: nothing is left waiting to be carried over.
@@ -407,7 +416,15 @@ function Estimator() {
         <section className="step step-3" aria-labelledby="q3" hidden={step !== 3}>
           <h2 id="q3"><span className="step-num">3</span> {t("estimate.q3")}</h2>
           {rows.length === 0 ? <p className="guide-pointer">👇 {t("estimate.q3Prompt")}</p> : null}
-          <ApplianceEditor rows={rows} setRows={setRows} library={config.appliances} guide={step === 3} />
+          <ApplianceEditor
+            rows={rows}
+            setRows={setRows}
+            library={config.appliances}
+            guide={step === 3}
+            renderExtra={(row) => (
+              <NameplatePhotos set={photos} photoKey={row.id} part="appliance" label={row.size ? `${row.name}, ${row.size}` : row.name} />
+            )}
+          />
           {rows.length === 0 ? <p className="hint">{t("estimate.q3Skip")}</p> : null}
         </section>
 

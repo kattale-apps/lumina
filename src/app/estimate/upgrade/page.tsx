@@ -8,7 +8,8 @@ import { api } from "../../../../convex/_generated/api";
 import { rememberPendingRequest } from "../../../lib/pendingRequests";
 import { AppUpdateNeeded, savePdf } from "../../../lib/savePdf";
 import { describeNeeds, describeSystem, type ExistingSystem, type UpgradeNeeds } from "./describe";
-import { blankUpgradeForm, stepProblem, toPayload, UpgradeForm } from "./UpgradeForm";
+import { blankUpgradeForm, PHOTO_PART_LABEL, stepProblem, toPayload, UpgradeForm } from "./UpgradeForm";
+import { NameplatePhotos, usePhotoSet } from "@/components/NameplatePhotos";
 import { StepButtons, StepProgress, useGoBack } from "@/components/StepNav";
 import { PublicShell } from "@/components/PublicShell";
 import { requestReference, WhatsAppSend } from "@/components/WhatsAppSend";
@@ -51,6 +52,8 @@ function UpgradeCheck() {
   const signUpOpen = useQuery(api.access.signUpStatus, {})?.publicSignUpOpen ?? false;
   const customer = useQuery(api.shop.myAccount, {});
   const submit = useMutation(api.upgrades.submitUpgradeRequest);
+  // Optional nameplate photos of the inverter, controller, panels and batteries.
+  const photos = usePhotoSet();
 
   const [form, setForm] = useState(blankUpgradeForm);
   // What the shown report was calculated from, so the request and the PDF match the screen.
@@ -177,6 +180,10 @@ function UpgradeCheck() {
       setError(t("upgrade.errGrid"));
       return;
     }
+    if (photos.uploading) {
+      setError(t("photos.wait"));
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -190,7 +197,11 @@ function UpgradeCheck() {
         phone: hasCustomerAccount ? undefined : contact.phone,
         email: hasCustomerAccount ? undefined : contact.email || undefined,
         location: contact.location,
-        website: contact.website || undefined
+        website: contact.website || undefined,
+        // Photos of the parts still in the system.
+        photos: photos.forRequest((part) =>
+          part === "inverter" ? form.hasInverter : part === "controller" ? form.hasController : part === "panels" ? form.hasPanels : part === "batteries" ? form.hasBatteries : false
+        )
       });
       if (sent.claimToken) rememberPendingRequest(sent.claimToken);
       setDone({ hasAccount: sent.hasAccount, whatsappText: sent.requestId ? whatsappMessage(sent.requestId) : null });
@@ -255,7 +266,13 @@ function UpgradeCheck() {
 
       <form className="panel-form estimate-form" onSubmit={calculate} noValidate>
         <StepProgress step={step} total={STEPS} label={t("wizard.progress", { step, total: STEPS })} />
-        <UpgradeForm state={form} setState={setForm} audience="public" step={step} />
+        <UpgradeForm
+          state={form}
+          setState={setForm}
+          audience="public"
+          step={step}
+          renderPhotos={(part) => <NameplatePhotos set={photos} photoKey={part} part={part} label={PHOTO_PART_LABEL[part]} />}
+        />
         {error ? <p className="auth-message" role="alert">{error}</p> : null}
         <StepButtons
           onBack={step > 1 ? () => goToStep(step - 1) : goBack}

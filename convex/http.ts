@@ -4,6 +4,7 @@ import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
 import { hashKey, KEY_PATTERN } from "./inbox";
 import { download, preflight, upload } from "./pdfLinks";
+import { preflight as photoPreflight, upload as photoUpload } from "./requestPhotos";
 
 const http = httpRouter();
 auth.addHttpRoutes(http);
@@ -33,5 +34,9 @@ http.route({
 http.route({ path: "/pdf-link", method: "POST", handler: upload });
 http.route({ path: "/pdf-link", method: "OPTIONS", handler: preflight });
 http.route({ path: "/pdf-link", method: "GET", handler: download });
+
+// Nameplate photos from the energy and upgrade checks, uploaded as they are chosen.
+http.route({ path: "/request-photo", method: "POST", handler: photoUpload });
+http.route({ path: "/request-photo", method: "OPTIONS", handler: photoPreflight });
 
 export default http;

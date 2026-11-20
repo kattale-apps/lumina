@@ -70,9 +70,9 @@ describe("technician responses to quote requests", () => {
     expect(lead.appliances.map((a) => a.name)).toEqual(expect.arrayContaining(["LED bulb"]));
     expect(lead.load.peakW).toBeGreaterThan(0);
     expect(lead.response).toBeNull();
-    // A sales agent sees only requests assigned to them.
-    await expect(agent.query(api.responses.getLead, { leadId })).rejects.toThrow(/not found/);
-    await expect(agent.mutation(api.responses.saveResponse, { leadId, message: "x", options: [], send: false })).rejects.toThrow(/role/);
+    // A sales agent can open any request and prepare the recommendation too.
+    expect(await agent.query(api.responses.getLead, { leadId })).toMatchObject({ canRespond: true });
+    await agent.mutation(api.responses.saveResponse, { leadId, message: "Draft by the agent", options: [option("agent1")], send: false });
 
     // Sending needs a message and at least one option with parts.
     await expect(tech.mutation(api.responses.saveResponse, { leadId, message: "Hello", options: [], send: true })).rejects.toThrow(/at least one option/);
@@ -259,11 +259,9 @@ describe("staff asking for recommendations", () => {
     const leadId = sent.requestId as Id<"quoteRequests">;
     expect((await tech.query(api.shop.myAccount, {})).account).toMatchObject({ name: "Tech One", phone: expect.stringContaining("701") });
 
-    // The requester cannot answer it; a colleague can.
-    expect(await tech.query(api.responses.getLead, { leadId })).toMatchObject({ canRespond: false, ownRequest: true });
-    await expect(tech.mutation(api.responses.saveResponse, {
-      leadId, message: "Hello", send: true, options: [option("opta1")]
-    })).rejects.toThrow(/your own request/);
+    // The requester may answer it themselves (an agent doing it for a client), and so may a colleague.
+    expect(await tech.query(api.responses.getLead, { leadId })).toMatchObject({ canRespond: true, ownRequest: true });
+    await tech.mutation(api.responses.saveResponse, { leadId, message: "Draft by the requester", send: false, options: [option("opta1")] });
     expect(await tech2.query(api.responses.getLead, { leadId })).toMatchObject({ canRespond: true, ownRequest: false });
     await tech2.mutation(api.responses.saveResponse, { leadId, message: "Hello Tech One", send: true, options: [option("opta1")] });
 

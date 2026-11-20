@@ -612,12 +612,6 @@ function ReadOnlyResponse({ lead }: { lead: Lead }) {
   return (
     <section className="lead-block">
       <h2>Recommendation</h2>
-      {lead.ownRequest ? (
-        <p className="hint">
-          This is your own request, so a colleague prepares the recommendation. You will see it under{" "}
-          <Link href="/my-requests"><u>My recommendations</u></Link>.
-        </p>
-      ) : null}
       {!r ? <p className="muted">A technician has not responded yet.</p> : (
         <>
           <p className="hint">{r.status === "sent" ? "Sent to the customer." : "Draft, not sent yet."}</p>
@@ -648,6 +642,29 @@ function ReadOnlyResponse({ lead }: { lead: Lead }) {
   );
 }
 
+/** Nameplate photos the customer added, each labelled with what it shows. Tap to open full size. */
+function LeadPhotos({ lead }: { lead: Lead }) {
+  const photos = lead.photos.filter((p) => p.url);
+  if (!photos.length) return null;
+  return (
+    <section className="lead-block">
+      <h2>Nameplate photos ({photos.length})</h2>
+      <p className="hint">Read the ratings from these to check the numbers the customer typed.</p>
+      <div className="lead-photos">
+        {photos.map((p) => (
+          <figure key={p.id}>
+            <a href={p.url!} target="_blank" rel="noopener noreferrer">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.url!} alt={`Nameplate: ${p.label}`} loading="lazy" />
+            </a>
+            <figcaption>{p.label}</figcaption>
+          </figure>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function LeadDetail({ leadId }: { leadId: Id<"quoteRequests"> }) {
   const lead = useQuery(api.responses.getLead, { leadId });
   if (lead === undefined) return <p className="muted">Loading request…</p>;
@@ -655,6 +672,7 @@ function LeadDetail({ leadId }: { leadId: Id<"quoteRequests"> }) {
     <div className="lead-detail">
       <Link className="back-link" href="/dashboard/leads">← All quote requests</Link>
       <Specs lead={lead} />
+      <LeadPhotos lead={lead} />
       {lead.canRespond ? <ResponseEditor key={lead.id} lead={lead} /> : <ReadOnlyResponse lead={lead} />}
     </div>
   );
@@ -664,7 +682,7 @@ export default function LeadPage() {
   const params = useParams<{ id: string }>();
   return (
     <ConfiguredOnly>
-      <CompanyPage title="Quote request" allowedRoles={["super_admin", "sales_manager", "sales_agent", "technician"]}>
+      <CompanyPage title="Quote request" allowedRoles={["super_admin", "inventory_admin", "sales_manager", "sales_agent", "technician"]}>
         {() => <LeadDetail leadId={params.id as Id<"quoteRequests">} />}
       </CompanyPage>
     </ConfiguredOnly>

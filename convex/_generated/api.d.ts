@@ -69,6 +69,7 @@ import type * as pdfLinks from "../pdfLinks.js";
 import type * as products from "../products.js";
 import type * as profile from "../profile.js";
 import type * as quotations from "../quotations.js";
+import type * as requestPhotos from "../requestPhotos.js";
 import type * as responses from "../responses.js";
 import type * as settings from "../settings.js";
 import type * as shop from "../shop.js";
@@ -147,6 +148,7 @@ declare const fullApi: ApiFromModules<{
   products: typeof products;
   profile: typeof profile;
   quotations: typeof quotations;
+  requestPhotos: typeof requestPhotos;
   responses: typeof responses;
   settings: typeof settings;
   shop: typeof shop;

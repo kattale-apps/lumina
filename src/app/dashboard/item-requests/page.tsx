@@ -84,7 +84,7 @@ function ItemRequests({ tenantId, companyName }: { tenantId: Id<"tenants">; comp
 export default function ItemRequestsPage() {
   return (
     <ConfiguredOnly>
-      <CompanyPage title="Item price requests" allowedRoles={["super_admin", "sales_manager", "sales_agent", "technician"]}>
+      <CompanyPage title="Item price requests" allowedRoles={["super_admin", "inventory_admin", "sales_manager", "sales_agent", "technician"]}>
         {(company) => <ItemRequests tenantId={company.tenantId} companyName={company.companyName} />}
       </CompanyPage>
     </ConfiguredOnly>
