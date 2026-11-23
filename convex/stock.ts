@@ -18,6 +18,8 @@ import {
   requireStockable
 } from "./lib/stock";
 import { requireText } from "./lib/validation";
+import { formatMinorUnits, toMinorUnits } from "./lib/money";
+import { productPrice } from "./lib/pricing";
 
 const MAX_ROWS = 3000;
 const MAX_HOLD_HOURS = 24 * 30;
@@ -91,8 +93,11 @@ export const stockOverview = query({
           available
         });
       }
+      const price = admin ? await productPrice(ctx, product) : null;
       items.push({
         productId: product._id,
+        // The selling price, for stock administrators only: fixed, or cost plus margin.
+        price: price ? { listMinor: price.listMinor, currency: price.currency, fixed: price.fixed } : null,
         name: product.name,
         sku: product.sku,
         categoryName: categories.get(product.categoryId) ?? "",
@@ -445,5 +450,62 @@ export const listReservations = query({
       });
     }
     return out.sort((a, b) => a.expiresAt - b.expiresAt);
+  }
+});
+
+/**
+ * Sets a fixed selling price for a product, replacing cost plus margin, or clears it (price null)
+ * so the product goes back to cost plus margin. Stock administrators only.
+ */
+export const setSellingPrice = mutation({
+  args: { productId: v.id("products"), price: v.union(v.number(), v.null()) },
+  handler: async (ctx, args) => {
+    const product = await ctx.db.get(args.productId);
+    if (!product) throw new ConvexError("Product not found.");
+    const { profile, tenant } = await requireTenantMembership(ctx, product.tenantId, STOCK_ADMINS);
+    const currency = tenant.defaultCurrency;
+    let fixedPrice: { amountMinor: number; currency: string; setAt: number; setBy: string } | undefined;
+    if (args.price !== null) {
+      if (!Number.isFinite(args.price) || args.price <= 0 || args.price > 10_000_000_000) {
+        throw new ConvexError("Enter a selling price above 0.");
+      }
+      fixedPrice = { amountMinor: toMinorUnits(args.price, currency), currency, setAt: Date.now(), setBy: profile.authSubject };
+    }
+    const before = product.fixedPrice ?? null;
+    if (before?.amountMinor === fixedPrice?.amountMinor && before?.currency === fixedPrice?.currency) return { changed: false };
+    await ctx.db.patch(product._id, { fixedPrice, updatedAt: Date.now() });
+    await recordAudit(ctx, profile, {
+      tenantId: product.tenantId,
+      action: fixedPrice ? "product.price_fixed" : "product.price_cleared",
+      entityType: "products",
+      entityId: product._id,
+      summary: fixedPrice
+        ? `${product.sku} selling price set to ${formatMinorUnits(fixedPrice.amountMinor, currency)}.`
+        : `${product.sku} selling price back to cost plus margin.`,
+      metadata: { before, after: fixedPrice ?? null }
+    });
+    return { changed: true };
+  }
+});
+
+/** Makes a product available for sale again, or takes it off sale (archived). Stock administrators only. */
+export const setProductAvailability = mutation({
+  args: { productId: v.id("products"), forSale: v.boolean() },
+  handler: async (ctx, args) => {
+    const product = await ctx.db.get(args.productId);
+    if (!product) throw new ConvexError("Product not found.");
+    const { profile } = await requireTenantMembership(ctx, product.tenantId, STOCK_ADMINS);
+    const status = args.forSale ? "active" : "archived";
+    if (product.status === status) return { changed: false };
+    await ctx.db.patch(product._id, { status, updatedAt: Date.now() });
+    await recordAudit(ctx, profile, {
+      tenantId: product.tenantId,
+      action: args.forSale ? "product.available" : "product.unavailable",
+      entityType: "products",
+      entityId: product._id,
+      summary: `${product.sku} ${args.forSale ? "made available for sale" : "taken off sale"}.`,
+      metadata: { before: product.status, after: status }
+    });
+    return { changed: true };
   }
 });

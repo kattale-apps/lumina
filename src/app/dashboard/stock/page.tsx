@@ -6,6 +6,7 @@ import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { CompanyPage, ConfiguredOnly, errorMessage } from "../workspace";
 import { Pager, pageFor } from "../../../components/Pager";
+import { amountText, ProductEditor } from "./ProductEditor";
 
 const STOCK_PAGE_SIZE = 25;
 
@@ -368,6 +369,7 @@ function Stock({ tenantId }: { tenantId: Id<"tenants"> }) {
   const [search, setSearch] = useState("");
   const [inStockOnly, setInStockOnly] = useState(false);
   const [paging, setPaging] = useState({ key: "", page: 1 });
+  const [editing, setEditing] = useState<string | null>(null);
   if (!overview) return <p className="muted">Loading stock…</p>;
 
   const term = search.trim().toLowerCase();
@@ -421,6 +423,12 @@ function Stock({ tenantId }: { tenantId: Id<"tenants"> }) {
                   <div className="price-block">
                     <span className="price">{item.totalAvailable}</span>
                     <span className="record-meta">Available</span>
+                    {item.price ? <span className="record-meta">{item.price.currency} {amountText(item.price.listMinor)}{item.price.fixed ? " (fixed)" : ""}</span> : null}
+                    {overview.canManage ? (
+                      <button type="button" className="button button-small button-secondary stock-edit-toggle" aria-expanded={editing === item.productId} onClick={() => setEditing(editing === item.productId ? null : item.productId)}>
+                        {editing === item.productId ? "Close" : "Edit"}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
                 {item.rows.length > 0 ? (
@@ -441,6 +449,7 @@ function Stock({ tenantId }: { tenantId: Id<"tenants"> }) {
                 ) : (
                   <p className="hint">No stock held.</p>
                 )}
+                {overview.canManage && editing === item.productId ? <ProductEditor key={item.productId} tenantId={tenantId} item={item} overview={overview} /> : null}
               </li>
             ))}
           </ul>

@@ -5,7 +5,7 @@ import { recordAudit } from "./lib/audit";
 import { findViewerProfile, requireTenantMembership } from "./lib/auth";
 import { validatePhone } from "./lib/crm";
 import { currencyExponent } from "./lib/money";
-import { currentCost, priceFrom, resolveMarginRule } from "./lib/pricing";
+import { productPrice } from "./lib/pricing";
 import { partType } from "./lib/shopParts";
 import { STILL_SIGNING_IN } from "./lib/signup";
 import { requireText } from "./lib/validation";
@@ -125,12 +125,6 @@ export const shopAccess = query({
   handler: async (ctx) => ({ staff: (await staffTenant(ctx)) !== null })
 });
 
-async function customerTenant(ctx: QueryCtx) {
-  const found = await viewerCustomer(ctx);
-  const tenant = found ? await ctx.db.get(found.account.tenantId) : await openCompany(ctx);
-  if (!tenant || tenant.status !== "active") throw new ConvexError("The catalogue is not available right now.");
-  return tenant;
-}
 
 
 
@@ -189,9 +183,7 @@ export const catalogueDetails = query({
       if (!product || product.tenantId !== tenant._id || product.status !== "active") continue;
       const category = await ctx.db.get(product.categoryId);
       if (!category || category.status !== "active") continue;
-      const cost = await currentCost(ctx, product._id);
-      const rule = await resolveMarginRule(ctx, product);
-      const price = cost && rule ? priceFrom(cost, rule.rule) : null;
+      const price = await productPrice(ctx, product);
       const photo = await ctx.db
         .query("productFiles")
         .withIndex("by_product", (q) => q.eq("productId", product._id))
@@ -258,10 +250,8 @@ export const placeOrder = mutation({
       }
       const category = await ctx.db.get(product.categoryId);
       if (!category || category.status !== "active") throw new ConvexError("One of the products is no longer available.");
-      const cost = await currentCost(ctx, product._id);
-      const rule = await resolveMarginRule(ctx, product);
-      if (!cost || !rule) throw new ConvexError(`${product.name} has no price yet. Ask us for a quote.`);
-      const price = priceFrom(cost, rule.rule);
+      const price = await productPrice(ctx, product);
+      if (!price) throw new ConvexError(`${product.name} has no price yet. Ask us for a quote.`);
       if (currency && currency !== price.currency) throw new ConvexError("These products are priced in different currencies. Order them separately.");
       currency = price.currency;
       total += price.listMinor * item.quantity;

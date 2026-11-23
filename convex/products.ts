@@ -8,7 +8,7 @@ import {
   PRICING_ADMINS,
   currentCost,
   isPricingAdmin,
-  priceFrom,
+  productPrice,
   resolveMarginRule
 } from "./lib/pricing";
 import { missingCritical, validateSpecValues, type SpecValues } from "./lib/specValues";
@@ -85,7 +85,7 @@ async function productView(
 ) {
   const cost = await currentCost(ctx, product._id);
   const resolved = await resolveMarginRule(ctx, product);
-  const price = cost && resolved ? priceFrom(cost, resolved.rule) : null;
+  const price = await productPrice(ctx, product);
   return {
     id: product._id,
     categoryId: category._id,

@@ -37,7 +37,7 @@ import {
 import { summariseAppliances, type GridAvailability, type ProductLabel } from "./lib/estimate";
 import { validateLine } from "./lib/load";
 import { currencyExponent, toMinorUnits } from "./lib/money";
-import { currentCost, priceFrom, resolveMarginRule } from "./lib/pricing";
+import { productPrice } from "./lib/pricing";
 import type { CatalogueItem } from "./lib/sizing";
 import { validateOptionalEmail, validatePhone } from "./lib/crm";
 import { requireText } from "./lib/validation";
@@ -71,10 +71,9 @@ async function pricedCatalogue(ctx: QueryCtx, tenant: Doc<"tenants">) {
     if (!MAIN_EQUIPMENT.has(item.categoryKey)) continue;
     const product = byId.get(item.id);
     if (!product) continue;
-    const cost = await currentCost(ctx, product._id);
-    const rule = await resolveMarginRule(ctx, product);
+    const price = await productPrice(ctx, product);
     // Only the company's own currency is compared, so totals are never mixed.
-    if (cost && rule && cost.currency === tenant.defaultCurrency) prices.set(item.id, priceFrom(cost, rule.rule).listMinor);
+    if (price && price.currency === tenant.defaultCurrency) prices.set(item.id, price.listMinor);
   }
   return { catalogue: catalogue.filter((c) => prices.has(c.id)), prices, labels };
 }

@@ -385,3 +385,60 @@ describe("visibility and permissions", () => {
     ).rejects.toThrow(/access/);
   });
 });
+
+describe("editing a product from the stock list", () => {
+  test("super admin and inventory admin set or clear a fixed selling price; others cannot", async () => {
+    const c = await setup([
+      { email: "inv@acme.ug", role: "inventory_admin" },
+      { email: "agent@acme.ug", role: "sales_agent" },
+      { email: "mgr@acme.ug", role: "sales_manager" },
+      { email: "tech@acme.ug", role: "technician" }
+    ]);
+    await c.asOwner.mutation(api.products.setCost, { productId: c.productId, currency: "UGX", amount: 400_000 });
+    await c.asOwner.mutation(api.margins.setMarginRule, { tenantId: c.tenantId, scope: "default", marginPercent: 25, floorMarginPercent: 10 });
+    const priceNow = async () => (await c.asOwner.query(api.stock.stockOverview, { tenantId: c.tenantId })).items[0].price;
+    expect(await priceNow()).toEqual({ listMinor: 500_000, currency: "UGX", fixed: false });
+
+    await c.as("inv@acme.ug").mutation(api.stock.setSellingPrice, { productId: c.productId, price: 480_000 });
+    expect(await priceNow()).toEqual({ listMinor: 480_000, currency: "UGX", fixed: true });
+    // The fixed price is what the shop, quotations and recommendations use.
+    await c.asOwner.mutation(api.estimator.updateEstimatorSettings, { tenantId: c.tenantId, enabled: true, tariffPerKwh: 800 });
+    const shop = await c.asOwner.query(api.shop.catalogueDetails, { ids: [c.productId] });
+    expect(shop[0].priceMinor).toBe(480_000);
+
+    for (const email of ["agent@acme.ug", "mgr@acme.ug", "tech@acme.ug"]) {
+      await expect(c.as(email).mutation(api.stock.setSellingPrice, { productId: c.productId, price: 1 })).rejects.toThrow(/role/);
+    }
+    // Staff without the right see no prices in the stock list.
+    expect((await c.as("agent@acme.ug").query(api.stock.stockOverview, { tenantId: c.tenantId })).items[0].price).toBeNull();
+
+    await c.asOwner.mutation(api.stock.setSellingPrice, { productId: c.productId, price: null });
+    expect(await priceNow()).toEqual({ listMinor: 500_000, currency: "UGX", fixed: false });
+    await expect(c.asOwner.mutation(api.stock.setSellingPrice, { productId: c.productId, price: 0 })).rejects.toThrow(/above 0/);
+  });
+
+  test("availability for sale: on and off by the two admin roles only", async () => {
+    const c = await setup([{ email: "inv@acme.ug", role: "inventory_admin" }, { email: "mgr@acme.ug", role: "sales_manager" }]);
+    await c.as("inv@acme.ug").mutation(api.stock.setProductAvailability, { productId: c.productId, forSale: false });
+    expect((await c.asOwner.query(api.stock.stockOverview, { tenantId: c.tenantId })).items[0].status).toBe("archived");
+    await expect(c.as("mgr@acme.ug").mutation(api.stock.setProductAvailability, { productId: c.productId, forSale: true })).rejects.toThrow(/role/);
+    await c.asOwner.mutation(api.stock.setProductAvailability, { productId: c.productId, forSale: true });
+    expect((await c.asOwner.query(api.stock.stockOverview, { tenantId: c.tenantId })).items[0].status).toBe("active");
+  });
+
+  test("moving stock to another location and setting a count are for the two admin roles only", async () => {
+    const c = await setup([{ email: "inv@acme.ug", role: "inventory_admin" }, { email: "agent@acme.ug", role: "sales_agent" }]);
+    await receive(c, 10);
+    await c.as("inv@acme.ug").mutation(api.stock.transferStock, {
+      tenantId: c.tenantId, productId: c.productId, fromWarehouseId: c.main, toWarehouseId: c.depot, quantity: 4
+    });
+    expect(await level(c, c.depot)).toMatchObject({ onHand: 4 });
+    await c.as("inv@acme.ug").mutation(api.stock.adjustStock, {
+      tenantId: c.tenantId, productId: c.productId, warehouseId: c.main, delta: -1, reason: "Stock count"
+    });
+    expect(await level(c, c.main)).toMatchObject({ onHand: 5 });
+    await expect(c.as("agent@acme.ug").mutation(api.stock.transferStock, {
+      tenantId: c.tenantId, productId: c.productId, fromWarehouseId: c.main, toWarehouseId: c.depot, quantity: 1
+    })).rejects.toThrow(/role/);
+  });
+});

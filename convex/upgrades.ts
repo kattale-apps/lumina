@@ -22,7 +22,7 @@ import { findViewerProfile, requireTenantMembership } from "./lib/auth";
 import { canAccessOwned, CRM_READERS, CRM_WRITERS, seesAllCustomers, validateOptionalEmail, validatePhone } from "./lib/crm";
 import { PUBLIC_ASSUMPTIONS } from "./lib/estimate";
 import { currencyExponent } from "./lib/money";
-import { currentCost, priceFrom, resolveMarginRule } from "./lib/pricing";
+import { productPrice } from "./lib/pricing";
 import type { Assumptions, CatalogueItem } from "./lib/sizing";
 import { withSafeEstimates } from "./lib/specEstimate";
 import {
@@ -120,11 +120,10 @@ async function present(ctx: Ctx, tenant: Doc<"tenants">, report: UpgradeReport, 
     const product = products.get(productId);
     let price: { currency: string; listMinor: number } | null = null;
     if (product) {
-      const cost = await currentCost(ctx, product._id);
-      const rule = await resolveMarginRule(ctx, product);
+      const found = await productPrice(ctx, product);
       // Only the company's default currency is compared, so totals are never mixed.
-      if (cost && rule && cost.currency === tenant.defaultCurrency) {
-        price = { currency: cost.currency, listMinor: priceFrom(cost, rule.rule).listMinor };
+      if (found && found.currency === tenant.defaultCurrency) {
+        price = { currency: found.currency, listMinor: found.listMinor };
       }
     }
     priceCache.set(productId, price);

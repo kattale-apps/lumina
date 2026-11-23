@@ -14,7 +14,7 @@ import {
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
 import { canAccessOwned, CRM_READERS, CRM_WRITERS, optionalText, seesAllCustomers } from "./lib/crm";
-import { currentCost, priceFrom, resolveMarginRule } from "./lib/pricing";
+import { productPrice } from "./lib/pricing";
 import {
   assertTransition,
   belowFloor,
@@ -125,14 +125,13 @@ async function sizingState(ctx: Ctx, quotation: Doc<"quotations">) {
   };
 }
 
-/** Prices a catalogue product now: list and floor from the current cost and margin rule. */
+/** Prices a catalogue product now: a fixed selling price, or list and floor from cost and margin. */
 async function priceProduct(ctx: QueryCtx, product: Doc<"products">) {
-  const cost = await currentCost(ctx, product._id);
-  const resolved = await resolveMarginRule(ctx, product);
-  if (!cost || !resolved) {
-    throw new ConvexError(`${product.sku} has no price yet: it needs a cost and a margin rule.`);
+  const price = await productPrice(ctx, product);
+  if (!price) {
+    throw new ConvexError(`${product.sku} has no price yet: it needs a cost and a margin rule, or a fixed selling price.`);
   }
-  return priceFrom(cost, resolved.rule);
+  return price;
 }
 
 type LineInput =

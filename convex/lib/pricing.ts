@@ -55,6 +55,34 @@ export async function resolveMarginRule(
   return defaultRule ? { rule: defaultRule, source: "default" } : null;
 }
 
+export type ProductPrice = ReturnType<typeof priceFrom> & {
+  /** True when an administrator set a fixed selling price instead of cost plus margin. */
+  fixed: boolean;
+};
+
+/**
+ * The selling price of a product now. A fixed selling price, when an administrator set one, wins;
+ * otherwise list = current cost plus the margin rule. The floor never rises above a fixed price.
+ * Null when there is neither a fixed price nor a cost with a margin rule.
+ */
+export async function productPrice(ctx: QueryCtx, product: Doc<"products">): Promise<ProductPrice | null> {
+  const cost = await currentCost(ctx, product._id);
+  const resolved = cost ? await resolveMarginRule(ctx, product) : null;
+  const fromMargin = cost && resolved ? priceFrom(cost, resolved.rule) : null;
+  const fixed = product.fixedPrice;
+  if (!fixed) return fromMargin ? { ...fromMargin, fixed: false } : null;
+  const floorMinor =
+    fromMargin && fromMargin.currency === fixed.currency ? Math.min(fromMargin.floorMinor, fixed.amountMinor) : fixed.amountMinor;
+  return {
+    currency: fixed.currency,
+    listMinor: fixed.amountMinor,
+    floorMinor,
+    list: formatMinorUnits(fixed.amountMinor, fixed.currency),
+    floor: formatMinorUnits(floorMinor, fixed.currency),
+    fixed: true
+  };
+}
+
 export function priceFrom(cost: Doc<"costRecords">, rule: Doc<"marginRules">) {
   const listMinor = applyMarginBps(cost.amountMinor, rule.marginBps);
   const floorMinor = applyMarginBps(cost.amountMinor, rule.floorMarginBps);

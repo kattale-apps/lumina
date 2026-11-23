@@ -288,6 +288,8 @@ export default defineSchema({
     // Version of the category specification these values were entered against.
     specSchemaVersion: v.number(),
     status: v.union(v.literal("active"), v.literal("archived")),
+    // A selling price set by an administrator; when present it replaces cost plus margin.
+    fixedPrice: v.optional(v.object({ amountMinor: v.number(), currency: v.string(), setAt: v.number(), setBy: v.string() })),
     createdAt: v.number(),
     createdBy: v.string(),
     updatedAt: v.number()

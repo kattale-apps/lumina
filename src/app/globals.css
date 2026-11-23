@@ -1785,3 +1785,39 @@ label.button:focus-within { outline: 3px solid #26a269; outline-offset: 2px; }
 .lead-budget-note { padding: 8px 12px; border-radius: 8px; background: #f4f6f5; }
 .lead-budget-ok { background: #e5f5ec; color: #0f5a3a; }
 .lead-budget-over { background: #fdf0f0; color: #7a1f1f; }
+
+/* Stock: edit a product's price, availability, location and count */
+.stock-editor { display: grid; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.stock-edit-block { display: grid; gap: 6px; }
+.stock-edit-block h3 { margin: 0; font-size: 15px; }
+.stock-edit-block .hint { margin: 0; }
+.stock-edit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.stock-edit-row input, .stock-edit-row select { min-height: 40px; width: auto; max-width: 100%; }
+.stock-edit-row .stock-qty { width: 90px; }
+.stock-edit-toggle { margin-top: 6px; }
+
+/* The menu bar floats at the top of every page, so the menu is always one tap away. */
+html { scroll-padding-top: 96px; }
+.topbar, .topbar-float { position: sticky; top: 0; z-index: 40; }
+.topbar-float > .topbar { position: relative; z-index: 32; }
+.topbar { border-bottom: 0; }
+/*
+ * A full-width background and bottom line behind the bar. Drawn with box-shadow, which never
+ * widens the page (no sideways scrolling), and clipped to the bar's own height.
+ */
+.topbar::before, .topbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: -1;
+  clip-path: inset(0 -100vmax);
+  pointer-events: none;
+}
+.topbar::before { top: 0; bottom: 0; background: var(--canvas); box-shadow: 0 0 0 100vmax var(--canvas); }
+.topbar::after { bottom: 0; height: 1px; background: var(--line); box-shadow: 0 0 0 100vmax var(--line); }
+/* The open menu scrolls on its own when it is taller than the screen. */
+.topbar-float .workspace-menu { max-height: calc(100vh - 100px); overflow-y: auto; overscroll-behavior: contain; }
+/* Long product names in a dropdown must not push a form wider than the screen. */
+.panel-form { min-width: 0; max-width: 100%; }
+.panel-form select { max-width: 100%; min-width: 0; text-overflow: ellipsis; }

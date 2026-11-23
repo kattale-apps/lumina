@@ -122,6 +122,8 @@ export function WorkspaceHeader({ role }: { role?: string }) {
 
   return (
     <>
+      {/* The menu bar floats at the top of the page, and the menu opens right under it. */}
+      <div className="topbar-float">
       <header className="topbar">
         <Link className="brand" href="/" aria-label="Solar Switch home">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -197,6 +199,7 @@ export function WorkspaceHeader({ role }: { role?: string }) {
           </nav>
         </>
       ) : null}
+      </div>
       {me && !me.complete && path !== "/profile" ? <ProfilePrompt /> : null}
     </>
   );

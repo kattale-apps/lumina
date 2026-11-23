@@ -15,7 +15,7 @@ import { findViewerProfile, requireTenantMembership } from "./lib/auth";
 import { MAX_IMAGE_BYTES, sniffFile } from "./lib/files";
 import { computeLoad, scheduledHours } from "./lib/load";
 import { currencyExponent, toMinorUnits } from "./lib/money";
-import { currentCost, priceFrom, resolveMarginRule } from "./lib/pricing";
+import { productPrice } from "./lib/pricing";
 import { matchesWords, searchWords } from "./lib/search";
 import { LEAD_MANAGERS, LEAD_VIEWERS } from "./leads";
 
@@ -102,10 +102,9 @@ async function equipmentPrice(ctx: QueryCtx, lead: Doc<"quoteRequests">, tenant:
   for (const c of lead.components) {
     const product = c.productId ? await ctx.db.get(c.productId) : null;
     if (!product) return null;
-    const cost = await currentCost(ctx, product._id);
-    const rule = await resolveMarginRule(ctx, product);
-    if (!cost || !rule || cost.currency !== tenant.defaultCurrency) return null;
-    total += priceFrom(cost, rule.rule).listMinor * c.quantity;
+    const price = await productPrice(ctx, product);
+    if (!price || price.currency !== tenant.defaultCurrency) return null;
+    total += price.listMinor * c.quantity;
   }
   return total;
 }
@@ -293,9 +292,7 @@ export const saveResponse = mutation({
 
 /** List price of a product as customers see it, or null when it has no cost or margin yet. */
 async function listPriceMinor(ctx: Ctx, product: Doc<"products">) {
-  const cost = await currentCost(ctx, product._id);
-  const rule = cost ? await resolveMarginRule(ctx, product) : null;
-  return cost && rule ? priceFrom(cost, rule.rule).listMinor : null;
+  return (await productPrice(ctx, product))?.listMinor ?? null;
 }
 
 /**
