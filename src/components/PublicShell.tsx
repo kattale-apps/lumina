@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { CustomerShell } from "@/components/CustomerShell";
+import { StaffFrame, useStaffRole } from "@/components/StaffFrame";
 import { DraftNotice, LanguagePicker, useT } from "@/lib/i18n";
 
 /**
@@ -14,6 +15,8 @@ import { DraftNotice, LanguagePicker, useT } from "@/lib/i18n";
 export function PublicShell({ children }: { children: ReactNode }) {
   const t = useT();
   const me = useQuery(api.shop.myAccount, {});
+  const staffRole = useStaffRole();
+  if (staffRole) return <StaffFrame role={staffRole}>{children}</StaffFrame>;
   if (me?.signedIn && me.account) return <CustomerShell signedIn>{children}</CustomerShell>;
   return (
     <div className="public-bg">

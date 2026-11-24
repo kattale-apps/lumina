@@ -7,6 +7,7 @@ import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { CompanyPage, ConfiguredOnly, errorMessage } from "../workspace";
+import { ItemPicker, type PickerProduct } from "./ItemPicker";
 import { savePdf } from "../../../lib/savePdf";
 import { shrinkImage } from "../../../lib/shrinkImage";
 import { buildSalesDocPdf, formatMoney } from "../../../lib/salesDocPdf";
@@ -106,15 +107,30 @@ function NewDocument({ tenantId, setup, onCreated }: { tenantId: Id<"tenants">; 
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
 
-  const byName = useMemo(() => new Map(setup.products.map((p) => [p.name.toLowerCase(), p])), [setup.products]);
   const total = lines.reduce((s, l) => s + digits(l.unitPrice) * (Number(l.quantity) || 0), 0);
   const set = (key: string, patch: Partial<Line>) => setLines((all) => all.map((l) => (l.key === key ? { ...l, ...patch } : l)));
 
-  function pickProduct(key: string, value: string) {
-    const product = byName.get(value.trim().toLowerCase());
-    // Choosing a catalogue product fills in today's list price; it can still be changed.
-    if (product) set(key, { description: product.name, productId: product.id, unitPrice: product.listMinor !== null ? (product.listMinor / 10 ** setup.exponent).toLocaleString("en-US") : "" });
-    else set(key, { description: value, productId: undefined });
+  // Product names repeat across brands, so a name the catalogue has more than once is
+  // printed with its brand, letting the buyer see exactly which one is meant.
+  const repeatedNames = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const p of setup.products) seen.set(p.name.toLowerCase(), (seen.get(p.name.toLowerCase()) ?? 0) + 1);
+    return new Set([...seen].filter(([, n]) => n > 1).map(([name]) => name));
+  }, [setup.products]);
+
+  // Choosing a catalogue product fills in today's list price; it can still be changed.
+  function pickProduct(key: string, product: PickerProduct) {
+    const description = repeatedNames.has(product.name.toLowerCase()) && product.brand ? `${product.name} (${product.brand})` : product.name;
+    set(key, {
+      description,
+      productId: product.id,
+      unitPrice: product.listMinor !== null ? (product.listMinor / 10 ** setup.exponent).toLocaleString("en-US") : ""
+    });
+  }
+
+  // Typing over a chosen product turns the line back into a free-text item.
+  function typeItem(key: string, text: string) {
+    set(key, { description: text, productId: undefined });
   }
 
   async function submit(e: FormEvent) {
@@ -175,13 +191,19 @@ function NewDocument({ tenantId, setup, onCreated }: { tenantId: Id<"tenants">; 
       <input id="inv-bcontact" required type="tel" maxLength={120} placeholder="+256 700 000000" value={buyer.contact} onChange={(e) => setBuyer({ ...buyer, contact: e.target.value })} />
 
       <h3>Items</h3>
-      <datalist id="inv-products">
-        {setup.products.map((p) => <option key={p.id} value={p.name}>{[p.brand, p.model].filter(Boolean).join(" ")}</option>)}
-      </datalist>
       <div className="invoice-lines">
         {lines.map((l, i) => (
           <div className="invoice-line" key={l.key}>
-            <input aria-label={`Item ${i + 1}`} list="inv-products" placeholder="Choose a product or type an item" maxLength={200} value={l.description} onChange={(e) => pickProduct(l.key, e.target.value)} />
+            <ItemPicker
+              id={`inv-item-${l.key}`}
+              label={`Item ${i + 1}`}
+              value={l.description}
+              productId={l.productId}
+              products={setup.products}
+              formatPrice={(minor) => formatMoney(minor, setup.exponent, setup.currency)}
+              onType={(text) => typeItem(l.key, text)}
+              onPick={(product) => pickProduct(l.key, product)}
+            />
             <input aria-label={`Quantity ${i + 1}`} className="invoice-qty" inputMode="numeric" value={l.quantity} onChange={(e) => set(l.key, { quantity: e.target.value.replace(/[^\d]/g, "") })} />
             <input aria-label={`Unit price ${i + 1}`} className="invoice-price" inputMode="numeric" placeholder={`Price (${setup.currency})`} value={l.unitPrice} onChange={(e) => set(l.key, { unitPrice: withCommas(e.target.value) })} />
             <span className="invoice-amount">{formatMoney(digits(l.unitPrice) * (Number(l.quantity) || 0) * 10 ** setup.exponent, setup.exponent, setup.currency)}</span>

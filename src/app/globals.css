@@ -1826,10 +1826,24 @@ html { scroll-padding-top: 96px; }
 .invoice-lines { display: grid; gap: 8px; }
 .invoice-line { display: grid; grid-template-columns: minmax(0, 1fr) 64px 130px auto auto; gap: 8px; align-items: center; }
 .invoice-line input { min-height: 42px; }
+.invoice-line { align-items: start; }
+/* The invoice item list: solid, above everything else on the form, and scrolls on its own. */
+.item-picker { min-width: 0; }
+.item-picker-list { z-index: 60; max-height: min(55vh, 360px); background: #fff; opacity: 1; overscroll-behavior: contain; }
+.item-picker-list li { border-bottom: 1px solid #e3ebe6; border-radius: 0; color: var(--ink, #172923); }
+.item-picker-list li:last-child { border-bottom: 0; }
+.item-picker-list li.item-picker-on { background: #e5f5ec; }
+.item-picker-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; color: inherit; }
+.combo-list li .item-picker-row { color: #172923; font-size: inherit; }
+.item-picker-row strong { font-size: 15px; line-height: 1.3; color: #172923; }
+.combo-list .item-picker-row .item-picker-price { flex: none; color: #176b4b; font-size: 13px; font-weight: 700; }
+.item-picker-chosen, .item-picker-free { margin: 4px 2px 0; font-size: 12.5px; line-height: 1.35; }
+.item-picker-chosen { color: #176b4b; }
+.item-picker-free { color: var(--muted); }
 .invoice-amount { font-size: 13px; color: var(--muted); white-space: nowrap; }
 @media (max-width: 640px) {
   .invoice-line { grid-template-columns: minmax(0, 1fr) 64px; }
-  .invoice-line input:first-child { grid-column: 1 / -1; }
+  .invoice-line > :first-child { grid-column: 1 / -1; }
   .invoice-amount { grid-column: 1 / -1; }
 }
 .invoice-total { margin: 6px 0 0; font-size: 18px; }

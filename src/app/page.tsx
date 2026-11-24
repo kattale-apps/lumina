@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { AppDownload } from "@/components/AppDownload";
 import { CustomerShell } from "@/components/CustomerShell";
+import { useStaffRole } from "@/components/StaffFrame";
 import { DraftNotice, LanguagePicker, Rich, useT } from "@/lib/i18n";
 
 export default function HomePage() {
@@ -13,9 +16,18 @@ export default function HomePage() {
   return <AccountAwareHome />;
 }
 
-/** A signed-in customer gets their dashboard; everyone else the public landing page. */
+/**
+ * Staff go to their workspace, even if they also have a customer account; a signed-in
+ * customer gets their dashboard; everyone else the public landing page.
+ */
 function AccountAwareHome() {
+  const router = useRouter();
   const me = useQuery(api.shop.myAccount, {});
+  const staffRole = useStaffRole();
+  useEffect(() => {
+    if (staffRole) router.replace("/dashboard");
+  }, [staffRole, router]);
+  if (staffRole || (me?.signedIn && staffRole === undefined)) return null;
   if (me?.signedIn && me.account) return <CustomerHome name={me.account.name} />;
   return <Landing />;
 }

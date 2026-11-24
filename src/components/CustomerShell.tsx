@@ -7,6 +7,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { ProfilePrompt } from "../app/dashboard/workspace";
+import { StaffFrame, useStaffRole } from "./StaffFrame";
 import { DraftNotice, LanguagePicker, useT, type MessageKey } from "@/lib/i18n";
 
 const TABS: { href: string; label: MessageKey }[] = [
@@ -17,8 +18,19 @@ const TABS: { href: string; label: MessageKey }[] = [
   { href: "/profile", label: "customer.tabProfile" }
 ];
 
-/** Page frame for signed-in customers: logo and sign-out on one line, then a row of tabs. */
+/**
+ * Page frame for signed-in customers: logo and sign-out on one line, then a row of tabs.
+ * A member of staff, even one who also has a customer account, gets the staff header and Menu.
+ */
 export function CustomerShell({ children, signedIn }: { children: ReactNode; signedIn?: boolean }) {
+  const staffRole = useStaffRole();
+  if (staffRole) return <StaffFrame role={staffRole}>{children}</StaffFrame>;
+  // Wait for the role before drawing, so staff never see the customer tabs flash up.
+  if (signedIn && staffRole === undefined) return null;
+  return <CustomerFrame signedIn={signedIn}>{children}</CustomerFrame>;
+}
+
+function CustomerFrame({ children, signedIn }: { children: ReactNode; signedIn?: boolean }) {
   const t = useT();
   const { signOut } = useAuthActions();
   const path = usePathname();
