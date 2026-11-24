@@ -1,5 +1,6 @@
 "use client";
 
+import { useRecordReply, WhatsappFollowUp } from "@/components/WhatsappFollowUp";
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
@@ -16,6 +17,7 @@ function ItemRequests({ tenantId, companyName }: { tenantId: Id<"tenants">; comp
   const [filter, setFilter] = useState<Status | "">("new");
   const rows = useQuery(api.itemRequests.list, { tenantId, status: filter || undefined });
   const setStatus = useMutation(api.itemRequests.setStatus);
+  const recordReply = useRecordReply();
   const [error, setError] = useState<string | null>(null);
 
   async function change(requestId: Id<"itemRequests">, status: Status) {
@@ -60,10 +62,12 @@ function ItemRequests({ tenantId, companyName }: { tenantId: Id<"tenants">; comp
                   </ol>
                   {r.note ? <span className="record-meta">Note: {r.note}</span> : null}
                   {r.handledBy ? <span className="record-meta">Last updated by {r.handledBy}</span> : null}
+                  <WhatsappFollowUp tracking={r.whatsapp} itemRequestId={r.id} />
                 </div>
                 <div className="record-actions">
                   {wa ? (
                     <a className="button button-small button-whatsapp" target="_blank" rel="noopener noreferrer"
+                      onClick={() => { if (!r.whatsapp.repliedAt) recordReply({ itemRequestId: r.id }); }}
                       href={whatsappLink(wa, `Hello ${r.name.split(" ")[0]}, this is ${companyName} about your request ${reference}.`)}>
                       💬 WhatsApp
                     </a>

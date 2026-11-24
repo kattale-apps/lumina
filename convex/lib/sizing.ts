@@ -191,6 +191,8 @@ export type CatalogueItem = {
   specValues: Record<string, number | string | boolean>;
   // Figures filled in by safe estimates (key -> how), pending technician verification.
   estimated?: Record<string, string>;
+  // A priority brand (Lumina): designs built from these parts are offered first.
+  preferred?: boolean;
 };
 
 export type CheckState = "pass" | "fail" | "review";
@@ -557,8 +559,13 @@ export function buildCandidates(
     const inv = catalogue.find((i) => i.id === c.inverterId);
     return (inv && num(inv, "rated_output_power")) ?? Number.MAX_SAFE_INTEGER;
   };
+  // Priority brand first: designs made only of preferred parts, then partly, then none. Within each,
+  // the closest fit leads, so a preferred design is never chosen just for being bigger.
+  const notPreferred = (c: Candidate) =>
+    [c.inverterId, c.batteryId, c.panelId].filter((id) => id && !catalogue.find((i) => i.id === id)?.preferred).length;
   candidates.sort(
     (x, y) =>
+      notPreferred(x) - notPreferred(y) ||
       x.counts.panels + x.counts.batteries - (y.counts.panels + y.counts.batteries) ||
       inverterW(x) - inverterW(y) ||
       x.counts.arrayWp - y.counts.arrayWp ||

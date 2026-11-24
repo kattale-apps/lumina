@@ -110,6 +110,23 @@ export const quotationLine = v.object({
 });
 
 /** A solar system that is already installed, as nameplate ratings typed in by an agent or the owner. */
+/** The agent a public request's WhatsApp button goes to (agents take turns). */
+export const whatsappRoute = v.object({
+  number: v.string(),
+  name: v.string(),
+  userId: v.optional(v.id("userProfiles"))
+});
+
+/** WhatsApp follow-up of a public request, tracked in the app. */
+const whatsappTracking = {
+  whatsappTo: v.optional(whatsappRoute),
+  // When the customer tapped "Send on WhatsApp".
+  whatsappOpenedAt: v.optional(v.number()),
+  // When a staff member recorded that they replied on WhatsApp, and who.
+  whatsappRepliedAt: v.optional(v.number()),
+  whatsappRepliedBy: v.optional(v.id("userProfiles"))
+};
+
 export const existingSystem = v.object({
   systemType: v.union(
     v.literal("off_grid"),
@@ -247,13 +264,16 @@ export default defineSchema({
     userId: v.id("userProfiles"),
     role: appRole,
     status: v.union(v.literal("active"), v.literal("invited"), v.literal("suspended")),
+    // For a sales agent: the sales manager they report to. That manager sees the agent's work.
+    managerUserId: v.optional(v.id("userProfiles")),
     createdAt: v.number(),
     createdBy: v.string()
   })
     .index("by_user", ["userId"])
     .index("by_tenant", ["tenantId"])
     .index("by_user_tenant", ["userId", "tenantId"])
-    .index("by_tenant_role", ["tenantId", "role"]),
+    .index("by_tenant_role", ["tenantId", "role"])
+    .index("by_tenant_manager", ["tenantId", "managerUserId"]),
 
   productCategories: defineTable({
     tenantId: v.id("tenants"),
@@ -764,6 +784,10 @@ export default defineSchema({
     contactEmail: v.optional(v.string()),
     // Where public requests for a recommendation can also be sent on WhatsApp, international digits.
     whatsappNumber: v.optional(v.string()),
+    // Sales agents' WhatsApp numbers. Public requests go to each in turn; empty: whatsappNumber.
+    whatsappAgents: v.optional(v.array(whatsappRoute)),
+    // Which agent is next (counts up; next = whatsappTurn mod the number of agents).
+    whatsappTurn: v.optional(v.number()),
     // Whether the public may create accounts. Off: only invited staff can sign up.
     publicSignUp: v.optional(v.boolean()),
     updatedAt: v.number(),
@@ -824,6 +848,7 @@ export default defineSchema({
     // Set for "What can my money buy?" requests: the budget for equipment (installation not included),
     // and the appliances the chosen system leaves out to fit it.
     budget: v.optional(v.object({ amountMinor: v.number(), leavesOut: v.array(v.string()) })),
+    ...whatsappTracking,
     // Where the power is needed (home, business, industry), when the person said.
     category: v.optional(
       v.union(v.literal("residential"), v.literal("commercial_small"), v.literal("commercial_medium"), v.literal("industrial"))
@@ -867,7 +892,8 @@ export default defineSchema({
     updatedAt: v.number()
   })
     .index("by_request", ["requestId"])
-    .index("by_tenant_chosen", ["tenantId", "chosenAt"]),
+    .index("by_tenant_chosen", ["tenantId", "chosenAt"])
+    .index("by_tenant_preparer", ["tenantId", "preparedByUserId", "createdAt"]),
 
   // A super administrator's correction to one piece of translated screen text.
   uiTranslations: defineTable({
@@ -968,11 +994,75 @@ export default defineSchema({
     ),
     status: v.union(v.literal("new"), v.literal("contacted"), v.literal("closed")),
     handledByUserId: v.optional(v.id("userProfiles")),
+    // When a staff member first marked it contacted (answered).
+    answeredAt: v.optional(v.number()),
+    ...whatsappTracking,
     createdAt: v.number(),
     updatedAt: v.number()
   })
     .index("by_tenant_time", ["tenantId", "createdAt"])
     .index("by_tenant_phone_time", ["tenantId", "phone", "createdAt"]),
+
+  // Proforma invoices and receipts made by sales staff, kept for the record books.
+  salesDocuments: defineTable({
+    tenantId: v.id("tenants"),
+    kind: v.union(v.literal("proforma"), v.literal("receipt")),
+    // Per company and kind: PF-0001, RC-0001…
+    seq: v.number(),
+    number: v.string(),
+    // The selling company as printed on the document.
+    sellerName: v.string(),
+    buyer: v.object({ name: v.string(), location: v.string(), contact: v.string() }),
+    // Digits of the buyer's phone, for the customer record book.
+    buyerPhoneKey: v.string(),
+    items: v.array(
+      v.object({
+        description: v.string(),
+        quantity: v.number(),
+        unitPriceMinor: v.number(),
+        productId: v.optional(v.id("products"))
+      })
+    ),
+    currency: v.string(),
+    totalMinor: v.number(),
+    notes: v.optional(v.string()),
+    // Receipts: how it was paid.
+    paymentMethod: v.optional(v.string()),
+    createdByUserId: v.id("userProfiles"),
+    createdAt: v.number()
+  })
+    .index("by_tenant_time", ["tenantId", "createdAt"])
+    .index("by_tenant_creator", ["tenantId", "createdByUserId", "createdAt"])
+    .index("by_tenant_kind_seq", ["tenantId", "kind", "seq"])
+    .index("by_tenant_buyer", ["tenantId", "buyerPhoneKey", "createdAt"]),
+
+  // Photos of payment proofs (mobile money, bank slips) on an invoice or receipt. A customer paying in
+  // instalments has several, each with the amount and date paid.
+  paymentProofs: defineTable({
+    tenantId: v.id("tenants"),
+    documentId: v.id("salesDocuments"),
+    storageId: v.id("_storage"),
+    amountMinor: v.optional(v.number()),
+    paidAt: v.optional(v.number()),
+    note: v.optional(v.string()),
+    addedByUserId: v.id("userProfiles"),
+    createdAt: v.number()
+  })
+    .index("by_document", ["documentId", "createdAt"])
+    .index("by_storage", ["storageId"]),
+
+  // Every public check run (energy, upgrade, budget), and whether a request followed.
+  publicChecks: defineTable({
+    tenantId: v.id("tenants"),
+    kind: v.union(v.literal("energy"), v.literal("upgrade"), v.literal("budget")),
+    // Plain-language summary, e.g. "4 appliances, 2.3 kWh a day, grid often goes off".
+    summary: v.string(),
+    // Set when the person then sent a request.
+    requestId: v.optional(v.id("quoteRequests")),
+    // Signed-in staff or customer who ran it, if any.
+    userId: v.optional(v.id("userProfiles")),
+    createdAt: v.number()
+  }).index("by_tenant_time", ["tenantId", "createdAt"]),
 
   // Nameplate photos from the energy and upgrade checks (see requestPhotos.ts).
   requestPhotos: defineTable({

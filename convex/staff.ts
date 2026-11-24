@@ -44,8 +44,11 @@ export const listStaff = query({
         membershipId: membership._id,
         email: person?.email ?? "",
         displayName: person?.displayName ?? "Unknown user",
+        userId: membership.userId,
         role: membership.role,
         status: membership.status,
+        // For a sales agent: the manager they report to.
+        managerUserId: membership.managerUserId ?? null,
         isSelf: membership.userId === profile._id
       });
     }
@@ -142,7 +145,8 @@ export const changeRole = mutation({
     const { actor, target, targetLabel } = await loadManageableMembership(ctx, args.membershipId);
     if (target.role === args.role) return { changed: false };
 
-    await ctx.db.patch(target._id, { role: args.role });
+    // Only sales agents report to a manager.
+    await ctx.db.patch(target._id, { role: args.role, ...(args.role !== "sales_agent" ? { managerUserId: undefined } : {}) });
     await recordAudit(ctx, actor, {
       tenantId: target.tenantId,
       action: "membership.role_changed",
@@ -150,6 +154,38 @@ export const changeRole = mutation({
       entityId: target._id,
       summary: `${targetLabel} changed from ${target.role} to ${args.role}.`,
       metadata: { before: { role: target.role }, after: { role: args.role } }
+    });
+    return { changed: true };
+  }
+});
+
+/** Puts a sales agent under a sales manager (or none). That manager then sees the agent's work. */
+export const setManager = mutation({
+  args: { membershipId: v.id("memberships"), managerUserId: v.union(v.id("userProfiles"), v.null()) },
+  handler: async (ctx, args) => {
+    const { actor, target, targetLabel } = await loadManageableMembership(ctx, args.membershipId);
+    if (target.role !== "sales_agent") throw new ConvexError("Only sales agents are assigned to a manager.");
+    let managerLabel = "no manager";
+    if (args.managerUserId) {
+      const manager = await ctx.db
+        .query("memberships")
+        .withIndex("by_user_tenant", (q) => q.eq("userId", args.managerUserId!).eq("tenantId", target.tenantId))
+        .unique();
+      if (!manager || manager.role !== "sales_manager" || manager.status !== "active") {
+        throw new ConvexError("Choose an active sales manager.");
+      }
+      managerLabel = (await ctx.db.get(manager.userId))?.email ?? "manager";
+    }
+    const next = args.managerUserId ?? undefined;
+    if (target.managerUserId === next) return { changed: false };
+    await ctx.db.patch(target._id, { managerUserId: next });
+    await recordAudit(ctx, actor, {
+      tenantId: target.tenantId,
+      action: "membership.manager_set",
+      entityType: "memberships",
+      entityId: target._id,
+      summary: `${targetLabel} now reports to ${managerLabel}.`,
+      metadata: { before: { managerUserId: target.managerUserId ?? null }, after: { managerUserId: next ?? null } }
     });
     return { changed: true };
   }

@@ -13,7 +13,7 @@ import {
 } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
-import { canAccessOwned, CRM_READERS, CRM_WRITERS, optionalText, seesAllCustomers } from "./lib/crm";
+import { canAccessOwned, CRM_READERS, CRM_WRITERS, optionalText, ownedRows, ownerScope } from "./lib/crm";
 import { productPrice } from "./lib/pricing";
 import {
   assertTransition,
@@ -50,7 +50,7 @@ async function loadQuotation(ctx: Ctx, quotationId: Id<"quotations">, write: boo
     quotation.tenantId,
     write ? CRM_WRITERS : CRM_READERS
   );
-  if (!canAccessOwned(auth.membership.role, auth.profile, quotation.ownerUserId)) {
+  if (!await canAccessOwned(ctx, auth.membership, auth.profile, quotation.ownerUserId)) {
     throw new ConvexError("Quotation not found.");
   }
   return { quotation, ...auth };
@@ -277,7 +277,7 @@ export const createQuotation = mutation({
     if (!run) throw new ConvexError("Sizing run not found.");
     const { profile, membership } = await requireTenantMembership(ctx, run.tenantId, CRM_WRITERS);
     const assessment = await ctx.db.get(run.assessmentId);
-    if (!assessment || !canAccessOwned(membership.role, profile, assessment.ownerUserId)) {
+    if (!assessment || !(await canAccessOwned(ctx, membership, profile, assessment.ownerUserId))) {
       throw new ConvexError("Assessment not found.");
     }
     if (run.assessmentRevision !== assessment.currentRevision) {
@@ -349,7 +349,7 @@ export const createFromUpgradeStudy = mutation({
     const study = await ctx.db.get(args.studyId);
     if (!study) throw new ConvexError("Upgrade study not found.");
     const { profile, membership } = await requireTenantMembership(ctx, study.tenantId, CRM_WRITERS);
-    if (!canAccessOwned(membership.role, profile, study.ownerUserId)) {
+    if (!(await canAccessOwned(ctx, membership, profile, study.ownerUserId))) {
       throw new ConvexError("Upgrade study not found.");
     }
     const keys = [...new Set(args.optionKeys)];
@@ -911,12 +911,11 @@ export const listQuotations = query({
   args: { tenantId: v.id("tenants") },
   handler: async (ctx, args) => {
     const { membership, profile } = await requireTenantMembership(ctx, args.tenantId, CRM_READERS);
-    const rows = seesAllCustomers(membership.role)
-      ? await ctx.db.query("quotations").withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId)).collect()
-      : await ctx.db
-          .query("quotations")
-          .withIndex("by_tenant_owner", (q) => q.eq("tenantId", args.tenantId).eq("ownerUserId", profile._id))
-          .collect();
+    const rows = await ownedRows(
+      await ownerScope(ctx, membership, profile),
+      () => ctx.db.query("quotations").withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId)).collect(),
+      (owner) => ctx.db.query("quotations").withIndex("by_tenant_owner", (q) => q.eq("tenantId", args.tenantId).eq("ownerUserId", owner)).collect()
+    );
 
     const now = Date.now();
     const items = [];

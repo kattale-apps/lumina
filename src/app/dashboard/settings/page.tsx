@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { CompanyPage, ConfiguredOnly, errorMessage } from "../workspace";
+import { WhatsappAgents } from "./WhatsappAgents";
 
 function SettingsForm({ tenantId }: { tenantId: Id<"tenants"> }) {
   const company = useQuery(api.settings.getCompany, { tenantId });
@@ -174,6 +175,7 @@ export default function SettingsPage() {
           <>
             <SettingsForm tenantId={company.tenantId} />
             <EstimatorForm tenantId={company.tenantId} />
+            <WhatsappAgents tenantId={company.tenantId} />
           </>
         )}
       </CompanyPage>

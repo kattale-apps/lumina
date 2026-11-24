@@ -17,6 +17,7 @@ import type * as auth from "../auth.js";
 import type * as budget from "../budget.js";
 import type * as catalogue from "../catalogue.js";
 import type * as catalogueImport from "../catalogueImport.js";
+import type * as checks from "../checks.js";
 import type * as crons from "../crons.js";
 import type * as customers from "../customers.js";
 import type * as estimator from "../estimator.js";
@@ -50,6 +51,7 @@ import type * as lib_languages from "../lib/languages.js";
 import type * as lib_load from "../lib/load.js";
 import type * as lib_money from "../lib/money.js";
 import type * as lib_pricing from "../lib/pricing.js";
+import type * as lib_priority from "../lib/priority.js";
 import type * as lib_quote from "../lib/quote.js";
 import type * as lib_quotePdf from "../lib/quotePdf.js";
 import type * as lib_requester from "../lib/requester.js";
@@ -65,6 +67,7 @@ import type * as lib_tariff from "../lib/tariff.js";
 import type * as lib_upgrade from "../lib/upgrade.js";
 import type * as lib_validation from "../lib/validation.js";
 import type * as lib_whatsapp from "../lib/whatsapp.js";
+import type * as lib_whatsappRoute from "../lib/whatsappRoute.js";
 import type * as margins from "../margins.js";
 import type * as operations from "../operations.js";
 import type * as pdfLinks from "../pdfLinks.js";
@@ -73,6 +76,8 @@ import type * as profile from "../profile.js";
 import type * as quotations from "../quotations.js";
 import type * as requestPhotos from "../requestPhotos.js";
 import type * as responses from "../responses.js";
+import type * as salesDocuments from "../salesDocuments.js";
+import type * as salesLog from "../salesLog.js";
 import type * as settings from "../settings.js";
 import type * as shop from "../shop.js";
 import type * as sizing from "../sizing.js";
@@ -81,6 +86,7 @@ import type * as stock from "../stock.js";
 import type * as sync from "../sync.js";
 import type * as upgrades from "../upgrades.js";
 import type * as users from "../users.js";
+import type * as whatsappAgents from "../whatsappAgents.js";
 
 import type {
   ApiFromModules,
@@ -98,6 +104,7 @@ declare const fullApi: ApiFromModules<{
   budget: typeof budget;
   catalogue: typeof catalogue;
   catalogueImport: typeof catalogueImport;
+  checks: typeof checks;
   crons: typeof crons;
   customers: typeof customers;
   estimator: typeof estimator;
@@ -131,6 +138,7 @@ declare const fullApi: ApiFromModules<{
   "lib/load": typeof lib_load;
   "lib/money": typeof lib_money;
   "lib/pricing": typeof lib_pricing;
+  "lib/priority": typeof lib_priority;
   "lib/quote": typeof lib_quote;
   "lib/quotePdf": typeof lib_quotePdf;
   "lib/requester": typeof lib_requester;
@@ -146,6 +154,7 @@ declare const fullApi: ApiFromModules<{
   "lib/upgrade": typeof lib_upgrade;
   "lib/validation": typeof lib_validation;
   "lib/whatsapp": typeof lib_whatsapp;
+  "lib/whatsappRoute": typeof lib_whatsappRoute;
   margins: typeof margins;
   operations: typeof operations;
   pdfLinks: typeof pdfLinks;
@@ -154,6 +163,8 @@ declare const fullApi: ApiFromModules<{
   quotations: typeof quotations;
   requestPhotos: typeof requestPhotos;
   responses: typeof responses;
+  salesDocuments: typeof salesDocuments;
+  salesLog: typeof salesLog;
   settings: typeof settings;
   shop: typeof shop;
   sizing: typeof sizing;
@@ -162,6 +173,7 @@ declare const fullApi: ApiFromModules<{
   sync: typeof sync;
   upgrades: typeof upgrades;
   users: typeof users;
+  whatsappAgents: typeof whatsappAgents;
 }>;
 
 /**

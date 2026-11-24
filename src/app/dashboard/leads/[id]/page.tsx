@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRecordReply, WhatsappFollowUp } from "@/components/WhatsappFollowUp";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -186,6 +187,7 @@ function sizingGuide(lead: Lead) {
 
 function Specs({ lead }: { lead: Lead }) {
   const guide = sizingGuide(lead);
+  const recordReply = useRecordReply();
   const phoneDigits = lead.phone.replace(/[^\d+]/g, "");
   const whatsapp = phoneDigits.replace(/^\+/, "").replace(/^0/, "256");
   return (
@@ -195,9 +197,10 @@ function Specs({ lead }: { lead: Lead }) {
         <p className="muted">{lead.location} · sent {new Date(lead.createdAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })} · reference <strong>{requestReference(lead.id)}</strong></p>
         <div className="lead-contact-actions">
           <a className="button button-small" href={`tel:${phoneDigits}`}>📞 Call {lead.phone}</a>
-          <a className="button button-small button-secondary" href={`https://wa.me/${whatsapp}`} target="_blank" rel="noreferrer">WhatsApp</a>
+          <a className="button button-small button-secondary" href={`https://wa.me/${whatsapp}`} target="_blank" rel="noreferrer" onClick={() => { if (!lead.whatsapp.repliedAt) recordReply({ quoteRequestId: lead.id }); }}>WhatsApp</a>
           {lead.email ? <a className="button button-small button-secondary" href={`mailto:${lead.email}`}>Email</a> : null}
         </div>
+        <WhatsappFollowUp tracking={lead.whatsapp} quoteRequestId={lead.id} />
         <p className={lead.hasAccount ? "lead-reach lead-reach-ok" : "lead-reach"}>
           {lead.hasAccount
             ? "Has a Solar Switch account: what you send appears in their app."

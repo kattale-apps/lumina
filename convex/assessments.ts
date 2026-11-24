@@ -3,7 +3,7 @@ import type { Doc } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
-import { canAccessOwned, CRM_READERS, CRM_WRITERS, optionalText, seesAllCustomers } from "./lib/crm";
+import { canAccessOwned, CRM_READERS, CRM_WRITERS, optionalText, ownedRows, ownerScope } from "./lib/crm";
 import { computeLoad, LOAD_ENGINE_VERSION, validateLine } from "./lib/load";
 import { requireText, validateCurrency } from "./lib/validation";
 import { assessmentInputs } from "./schema";
@@ -24,7 +24,7 @@ export async function loadAssessment(
     assessment.tenantId,
     write ? CRM_WRITERS : CRM_READERS
   );
-  if (!canAccessOwned(membership.role, profile, assessment.ownerUserId)) {
+  if (!(await canAccessOwned(ctx, membership, profile, assessment.ownerUserId))) {
     throw new ConvexError("Assessment not found.");
   }
   return { assessment, profile, membership, tenant };
@@ -104,17 +104,11 @@ export const listAssessments = query({
   args: { tenantId: v.id("tenants") },
   handler: async (ctx, args) => {
     const { membership, profile } = await requireTenantMembership(ctx, args.tenantId, CRM_READERS);
-    const rows = seesAllCustomers(membership.role)
-      ? await ctx.db
-          .query("assessments")
-          .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
-          .collect()
-      : await ctx.db
-          .query("assessments")
-          .withIndex("by_tenant_owner", (q) =>
-            q.eq("tenantId", args.tenantId).eq("ownerUserId", profile._id)
-          )
-          .collect();
+    const rows = await ownedRows(
+      await ownerScope(ctx, membership, profile),
+      () => ctx.db.query("assessments").withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId)).collect(),
+      (owner) => ctx.db.query("assessments").withIndex("by_tenant_owner", (q) => q.eq("tenantId", args.tenantId).eq("ownerUserId", owner)).collect()
+    );
 
     const items = [];
     for (const a of rows) {
@@ -185,7 +179,7 @@ export const createAssessment = mutation({
       customer.tenantId,
       CRM_WRITERS
     );
-    if (!canAccessOwned(membership.role, profile, customer.ownerUserId)) {
+    if (!(await canAccessOwned(ctx, membership, profile, customer.ownerUserId))) {
       throw new ConvexError("Customer not found.");
     }
     const site = await ctx.db.get(args.siteId);

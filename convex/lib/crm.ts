@@ -1,24 +1,56 @@
 import { ConvexError } from "convex/values";
-import type { Doc } from "../_generated/dataModel";
-import type { AppRole } from "./auth";
+import type { Doc, Id } from "../_generated/dataModel";
+import type { QueryCtx } from "../_generated/server";
 
 /** Roles that may open the customer and assessment screens at all. */
 export const CRM_READERS = ["super_admin", "sales_manager", "sales_agent", "technician"] as const;
 /** Roles that may create and change customers and assessments. Technicians review only. */
 export const CRM_WRITERS = ["super_admin", "sales_manager", "sales_agent"] as const;
 
-/** Agents see only their own customers; managers, admins and technicians see all. */
-export function seesAllCustomers(role: AppRole) {
-  return role !== "sales_agent";
+/**
+ * Whose sales records a person sees. Agents: their own. Managers: their own and those of the
+ * agents assigned to them. Super admins, inventory admins and technicians: everyone's.
+ */
+export type OwnerScope = {
+  all: boolean;
+  owners: Id<"userProfiles">[];
+  can: (ownerUserId: Id<"userProfiles">) => boolean;
+};
+
+export async function ownerScope(
+  ctx: QueryCtx,
+  membership: Doc<"memberships">,
+  profile: Doc<"userProfiles">
+): Promise<OwnerScope> {
+  if (membership.role !== "sales_agent" && membership.role !== "sales_manager") {
+    return { all: true, owners: [], can: () => true };
+  }
+  const owners: Id<"userProfiles">[] = [profile._id];
+  if (membership.role === "sales_manager") {
+    const team = await ctx.db
+      .query("memberships")
+      .withIndex("by_tenant_manager", (q) => q.eq("tenantId", membership.tenantId).eq("managerUserId", profile._id))
+      .collect();
+    for (const m of team) if (m.userId !== profile._id) owners.push(m.userId);
+  }
+  const set = new Set<string>(owners);
+  return { all: false, owners, can: (ownerUserId) => set.has(ownerUserId) };
 }
 
-/** True when this user may view a record owned by `ownerUserId`. */
-export function canAccessOwned(
-  role: AppRole,
+/** True when this user may view a record owned by `ownerUserId` (see ownerScope). */
+export async function canAccessOwned(
+  ctx: QueryCtx,
+  membership: Doc<"memberships">,
   profile: Doc<"userProfiles">,
-  ownerUserId: Doc<"userProfiles">["_id"]
+  ownerUserId: Id<"userProfiles">
 ) {
-  return seesAllCustomers(role) || ownerUserId === profile._id;
+  return (await ownerScope(ctx, membership, profile)).can(ownerUserId);
+}
+
+/** Rows of an owner-indexed table that a scope may see: all of them, or each owner's. */
+export async function ownedRows<T>(scope: OwnerScope, all: () => Promise<T[]>, byOwner: (owner: Id<"userProfiles">) => Promise<T[]>) {
+  if (scope.all) return await all();
+  return (await Promise.all(scope.owners.map(byOwner))).flat();
 }
 
 export function validatePhone(raw: string) {

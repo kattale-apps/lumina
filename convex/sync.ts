@@ -5,7 +5,7 @@ import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/s
 import { loadAssessment } from "./assessments";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
-import { canAccessOwned, CRM_READERS, CRM_WRITERS, seesAllCustomers } from "./lib/crm";
+import { CRM_READERS, CRM_WRITERS, ownedRows, ownerScope } from "./lib/crm";
 import { computeLoad, type LoadLine } from "./lib/load";
 
 const MAX_OPERATIONS = 50;
@@ -214,14 +214,14 @@ export const snapshot = query({
   args: { tenantId: v.id("tenants") },
   handler: async (ctx, args) => {
     const { profile, membership, tenant } = await requireTenantMembership(ctx, args.tenantId, CRM_READERS);
-    const all = seesAllCustomers(membership.role);
+    const scope = await ownerScope(ctx, membership, profile);
+    const all = scope.all;
 
-    const customers = all
-      ? await ctx.db.query("customers").withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId)).collect()
-      : await ctx.db
-          .query("customers")
-          .withIndex("by_tenant_owner", (q) => q.eq("tenantId", args.tenantId).eq("ownerUserId", profile._id))
-          .collect();
+    const customers = await ownedRows(
+      scope,
+      () => ctx.db.query("customers").withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId)).collect(),
+      (owner) => ctx.db.query("customers").withIndex("by_tenant_owner", (q) => q.eq("tenantId", args.tenantId).eq("ownerUserId", owner)).collect()
+    );
     const visible = customers.filter((c) => c.status === "active");
 
     const sites: Doc<"customerSites">[] = [];
@@ -313,9 +313,10 @@ export const listConflicts = query({
       .withIndex("by_tenant_status", (q) => q.eq("tenantId", args.tenantId).eq("status", "open"))
       .collect();
 
+    const scope = await ownerScope(ctx, membership, profile);
     const out = [];
     for (const c of open) {
-      if (!canAccessOwned(membership.role, profile, c.ownerUserId)) continue;
+      if (!scope.can(c.ownerUserId)) continue;
       const assessment = await ctx.db.get(c.assessmentId);
       if (!assessment) continue;
       const customer = await ctx.db.get(assessment.customerId);

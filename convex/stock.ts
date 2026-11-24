@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
 import {
@@ -20,6 +20,7 @@ import {
 import { requireText } from "./lib/validation";
 import { formatMinorUnits, toMinorUnits } from "./lib/money";
 import { productPrice } from "./lib/pricing";
+import { isPriorityProduct } from "./lib/priority";
 
 const MAX_ROWS = 3000;
 const MAX_HOLD_HOURS = 24 * 30;
@@ -507,5 +508,61 @@ export const setProductAvailability = mutation({
       metadata: { before: product.status, after: status }
     });
     return { changed: true };
+  }
+});
+
+/**
+ * One-time opening stock: raises every priority-brand (Lumina) product to at least `minimum` on
+ * hand in one warehouse, recorded as stock adjustments by the named staff member. Products already
+ * at or above the minimum are left alone, so running it again changes nothing.
+ * Run from the command line: npx convex run stock:topUpBaseline '{...}'
+ */
+export const topUpBaseline = internalMutation({
+  args: { tenantSlug: v.string(), warehouseCode: v.string(), minimum: v.number(), actorEmail: v.string() },
+  handler: async (ctx, args) => {
+    if (!Number.isInteger(args.minimum) || args.minimum < 1 || args.minimum > 10_000) throw new ConvexError("Minimum must be a whole number from 1.");
+    const tenant = await ctx.db.query("tenants").withIndex("by_slug", (q) => q.eq("slug", args.tenantSlug)).unique();
+    if (!tenant) throw new ConvexError("Company not found.");
+    const warehouse = await ctx.db
+      .query("warehouses")
+      .withIndex("by_tenant_code", (q) => q.eq("tenantId", tenant._id).eq("code", args.warehouseCode))
+      .unique();
+    if (!warehouse || warehouse.status !== "active") throw new ConvexError(`Active warehouse ${args.warehouseCode} not found.`);
+    const actor = (await ctx.db.query("userProfiles").collect()).find((p) => p.email?.toLowerCase() === args.actorEmail.toLowerCase());
+    if (!actor) throw new ConvexError("Staff member not found.");
+    const membership = await ctx.db
+      .query("memberships")
+      .withIndex("by_user_tenant", (q) => q.eq("userId", actor._id).eq("tenantId", tenant._id))
+      .unique();
+    if (!membership || membership.status !== "active" || !(STOCK_ADMINS as readonly string[]).includes(membership.role)) {
+      throw new ConvexError("The staff member must be an active super admin or inventory admin.");
+    }
+    const products = await ctx.db.query("products").withIndex("by_tenant", (q) => q.eq("tenantId", tenant._id)).collect();
+    let raised = 0;
+    let unitsAdded = 0;
+    let alreadyEnough = 0;
+    for (const product of products) {
+      if (product.status !== "active" || !isPriorityProduct(product)) continue;
+      const onHand = (await getBalance(ctx, product._id, warehouse._id))?.onHand ?? 0;
+      if (onHand >= args.minimum) {
+        alreadyEnough++;
+        continue;
+      }
+      const delta = args.minimum - onHand;
+      await postMovement(ctx, actor, {
+        tenantId: tenant._id,
+        product,
+        warehouse,
+        type: "adjustment",
+        delta,
+        reference: "Opening stock",
+        reason: `Opening stock: baseline of ${args.minimum} units`,
+        idempotencyKey: `baseline-${warehouse._id}-${product._id}-${args.minimum}`,
+        protectReserved: false
+      });
+      raised++;
+      unitsAdded += delta;
+    }
+    return { warehouse: warehouse.name, raised, unitsAdded, alreadyEnough };
   }
 });

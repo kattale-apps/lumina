@@ -126,6 +126,7 @@ function StaffList({ tenantId }: { tenantId: Id<"tenants"> }) {
   const staff = useQuery(api.staff.listStaff, { tenantId });
   const changeRole = useMutation(api.staff.changeRole);
   const setAccess = useMutation(api.staff.setAccess);
+  const setManager = useMutation(api.staff.setManager);
   const [error, setError] = useState("");
 
   async function run(action: () => Promise<unknown>) {
@@ -138,6 +139,7 @@ function StaffList({ tenantId }: { tenantId: Id<"tenants"> }) {
   }
 
   if (!staff) return <p className="muted">Loading staff…</p>;
+  const managers = staff.filter((p) => p.role === "sales_manager" && p.status === "active");
 
   return (
     <section aria-labelledby="staff-heading" className="workspace-section">
@@ -156,6 +158,11 @@ function StaffList({ tenantId }: { tenantId: Id<"tenants"> }) {
                 {person.isSelf ? " (you)" : ""}
               </span>
               <span className="record-meta">{person.email}</span>
+              {person.role === "sales_manager" ? (
+                <span className="record-meta">
+                  Team: {staff.filter((p) => p.managerUserId === person.userId).map((p) => p.displayName).join(", ") || "no agents yet"}
+                </span>
+              ) : null}
               {person.status !== "active" ? (
                 <span className="pill pill-warn">{person.status}</span>
               ) : null}
@@ -170,6 +177,21 @@ function StaffList({ tenantId }: { tenantId: Id<"tenants"> }) {
                 disabled={person.isSelf}
                 onChange={(role) => run(() => changeRole({ membershipId: person.membershipId, role }))}
               />
+              {person.role === "sales_agent" ? (
+                <>
+                  <label className="visually-hidden" htmlFor={`mgr-${person.membershipId}`}>Manager for {person.displayName}</label>
+                  <select
+                    id={`mgr-${person.membershipId}`}
+                    value={person.managerUserId ?? ""}
+                    onChange={(e) => run(() => setManager({ membershipId: person.membershipId, managerUserId: (e.target.value || null) as Id<"userProfiles"> | null }))}
+                  >
+                    <option value="">No manager</option>
+                    {managers.map((m) => (
+                      <option key={m.userId} value={m.userId}>Manager: {m.displayName}</option>
+                    ))}
+                  </select>
+                </>
+              ) : null}
               {person.isSelf ? null : (
                 <button
                   type="button"

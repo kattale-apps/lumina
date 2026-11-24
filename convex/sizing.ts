@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { isPriorityProduct } from "./lib/priority";
 import { mutation, query } from "./_generated/server";
 import { loadAssessment } from "./assessments";
 import { recordAudit } from "./lib/audit";
@@ -71,7 +72,8 @@ export const runSizing = mutation({
         name: p.name,
         categoryKey: keyOf.get(p.categoryId) ?? "",
         specSchemaVersion: p.specSchemaVersion,
-        specValues: p.specValues
+        specValues: p.specValues,
+        preferred: isPriorityProduct(p)
       }))
       .sort((a, b) => a.sku.localeCompare(b.sku)));
 

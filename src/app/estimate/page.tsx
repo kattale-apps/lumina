@@ -6,6 +6,7 @@ import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { guideByKey } from "../../../convex/lib/applianceGuide";
 import { ApplianceEditor, rowsToItems, type ApplianceRow } from "./ApplianceEditor";
 import type { ReportLine } from "./usageReport";
@@ -83,6 +84,10 @@ function Estimator() {
   // Use the same customer-account lookup as the customer dashboard, not staff/profile state.
   const customer = useQuery(api.shop.myAccount, {});
   const submit = useMutation(api.estimator.submitRequest);
+  // Every check is recorded for the sales log; the request then links back to it.
+  const logCheck = useMutation(api.checks.logCheck);
+  const opened = useMutation(api.whatsappAgents.opened);
+  const [checkId, setCheckId] = useState<Id<"publicChecks"> | null>(null);
   // Optional nameplate photos, one set per appliance card.
   const photos = usePhotoSet();
 
@@ -114,7 +119,7 @@ function Estimator() {
   const signedInCustomer = customer?.signedIn === true;
   const hasCustomerAccount = signedInCustomer && customer.account !== null;
   // After sending: whether the request already went to a signed-in customer account.
-  const [done, setDone] = useState<null | { hasAccount: boolean; whatsappText: string | null }>(null);
+  const [done, setDone] = useState<null | { hasAccount: boolean; whatsappText: string | null; whatsappNumber: string | null; requestId: Id<"quoteRequests"> | null }>(null);
 
   function runQuery(input: FunctionArgs<typeof api.estimator.recommend>) {
     return convex.query(api.estimator.recommend, input);
@@ -201,6 +206,16 @@ function Estimator() {
       const check = { input: buildInput(), grid };
       const response = await runQuery(check);
       setResult(response);
+      setCheckId(null);
+      void logCheck({
+        kind: "energy",
+        summary: [
+          rows.length ? `${rows.length} appliance(s)` : "Token messages",
+          `about ${response.summary.dailyKwh} kWh a day`,
+          `grid: ${en[`estimate.grid.${grid}` as MessageKey] ?? grid}`,
+          `${response.options.length} option(s) shown`
+        ].join(", ")
+      }).then((r) => setCheckId(r.checkId)).catch(() => undefined);
       // Kept on the phone so the same options appear in My recommendations after signing up.
       if (customer !== undefined && !hasCustomerAccount) savePendingEstimate(check);
       setSnapshot({
@@ -307,6 +322,7 @@ function Estimator() {
     setError(null);
     try {
       const sent = await submit({
+        checkId: checkId ?? undefined,
         input: buildInput(),
         grid,
         optionKey: chosen,
@@ -323,7 +339,7 @@ function Estimator() {
       if (sent.claimToken) rememberPendingRequest(sent.claimToken);
       // Sent: nothing is left waiting to be carried over.
       clearPendingEstimate();
-      setDone({ hasAccount: sent.hasAccount, whatsappText: sent.requestId ? whatsappMessage(sent.requestId) : null });
+      setDone({ hasAccount: sent.hasAccount, whatsappText: sent.requestId ? whatsappMessage(sent.requestId) : null, whatsappNumber: sent.whatsappNumber, requestId: sent.requestId });
     } catch (e) {
       setError(message(e, t("common.genericError")));
     } finally {
@@ -343,7 +359,7 @@ function Estimator() {
         <p>
           <Rich text={t("estimate.thanksText", { phone: hasCustomerAccount ? customer.account!.phone : form.phone })} />
         </p>
-        {config.whatsappNumber && done.whatsappText ? <WhatsAppSend number={config.whatsappNumber} text={done.whatsappText} /> : null}
+        {done.whatsappNumber && done.whatsappText ? <WhatsAppSend number={done.whatsappNumber} text={done.whatsappText} onOpen={() => { if (done.requestId) void opened({ quoteRequestId: done.requestId }); }} /> : null}
         {done.hasAccount ? (
           <div className="next-step next-step-ok">
             <strong>{t("estimate.inAccountTitle")}</strong>

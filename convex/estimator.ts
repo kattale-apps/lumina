@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { isPriorityProduct } from "./lib/priority";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
@@ -28,6 +29,8 @@ import { requireText } from "./lib/validation";
 import { requesterAccount } from "./lib/requester";
 import { attachPhotos, photoArg } from "./requestPhotos";
 import { whatsappDigits } from "./lib/whatsapp";
+import { nextWhatsapp } from "./lib/whatsappRoute";
+import { linkCheck } from "./checks";
 
 /** Public, unauthenticated limits. Convex gives no IP address, so limits are per phone and overall. */
 const MAX_ITEMS = 40;
@@ -247,7 +250,8 @@ export async function sizingCatalogue(ctx: QueryCtx, tenantId: Id<"tenants">) {
       name: p.name,
       categoryKey: keyOf.get(p.categoryId) ?? "",
       specSchemaVersion: p.specSchemaVersion,
-      specValues: p.specValues
+      specValues: p.specValues,
+      preferred: isPriorityProduct(p)
     }))
     .sort((a, b) => a.sku.localeCompare(b.sku)));
   const labels = new Map<string, ProductLabel>(
@@ -329,10 +333,12 @@ export const submitRequest = mutation({
     // Real people leave this empty; bots tend to fill every field.
     website: v.optional(v.string()),
     // Optional nameplate photos, uploaded as they were chosen.
-    photos: v.optional(v.array(photoArg))
+    photos: v.optional(v.array(photoArg)),
+    // The check this request follows, so the sales log shows that it led to a request.
+    checkId: v.optional(v.id("publicChecks"))
   },
   handler: async (ctx, args) => {
-    if (args.website) return { ok: true as const, requestId: null, hasAccount: false, claimToken: null };
+    if (args.website) return { ok: true as const, requestId: null, hasAccount: false, claimToken: null, whatsappNumber: null };
     const company = await publicCompany(ctx);
     if (!company) throw new ConvexError("Quote requests are not open right now.");
     const { tenant } = company;
@@ -387,9 +393,13 @@ export const submitRequest = mutation({
     // Signed-in customers get the recommendation in their account. Anyone else gets a
     // secret code, kept on their phone, that attaches the request to the account they create.
     const claimToken = account && account.tenantId === tenant._id ? undefined : newClaimToken();
+    // Agents take turns: the request goes to the next agent's WhatsApp, and is assigned to them.
+    const route = await nextWhatsapp(ctx, company.settings);
 
     const id = await ctx.db.insert("quoteRequests", {
       tenantId: tenant._id,
+      whatsappTo: route ?? undefined,
+      ...(route?.userId ? { assignedToUserId: route.userId } : {}),
       category: args.input.category,
       customerAccountId: account && account.tenantId === tenant._id ? account._id : undefined,
       claimToken,
@@ -408,12 +418,13 @@ export const submitRequest = mutation({
       optionTitle: option.title,
       components: option.components as Doc<"quoteRequests">["components"],
       lines: requestLines(result.lines),
-      status: "new",
+      status: route?.userId ? "assigned" : "new",
       createdAt: now,
       updatedAt: now
     });
     await attachPhotos(ctx, tenant._id, id, args.photos);
-    return { ok: true as const, requestId: id, hasAccount: claimToken === undefined, claimToken: claimToken ?? null };
+    if (args.checkId) await linkCheck(ctx, args.checkId, id);
+    return { ok: true as const, requestId: id, hasAccount: claimToken === undefined, claimToken: claimToken ?? null, whatsappNumber: route?.number ?? null };
   }
 });
 

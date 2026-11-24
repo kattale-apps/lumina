@@ -3,7 +3,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership, type AppRole } from "./lib/auth";
-import { canAccessOwned, CRM_READERS, CRM_WRITERS, optionalText } from "./lib/crm";
+import { canAccessOwned, CRM_READERS, CRM_WRITERS, optionalText, ownedRows, ownerScope } from "./lib/crm";
 import {
   addMonths,
   applyBps,
@@ -34,7 +34,7 @@ async function loadOwnedQuotation(ctx: Ctx, quotationId: Id<"quotations">, write
     quotation.tenantId,
     write ? CRM_WRITERS : CRM_READERS
   );
-  if (!canAccessOwned(auth.membership.role, auth.profile, quotation.ownerUserId)) {
+  if (!await canAccessOwned(ctx, auth.membership, auth.profile, quotation.ownerUserId)) {
     throw new ConvexError("Quotation not found.");
   }
   return { quotation, ...auth };
@@ -253,12 +253,12 @@ export const listCommissions = query({
       "sales_agent"
     ]);
     const manager = (MANAGERS as readonly AppRole[]).includes(membership.role);
-    const rows = manager
-      ? await ctx.db.query("commissions").withIndex("by_tenant_status", (q) => q.eq("tenantId", args.tenantId)).collect()
-      : await ctx.db
-          .query("commissions")
-          .withIndex("by_tenant_agent", (q) => q.eq("tenantId", args.tenantId).eq("agentUserId", profile._id))
-          .collect();
+    // A manager sees their own team's commissions; the super admin sees everyone's; an agent their own.
+    const rows = await ownedRows(
+      await ownerScope(ctx, membership, profile),
+      () => ctx.db.query("commissions").withIndex("by_tenant_status", (q) => q.eq("tenantId", args.tenantId)).collect(),
+      (owner) => ctx.db.query("commissions").withIndex("by_tenant_agent", (q) => q.eq("tenantId", args.tenantId).eq("agentUserId", owner)).collect()
+    );
     const agents = await names(ctx, rows.map((r) => r.agentUserId));
     const out = [];
     for (const row of rows.sort((a, b) => b.createdAt - a.createdAt)) {
@@ -296,9 +296,13 @@ export const decideCommission = mutation({
   handler: async (ctx, args) => {
     const commission = await ctx.db.get(args.commissionId);
     if (!commission) throw new ConvexError("Commission not found.");
-    const { profile } = await requireTenantMembership(ctx, commission.tenantId, MANAGERS);
+    const { profile, membership } = await requireTenantMembership(ctx, commission.tenantId, MANAGERS);
     if (commission.agentUserId === profile._id) {
       throw new ConvexError("You cannot approve, pay or cancel your own commission.");
+    }
+    // A manager decides only for the agents assigned to them.
+    if (!(await canAccessOwned(ctx, membership, profile, commission.agentUserId))) {
+      throw new ConvexError("This commission belongs to an agent outside your team.");
     }
     const now = Date.now();
     if (args.action === "approve") {
@@ -336,7 +340,7 @@ async function loadInstallation(ctx: Ctx, installationId: Id<"installations">) {
     ...FIELD_STAFF,
     "sales_agent"
   ]);
-  if (!canAccessOwned(auth.membership.role, auth.profile, installation.ownerUserId)) {
+  if (!await canAccessOwned(ctx, auth.membership, auth.profile, installation.ownerUserId)) {
     throw new ConvexError("Installation not found.");
   }
   return { installation, ...auth };
@@ -371,7 +375,8 @@ export const listInstallations = query({
       "sales_agent"
     ]);
     const all = await ctx.db.query("installations").withIndex("by_tenant_status", (q) => q.eq("tenantId", args.tenantId)).collect();
-    const visible = all.filter((i) => canAccessOwned(membership.role, profile, i.ownerUserId));
+    const scope = await ownerScope(ctx, membership, profile);
+    const visible = all.filter((i) => scope.can(i.ownerUserId));
     const people = await names(ctx, visible.flatMap((i) => [i.technicianUserId, i.ownerUserId]));
     const out = [];
     for (const i of visible.sort((a, b) => b.createdAt - a.createdAt)) {
@@ -554,11 +559,12 @@ export const listWarranties = query({
   handler: async (ctx, args) => {
     const { membership, profile } = await requireTenantMembership(ctx, args.tenantId, CRM_READERS);
     const rows = await ctx.db.query("warranties").withIndex("by_tenant_end", (q) => q.eq("tenantId", args.tenantId)).collect();
+    const scope = await ownerScope(ctx, membership, profile);
     const now = Date.now();
     const out = [];
     for (const w of rows) {
       const customer = await ctx.db.get(w.customerId);
-      if (!customer || !canAccessOwned(membership.role, profile, customer.ownerUserId)) continue;
+      if (!customer || !scope.can(customer.ownerUserId)) continue;
       const quotation = await ctx.db.get(w.quotationId);
       out.push({
         id: w._id,
@@ -610,19 +616,23 @@ export const previewInstallments = query({
 export const dashboard = query({
   args: { tenantId: v.id("tenants"), windowDays: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    await requireTenantMembership(ctx, args.tenantId, MANAGERS);
+    const { membership, profile } = await requireTenantMembership(ctx, args.tenantId, MANAGERS);
+    // A sales manager sees their team's figures; the super admin sees the whole company.
+    const scope = await ownerScope(ctx, membership, profile);
     const windowDays = Math.min(Math.max(Math.floor(args.windowDays ?? 30), 1), 365);
     const now = Date.now();
     const since = now - windowDays * DAY_MS;
 
-    const quotations = await ctx.db.query("quotations").withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId)).collect();
+    const quotations = (await ctx.db.query("quotations").withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId)).collect()).filter((q) => scope.can(q.ownerUserId));
     const byStatus: Record<string, number> = {};
     for (const q of quotations) byStatus[q.status] = (byStatus[q.status] ?? 0) + 1;
 
-    const deals = await ctx.db
-      .query("dealOutcomes")
-      .withIndex("by_tenant_time", (q) => q.eq("tenantId", args.tenantId).gte("decidedAt", since))
-      .collect();
+    const deals = (
+      await ctx.db
+        .query("dealOutcomes")
+        .withIndex("by_tenant_time", (q) => q.eq("tenantId", args.tenantId).gte("decidedAt", since))
+        .collect()
+    ).filter((d) => scope.can(d.ownerUserId));
     const decided = new Set(
       (await ctx.db.query("dealOutcomes").withIndex("by_tenant_time", (q) => q.eq("tenantId", args.tenantId)).collect()).map((d) => d.quotationId)
     );
@@ -650,23 +660,25 @@ export const dashboard = query({
     const won = deals.filter((d) => d.outcome === "won").length;
     const lost = deals.length - won;
 
-    const commissions = await ctx.db.query("commissions").withIndex("by_tenant_status", (q) => q.eq("tenantId", args.tenantId)).collect();
+    const commissions = (await ctx.db.query("commissions").withIndex("by_tenant_status", (q) => q.eq("tenantId", args.tenantId)).collect()).filter((c) => scope.can(c.agentUserId));
     const commissionOwed: Record<string, Record<string, number>> = {};
     for (const c of commissions) {
       const bucket = (commissionOwed[c.status] ??= {});
       bucket[c.currency] = (bucket[c.currency] ?? 0) + c.amountMinor;
     }
 
-    const installations = await ctx.db.query("installations").withIndex("by_tenant_status", (q) => q.eq("tenantId", args.tenantId)).collect();
+    const installations = (await ctx.db.query("installations").withIndex("by_tenant_status", (q) => q.eq("tenantId", args.tenantId)).collect()).filter((i) => scope.can(i.ownerUserId));
     const installationsByStatus: Record<string, number> = {};
     for (const i of installations) installationsByStatus[i.status] = (installationsByStatus[i.status] ?? 0) + 1;
 
-    const expiringWarranties = (
-      await ctx.db
-        .query("warranties")
-        .withIndex("by_tenant_end", (q) => q.eq("tenantId", args.tenantId).gt("endsAt", now).lte("endsAt", now + EXPIRING_SOON_DAYS * DAY_MS))
-        .collect()
-    ).length;
+    let expiringWarranties = 0;
+    for (const w of await ctx.db
+      .query("warranties")
+      .withIndex("by_tenant_end", (q) => q.eq("tenantId", args.tenantId).gt("endsAt", now).lte("endsAt", now + EXPIRING_SOON_DAYS * DAY_MS))
+      .collect()) {
+      const customer = scope.all ? null : await ctx.db.get(w.customerId);
+      if (scope.all || (customer && scope.can(customer.ownerUserId))) expiringWarranties++;
+    }
 
     return {
       windowDays,

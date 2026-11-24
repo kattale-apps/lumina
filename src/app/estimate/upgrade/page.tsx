@@ -5,6 +5,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { rememberPendingRequest } from "../../../lib/pendingRequests";
 import { AppUpdateNeeded, savePdf } from "../../../lib/savePdf";
 import { describeNeeds, describeSystem, type ExistingSystem, type UpgradeNeeds } from "./describe";
@@ -52,6 +53,9 @@ function UpgradeCheck() {
   const signUpOpen = useQuery(api.access.signUpStatus, {})?.publicSignUpOpen ?? false;
   const customer = useQuery(api.shop.myAccount, {});
   const submit = useMutation(api.upgrades.submitUpgradeRequest);
+  const logCheck = useMutation(api.checks.logCheck);
+  const opened = useMutation(api.whatsappAgents.opened);
+  const [checkId, setCheckId] = useState<Id<"publicChecks"> | null>(null);
   // Optional nameplate photos of the inverter, controller, panels and batteries.
   const photos = usePhotoSet();
 
@@ -69,7 +73,7 @@ function UpgradeCheck() {
   const [busy, setBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<null | { hasAccount: boolean; whatsappText: string | null }>(null);
+  const [done, setDone] = useState<null | { hasAccount: boolean; whatsappText: string | null; whatsappNumber: string | null; requestId: Id<"quoteRequests"> | null }>(null);
 
   const signedInCustomer = customer?.signedIn === true;
   const hasCustomerAccount = signedInCustomer && customer.account !== null;
@@ -115,6 +119,15 @@ function UpgradeCheck() {
     try {
       const report = await convex.query(api.upgrades.publicSimulate, { system: payload.system, needs: payload.needs });
       setChecked({ system: payload.system, needs: payload.needs, report });
+      setCheckId(null);
+      void logCheck({
+        kind: "upgrade",
+        summary: [
+          `${payload.system.systemType.replace("_", " ")} ${payload.system.systemVoltage} V`,
+          payload.system.inverter?.ratedW ? `inverter ${payload.system.inverter.ratedW} W` : "",
+          payload.needs.goals.length ? `wants: ${payload.needs.goals.join(", ")}` : ""
+        ].filter(Boolean).join(", ")
+      }).then((r) => setCheckId(r.checkId)).catch(() => undefined);
       setSelected([]);
       setAsking(false);
       setView("results");
@@ -188,6 +201,7 @@ function UpgradeCheck() {
     setError(null);
     try {
       const sent = await submit({
+        checkId: checkId ?? undefined,
         system: checked.system,
         needs: checked.needs,
         grid,
@@ -204,7 +218,7 @@ function UpgradeCheck() {
         )
       });
       if (sent.claimToken) rememberPendingRequest(sent.claimToken);
-      setDone({ hasAccount: sent.hasAccount, whatsappText: sent.requestId ? whatsappMessage(sent.requestId) : null });
+      setDone({ hasAccount: sent.hasAccount, whatsappText: sent.requestId ? whatsappMessage(sent.requestId) : null, whatsappNumber: sent.whatsappNumber, requestId: sent.requestId });
     } catch (e) {
       setError(message(e, t("common.genericError")));
     } finally {
@@ -219,7 +233,7 @@ function UpgradeCheck() {
         <p>
           <Rich text={t("upgrade.thanksText", { phone: hasCustomerAccount ? customer.account!.phone : contact.phone })} />
         </p>
-        {config.whatsappNumber && done.whatsappText ? <WhatsAppSend number={config.whatsappNumber} text={done.whatsappText} /> : null}
+        {done.whatsappNumber && done.whatsappText ? <WhatsAppSend number={done.whatsappNumber} text={done.whatsappText} onOpen={() => { if (done.requestId) void opened({ quoteRequestId: done.requestId }); }} /> : null}
         {done.hasAccount ? (
           <div className="next-step next-step-ok">
             <strong>{t("estimate.inAccountTitle")}</strong>

@@ -43,6 +43,8 @@ import { validateOptionalEmail, validatePhone } from "./lib/crm";
 import { requireText } from "./lib/validation";
 import { requesterAccount } from "./lib/requester";
 import { findViewerProfile } from "./lib/auth";
+import { nextWhatsapp } from "./lib/whatsappRoute";
+import { linkCheck } from "./checks";
 
 export const BUDGET_REQUEST_KEY = "budget";
 const MAX_BUDGET = 10_000_000_000;
@@ -188,10 +190,11 @@ export const submitBudgetRequest = mutation({
     email: v.optional(v.string()),
     location: v.string(),
     // Real people leave this empty; bots tend to fill every field.
-    website: v.optional(v.string())
+    website: v.optional(v.string()),
+    checkId: v.optional(v.id("publicChecks"))
   },
   handler: async (ctx, args) => {
-    if (args.website) return { ok: true as const, requestId: null, hasAccount: false, claimToken: null, systemTitle: null };
+    if (args.website) return { ok: true as const, requestId: null, hasAccount: false, claimToken: null, systemTitle: null, whatsappNumber: null };
     const company = await publicCompany(ctx);
     if (!company) throw new ConvexError("Requests are not open right now.");
     const { tenant } = company;
@@ -217,8 +220,11 @@ export const submitBudgetRequest = mutation({
     const fallback = fallbackDesign(args.grid);
 
     const claimToken = account && account.tenantId === tenant._id ? undefined : newClaimToken();
+    const route = await nextWhatsapp(ctx, company.settings);
     const id = await ctx.db.insert("quoteRequests", {
       tenantId: tenant._id,
+      whatsappTo: route ?? undefined,
+      ...(route?.userId ? { assignedToUserId: route.userId } : {}),
       category: args.category,
       customerAccountId: account && account.tenantId === tenant._id ? account._id : undefined,
       claimToken,
@@ -237,16 +243,18 @@ export const submitBudgetRequest = mutation({
       components: (chosen?.components ?? []) as Doc<"quoteRequests">["components"],
       lines: requestLines(lines),
       budget: { amountMinor, leavesOut: chosen?.leavesOut ?? [] },
-      status: "new",
+      status: route?.userId ? "assigned" : "new",
       createdAt: now,
       updatedAt: now
     });
+    if (args.checkId) await linkCheck(ctx, args.checkId, id);
     return {
       ok: true as const,
       requestId: id,
       hasAccount: claimToken === undefined,
       claimToken: claimToken ?? null,
-      systemTitle: chosen ? budgetSystemTitle(chosen) : null
+      systemTitle: chosen ? budgetSystemTitle(chosen) : null,
+      whatsappNumber: route?.number ?? null
     };
   }
 });

@@ -9,6 +9,7 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 import { CompanyPage, ConfiguredOnly, errorMessage } from "../../workspace";
 import { fromMinor, money, STATUS_HELP, STATUS_LABELS, toMinor } from "../../quotes";
 import { InstallmentCalculator, SalesOutcome } from "./SalesOutcome";
+import { savePdfFromUrl } from "../../../../lib/savePdf";
 
 type View = NonNullable<ReturnType<typeof useQuery<typeof api.quotations.getQuotation>>>;
 
@@ -235,7 +236,7 @@ function Actions({ view }: { view: View }) {
             onClick={() =>
               run(async () => {
                 const { url } = await pdf({ quotationId: id });
-                if (url) window.open(url, "_blank", "noopener");
+                if (url) await savePdfFromUrl(url, "quotation-illustrative.pdf", "Illustrative quotation");
               })
             }
           >
@@ -338,10 +339,10 @@ function Detail({ quotationId, role }: { quotationId: Id<"quotations">; role: st
           <p className="hint">This revision needs a manager&apos;s commercial approval.</p>
         ) : null}
         {shown.illustrativePdfUrl ? (
-          <p><a href={shown.illustrativePdfUrl} target="_blank" rel="noopener noreferrer">Illustrative PDF (unverified)</a></p>
+          <p><button type="button" className="link-button" onClick={() => void savePdfFromUrl(shown.illustrativePdfUrl!, "quotation-illustrative.pdf", "Illustrative quotation")}>Illustrative PDF (unverified)</button></p>
         ) : null}
         {shown.officialPdfUrl ? (
-          <p><a href={shown.officialPdfUrl} target="_blank" rel="noopener noreferrer">Official quotation PDF</a></p>
+          <p><button type="button" className="link-button" onClick={() => void savePdfFromUrl(shown.officialPdfUrl!, `quotation-${view.quotation.officialNumber ?? "official"}.pdf`, "Official quotation")}>Official quotation PDF</button></p>
         ) : null}
       </section>
 

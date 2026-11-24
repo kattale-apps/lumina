@@ -14,6 +14,8 @@ import { requesterAccount } from "./lib/requester";
 import { partType } from "./lib/shopParts";
 import { requireText } from "./lib/validation";
 import { publicCompany } from "./estimator";
+import { nextWhatsapp } from "./lib/whatsappRoute";
+
 import { LEAD_VIEWERS } from "./leads";
 
 const MAX_ITEMS = 10;
@@ -104,7 +106,7 @@ export const submit = mutation({
     website: v.optional(v.string())
   },
   handler: async (ctx, args) => {
-    if (args.website) return { requestId: null };
+    if (args.website) return { requestId: null, whatsappNumber: null };
     const company = await publicCompany(ctx);
     if (!company) throw new ConvexError("Requests are not open right now.");
     const { tenant } = company;
@@ -134,8 +136,11 @@ export const submit = mutation({
       .take(MAX_PER_HOUR);
     if (lastHour.length >= MAX_PER_HOUR) throw new ConvexError("We are receiving a lot of requests. Please try again later.");
 
+    const route = await nextWhatsapp(ctx, company.settings);
     const requestId = await ctx.db.insert("itemRequests", {
       tenantId: tenant._id,
+      whatsappTo: route ?? undefined,
+      ...(route?.userId ? { handledByUserId: route.userId } : {}),
       customerAccountId: account?._id,
       name,
       phone,
@@ -147,7 +152,7 @@ export const submit = mutation({
       createdAt: now,
       updatedAt: now
     });
-    return { requestId };
+    return { requestId, whatsappNumber: route?.number ?? null };
   }
 });
 
@@ -178,7 +183,13 @@ export const list = query({
         items: r.items,
         status: r.status,
         handledBy: handler?.displayName ?? null,
-        hasAccount: Boolean(r.customerAccountId)
+        hasAccount: Boolean(r.customerAccountId),
+        whatsapp: {
+          to: r.whatsappTo?.name ?? null,
+          openedAt: r.whatsappOpenedAt ?? null,
+          repliedAt: r.whatsappRepliedAt ?? null,
+          repliedBy: r.whatsappRepliedBy ? (await ctx.db.get(r.whatsappRepliedBy))?.displayName ?? null : null
+        }
       });
     }
     return out;
@@ -192,7 +203,10 @@ export const setStatus = mutation({
     const row = await ctx.db.get(args.requestId);
     if (!row) throw new ConvexError("Request not found.");
     const { profile } = await requireTenantMembership(ctx, row.tenantId, LEAD_VIEWERS);
-    await ctx.db.patch(row._id, { status: args.status, handledByUserId: profile._id, updatedAt: Date.now() });
+    const now = Date.now();
+    // The first time it is marked contacted counts as answered.
+    const answeredAt = row.answeredAt ?? (args.status === "contacted" ? now : undefined);
+    await ctx.db.patch(row._id, { status: args.status, handledByUserId: profile._id, answeredAt, updatedAt: now });
     await recordAudit(ctx, profile, {
       tenantId: row.tenantId,
       action: "item_request.status",

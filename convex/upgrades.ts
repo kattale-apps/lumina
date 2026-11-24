@@ -9,6 +9,7 @@
  * approved.
  */
 import { ConvexError, v, type Infer } from "convex/values";
+import { isPriorityProduct } from "./lib/priority";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import {
@@ -19,7 +20,7 @@ import {
 } from "./estimator";
 import { recordAudit } from "./lib/audit";
 import { findViewerProfile, requireTenantMembership } from "./lib/auth";
-import { canAccessOwned, CRM_READERS, CRM_WRITERS, seesAllCustomers, validateOptionalEmail, validatePhone } from "./lib/crm";
+import { canAccessOwned, CRM_READERS, CRM_WRITERS, ownerScope, validateOptionalEmail, validatePhone } from "./lib/crm";
 import { PUBLIC_ASSUMPTIONS } from "./lib/estimate";
 import { currencyExponent } from "./lib/money";
 import { productPrice } from "./lib/pricing";
@@ -37,6 +38,8 @@ import {
 import { requireText } from "./lib/validation";
 import { requesterAccount } from "./lib/requester";
 import { attachPhotos, photoArg } from "./requestPhotos";
+import { nextWhatsapp } from "./lib/whatsappRoute";
+import { linkCheck } from "./checks";
 import { existingSystem, upgradeNeeds } from "./schema";
 
 type Ctx = QueryCtx | MutationCtx;
@@ -84,7 +87,8 @@ async function loadCatalogue(ctx: Ctx, tenantId: Id<"tenants">) {
       name: p.name,
       categoryKey: keyOf.get(p.categoryId) ?? "",
       specSchemaVersion: p.specSchemaVersion,
-      specValues: p.specValues
+      specValues: p.specValues,
+      preferred: isPriorityProduct(p)
     }))
     .sort((a, b) => a.sku.localeCompare(b.sku)));
   return { catalogue, products: new Map(products.map((p) => [p._id as string, p])) };
@@ -158,9 +162,11 @@ async function present(ctx: Ctx, tenant: Doc<"tenants">, report: UpgradeReport, 
       const rank = (o: ShownOption) => (o.status === "compatible" ? 0 : 1);
       // The engine's order is kept between options that cost the same or have no price.
       const order = new Map(group.map((o, i) => [o.key, i]));
+      const priority = (o: ShownOption) => (products.get(o.productId) && isPriorityProduct(products.get(o.productId)!) ? 0 : 1);
       group.sort(
         (x, y) =>
           rank(x) - rank(y) ||
+          priority(x) - priority(y) ||
           (x.figures.shortWp ?? 0) - (y.figures.shortWp ?? 0) ||
           (x.sortTotal ?? Infinity) - (y.sortTotal ?? Infinity) ||
           order.get(x.key)! - order.get(y.key)!
@@ -274,7 +280,7 @@ export const saveStudy = mutation({
     const customer = await ctx.db.get(args.customerId);
     if (!customer) throw new ConvexError("Customer not found.");
     const { profile, membership } = await requireTenantMembership(ctx, customer.tenantId, CRM_WRITERS);
-    if (!canAccessOwned(membership.role, profile, customer.ownerUserId)) {
+    if (!(await canAccessOwned(ctx, membership, profile, customer.ownerUserId))) {
       throw new ConvexError("Customer not found.");
     }
     const site = await ctx.db.get(args.siteId);
@@ -295,7 +301,7 @@ async function loadStudy(ctx: Ctx, studyId: Id<"upgradeStudies">) {
   const study = await ctx.db.get(studyId);
   if (!study) throw new ConvexError("Upgrade study not found.");
   const auth = await requireTenantMembership(ctx, study.tenantId, CRM_READERS);
-  if (!canAccessOwned(auth.membership.role, auth.profile, study.ownerUserId)) {
+  if (!await canAccessOwned(ctx, auth.membership, auth.profile, study.ownerUserId)) {
     throw new ConvexError("Upgrade study not found.");
   }
   return { study, ...auth };
@@ -310,7 +316,8 @@ export const listStudies = query({
       .withIndex("by_tenant_time", (q) => q.eq("tenantId", args.tenantId))
       .order("desc")
       .take(200);
-    const visible = seesAllCustomers(membership.role) ? rows : rows.filter((r) => r.ownerUserId === profile._id);
+    const scope = await ownerScope(ctx, membership, profile);
+    const visible = rows.filter((r) => scope.can(r.ownerUserId));
     const names = new Map<string, string>();
     const out = [];
     for (const r of visible) {
@@ -463,10 +470,11 @@ export const submitUpgradeRequest = mutation({
     // Real people leave this empty; bots tend to fill every field.
     website: v.optional(v.string()),
     // Optional nameplate photos, uploaded as they were chosen.
-    photos: v.optional(v.array(photoArg))
+    photos: v.optional(v.array(photoArg)),
+    checkId: v.optional(v.id("publicChecks"))
   },
   handler: async (ctx, args) => {
-    if (args.website) return { ok: true as const, requestId: null, hasAccount: false, claimToken: null };
+    if (args.website) return { ok: true as const, requestId: null, hasAccount: false, claimToken: null, whatsappNumber: null };
     const company = await publicCompany(ctx);
     if (!company) throw new ConvexError("Quote requests are not open right now.");
     const { tenant } = company;
@@ -524,8 +532,11 @@ export const submitUpgradeRequest = mutation({
     });
 
     const claimToken = account && account.tenantId === tenant._id ? undefined : newClaimToken();
+    const route = await nextWhatsapp(ctx, company.settings);
     const id = await ctx.db.insert("quoteRequests", {
       tenantId: tenant._id,
+      whatsappTo: route ?? undefined,
+      ...(route?.userId ? { assignedToUserId: route.userId } : {}),
       customerAccountId: account && account.tenantId === tenant._id ? account._id : undefined,
       claimToken,
       name,
@@ -542,11 +553,12 @@ export const submitUpgradeRequest = mutation({
       components,
       lines: [],
       upgrade: { system: args.system, needs: args.needs },
-      status: "new",
+      status: route?.userId ? "assigned" : "new",
       createdAt: now,
       updatedAt: now
     });
     await attachPhotos(ctx, tenant._id, id, args.photos);
-    return { ok: true as const, requestId: id, hasAccount: claimToken === undefined, claimToken: claimToken ?? null };
+    if (args.checkId) await linkCheck(ctx, args.checkId, id);
+    return { ok: true as const, requestId: id, hasAccount: claimToken === undefined, claimToken: claimToken ?? null, whatsappNumber: route?.number ?? null };
   }
 });

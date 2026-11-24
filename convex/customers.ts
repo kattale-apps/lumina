@@ -8,7 +8,8 @@ import {
   CRM_READERS,
   CRM_WRITERS,
   optionalText,
-  seesAllCustomers,
+  ownedRows,
+  ownerScope,
   validateGps,
   validateOptionalEmail,
   validatePhone
@@ -25,18 +26,11 @@ export const listCustomers = query({
   args: { tenantId: v.id("tenants") },
   handler: async (ctx, args) => {
     const { membership, profile } = await requireTenantMembership(ctx, args.tenantId, CRM_READERS);
-    const all = seesAllCustomers(membership.role);
-    const customers = all
-      ? await ctx.db
-          .query("customers")
-          .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
-          .collect()
-      : await ctx.db
-          .query("customers")
-          .withIndex("by_tenant_owner", (q) =>
-            q.eq("tenantId", args.tenantId).eq("ownerUserId", profile._id)
-          )
-          .collect();
+    const customers = await ownedRows(
+      await ownerScope(ctx, membership, profile),
+      () => ctx.db.query("customers").withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId)).collect(),
+      (owner) => ctx.db.query("customers").withIndex("by_tenant_owner", (q) => q.eq("tenantId", args.tenantId).eq("ownerUserId", owner)).collect()
+    );
 
     return {
       canWrite: (CRM_WRITERS as readonly string[]).includes(membership.role),
@@ -64,7 +58,7 @@ export const getCustomer = query({
       customer.tenantId,
       CRM_READERS
     );
-    if (!canAccessOwned(membership.role, profile, customer.ownerUserId)) {
+    if (!(await canAccessOwned(ctx, membership, profile, customer.ownerUserId))) {
       throw new ConvexError("Customer not found.");
     }
     const sites = await ctx.db
@@ -156,7 +150,7 @@ export const updateCustomer = mutation({
       customer.tenantId,
       CRM_WRITERS
     );
-    if (!canAccessOwned(membership.role, profile, customer.ownerUserId)) {
+    if (!(await canAccessOwned(ctx, membership, profile, customer.ownerUserId))) {
       throw new ConvexError("Customer not found.");
     }
 
@@ -231,7 +225,7 @@ export const createSite = mutation({
       customer.tenantId,
       CRM_WRITERS
     );
-    if (!canAccessOwned(membership.role, profile, customer.ownerUserId)) {
+    if (!(await canAccessOwned(ctx, membership, profile, customer.ownerUserId))) {
       throw new ConvexError("Customer not found.");
     }
     if (customer.status !== "active") throw new ConvexError("This customer is archived.");
@@ -275,7 +269,7 @@ export const updateSite = mutation({
       site.tenantId,
       CRM_WRITERS
     );
-    if (!canAccessOwned(membership.role, profile, customer.ownerUserId)) {
+    if (!(await canAccessOwned(ctx, membership, profile, customer.ownerUserId))) {
       throw new ConvexError("Site not found.");
     }
 

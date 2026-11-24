@@ -7,13 +7,13 @@ import { useT } from "@/lib/i18n";
  * After a request is saved: one tap opens WhatsApp to the company's number with the request typed
  * in, so the customer only presses send. A plain link, so it works in every browser and in the app.
  */
-export function WhatsAppSend({ number, text }: { number: string; text: string }) {
+export function WhatsAppSend({ number, text, onOpen }: { number: string; text: string; onOpen?: () => void }) {
   const t = useT();
   return (
     <div className="next-step whatsapp-send">
       <strong>{t("whatsapp.title")}</strong>
       <p>{t("whatsapp.text")}</p>
-      <a className="button button-whatsapp guide-glow" href={whatsappLink(number, text)} target="_blank" rel="noopener noreferrer">
+      <a className="button button-whatsapp guide-glow" href={whatsappLink(number, text)} target="_blank" rel="noopener noreferrer" onClick={() => onOpen?.()}>
         <span aria-hidden="true">💬</span> {t("whatsapp.button")}
       </a>
     </div>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { ConvexError } from "convex/values";
 import { api } from "../../../../convex/_generated/api";
 import { ApplianceEditor, rowsToItems, type ApplianceRow } from "../ApplianceEditor";
@@ -50,6 +51,9 @@ function BudgetCheck() {
   const customer = useQuery(api.shop.myAccount, {});
   const match = useAction(api.budget.budgetMatch);
   const submit = useMutation(api.budget.submitBudgetRequest);
+  const logCheck = useMutation(api.checks.logCheck);
+  const opened = useMutation(api.whatsappAgents.opened);
+  const [checkId, setCheckId] = useState<Id<"publicChecks"> | null>(null);
 
   const [step, setStep] = useState(1);
   const [amount, setAmount] = useState("");
@@ -62,7 +66,7 @@ function BudgetCheck() {
   // The system to request: a key, or "advice" for "Send us your budget".
   const [chosen, setChosen] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", location: "", website: "" });
-  const [done, setDone] = useState<null | { whatsappText: string | null; name: string; phone: string }>(null);
+  const [done, setDone] = useState<null | { whatsappText: string | null; name: string; phone: string; whatsappNumber: string | null; requestId: Id<"quoteRequests"> | null }>(null);
 
   const signedIn = customer?.signedIn === true;
   const account = signedIn ? customer.account : null;
@@ -108,6 +112,11 @@ function BudgetCheck() {
     try {
       const found = await match({ budget, grid, items: rowsToItems(rows) });
       setResult({ match: found, budget, grid, rows });
+      setCheckId(null);
+      void logCheck({
+        kind: "budget",
+        summary: `Budget ${fmt(budget)}, ${rows.length} appliance(s), ${found.closest ? "a system fits" : "nothing fits"}`
+      }).then((r) => setCheckId(r.checkId)).catch(() => undefined);
       setChosen(null);
       toTop();
     } catch (e) {
@@ -163,6 +172,7 @@ function BudgetCheck() {
     setError(null);
     try {
       const sent = await submit({
+        checkId: checkId ?? undefined,
         budget: result.budget,
         grid: result.grid,
         items: rowsToItems(result.rows),
@@ -176,7 +186,9 @@ function BudgetCheck() {
       setDone({
         whatsappText: sent.requestId ? whatsappMessage(sent.requestId, sent.systemTitle) : null,
         name: (account?.name ?? form.name).split(" ")[0],
-        phone: account?.phone ?? form.phone
+        phone: account?.phone ?? form.phone,
+        whatsappNumber: sent.whatsappNumber,
+        requestId: sent.requestId
       });
       setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
     } catch (e) {
@@ -191,7 +203,7 @@ function BudgetCheck() {
       <>
         <h1>{t("estimate.thanks", { name: done.name })}</h1>
         <p><Rich text={t("budget.thanksText", { phone: done.phone })} /></p>
-        {config.whatsappNumber && done.whatsappText ? <WhatsAppSend number={config.whatsappNumber} text={done.whatsappText} /> : null}
+        {done.whatsappNumber && done.whatsappText ? <WhatsAppSend number={done.whatsappNumber} text={done.whatsappText} onOpen={() => { if (done.requestId) void opened({ quoteRequestId: done.requestId }); }} /> : null}
         {config.contactPhone ? <p className="muted">{t("common.questionsCall", { phone: config.contactPhone })}</p> : null}
         <div className="hero-actions">
           <button type="button" className="button button-secondary" onClick={() => { setDone(null); setResult(null); setChosen(null); goToStep(1); }}>

@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { isPriorityProduct } from "./lib/priority";
 import type { Doc } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
@@ -155,7 +156,8 @@ export const catalogue = query({
         brand: product.brand,
         model: product.model,
         description: product.description ?? "",
-        warrantyMonths: product.warrantyMonths ?? null
+        warrantyMonths: product.warrantyMonths ?? null,
+        priority: isPriorityProduct(product)
       });
     }
     const settings = await ctx.db
@@ -166,7 +168,7 @@ export const catalogue = query({
       companyName: tenant.name,
       whatsappNumber: settings?.whatsappNumber ?? null,
       exponent: currencyExponent(tenant.defaultCurrency),
-      products: items.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
+      products: items.sort((a, b) => a.category.localeCompare(b.category) || Number(b.priority) - Number(a.priority) || a.name.localeCompare(b.name))
     };
   }
 });

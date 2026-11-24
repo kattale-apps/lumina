@@ -164,6 +164,14 @@ export const getLead = query({
         };
       }),
       hasAccount: Boolean(lead.customerAccountId),
+      // The WhatsApp follow-up: whose number it went to, when the customer opened it, who replied.
+      whatsapp: {
+        to: lead.whatsappTo?.name ?? null,
+        number: lead.whatsappTo?.number ?? null,
+        openedAt: lead.whatsappOpenedAt ?? null,
+        repliedAt: lead.whatsappRepliedAt ?? null,
+        repliedBy: lead.whatsappRepliedBy ? (await ctx.db.get(lead.whatsappRepliedBy))?.displayName ?? null : null
+      },
       // Nameplate photos the customer added, with what each shows.
       photos: await Promise.all(
         (await ctx.db.query("requestPhotos").withIndex("by_request", (q) => q.eq("requestId", lead._id)).collect()).map(async (p) => ({

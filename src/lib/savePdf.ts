@@ -163,3 +163,21 @@ export async function savePdf(bytes: Uint8Array, filename: string, title: string
   }
   viaDownload(bytes, filename);
 }
+
+/**
+ * Saves a PDF the server already made (it has a link), the same way as one made on the page, so it
+ * downloads on laptops, Android, iPhone and inside the app. If the file cannot be fetched, the
+ * link is opened instead.
+ */
+export async function savePdfFromUrl(url: string, filename: string, title: string, labels: PdfLabels = ENGLISH) {
+  let bytes: Uint8Array;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`pdf ${res.status}`);
+    bytes = new Uint8Array(await res.arrayBuffer());
+  } catch {
+    window.location.assign(url);
+    return;
+  }
+  await savePdf(bytes, filename, title, labels);
+}

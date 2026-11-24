@@ -5,6 +5,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { BATTERY_PART, ITEM_TYPES, itemTypeByKey, type ItemType } from "../../../convex/lib/itemTypes";
 import { PublicShell } from "@/components/PublicShell";
 import { SearchSuggest } from "@/components/SearchSuggest";
@@ -56,6 +57,7 @@ function RequestItem() {
   const hints = useQuery(api.itemRequests.publicHints, {});
   const customer = useQuery(api.shop.myAccount, {});
   const submit = useMutation(api.itemRequests.submit);
+  const opened = useMutation(api.whatsappAgents.opened);
 
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState<Draft>(blankDraft());
@@ -65,7 +67,7 @@ function RequestItem() {
   const [form, setForm] = useState({ name: "", phone: "", location: "", website: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<null | { whatsappText: string | null; phone: string; name: string }>(null);
+  const [done, setDone] = useState<null | { whatsappText: string | null; phone: string; name: string; whatsappNumber: string | null; requestId: Id<"itemRequests"> | null }>(null);
 
   const signedIn = customer?.signedIn === true;
   const account = signedIn ? customer.account : null;
@@ -160,7 +162,9 @@ function RequestItem() {
       setDone({
         whatsappText: sent.requestId ? whatsappMessage(sent.requestId, items) : null,
         name: (account?.name ?? form.name).split(" ")[0],
-        phone: account?.phone ?? form.phone
+        phone: account?.phone ?? form.phone,
+        whatsappNumber: sent.whatsappNumber,
+        requestId: sent.requestId
       });
       setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
     } catch (e) {
@@ -178,7 +182,7 @@ function RequestItem() {
       <>
         <h1>{t("item.thanks", { name: done.name })}</h1>
         <p><Rich text={t("item.thanksText", { phone: done.phone })} /></p>
-        {hints.whatsappNumber && done.whatsappText ? <WhatsAppSend number={hints.whatsappNumber} text={done.whatsappText} /> : null}
+        {done.whatsappNumber && done.whatsappText ? <WhatsAppSend number={done.whatsappNumber} text={done.whatsappText} onOpen={() => { if (done.requestId) void opened({ itemRequestId: done.requestId }); }} /> : null}
         {hints.contactPhone ? <p className="muted">{t("common.questionsCall", { phone: hints.contactPhone })}</p> : null}
         <div className="hero-actions">
           <button type="button" className="button button-secondary" onClick={() => { setDone(null); setList([]); setDraft(blankDraft()); }}>

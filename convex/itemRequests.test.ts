@@ -87,7 +87,7 @@ describe("request an item", () => {
 
   test("one phone can send a few requests a day, and bots filling the hidden box are ignored", async () => {
     const { t, tenantId, tech } = await setup();
-    expect(await t.mutation(api.itemRequests.submit, { ...person, items: [battery], website: "http://spam" })).toEqual({ requestId: null });
+    expect(await t.mutation(api.itemRequests.submit, { ...person, items: [battery], website: "http://spam" })).toEqual({ requestId: null, whatsappNumber: null });
     for (let i = 0; i < 5; i++) await t.mutation(api.itemRequests.submit, { ...person, items: [battery] });
     await expect(t.mutation(api.itemRequests.submit, { ...person, items: [battery] })).rejects.toThrow(/already have your requests/);
     expect(await tech.query(api.itemRequests.list, { tenantId })).toHaveLength(5);

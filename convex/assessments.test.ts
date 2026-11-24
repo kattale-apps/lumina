@@ -32,6 +32,12 @@ async function setup(extra: { email: string; role: Role }[] = []) {
     people[email] = await registerUser(t, email);
     await t.mutation(internal.admin.grantMembership, { tenantSlug: "acme", email, role });
   }
+  // Every agent here reports to the sales manager, who therefore sees their work.
+  await t.run(async (ctx) => {
+    const mgr = (await ctx.db.query("userProfiles").collect()).find((p) => p.email === "mgr@acme.ug");
+    if (!mgr) return;
+    for (const m of await ctx.db.query("memberships").collect()) if (m.role === "sales_agent") await ctx.db.patch(m._id, { managerUserId: mgr._id });
+  });
   const as = (email: string) => t.withIdentity({ subject: people[email].subject });
   const asOwner = t.withIdentity({ subject: owner.subject });
   return { t, tenantId, asOwner, as };
