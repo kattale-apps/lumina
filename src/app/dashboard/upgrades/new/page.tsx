@@ -121,7 +121,6 @@ function NewCheck({ tenantId }: { tenantId: Id<"tenants"> }) {
 
   return (
     <>
-      <p><Link className="back-link" href="/dashboard/upgrades">← Upgrade checks</Link></p>
       <p className="muted">
         Read the figures off the nameplates. Leave empty anything you cannot find: that part is then marked for a
         technician instead of being guessed. This needs a connection, because it checks the live catalogue.

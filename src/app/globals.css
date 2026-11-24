@@ -1873,3 +1873,13 @@ html { scroll-padding-top: 96px; }
 .invoice-card { flex-direction: column; align-items: stretch; }
 .invoice-card > .field-head { width: 100%; }
 .invoice-card .price-block .stock-edit-row { justify-content: flex-end; }
+
+/* Back button under the staff header, on every page except the workspace home. */
+.back-bar { margin: 10px 0 2px; }
+.back-button {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px;
+  border: 1px solid #c9d6cf; border-radius: 999px; background: #fff; color: #176b4b;
+  font: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+}
+.back-button span { font-size: 18px; line-height: 1; }
+.back-button:hover, .back-button:focus-visible { background: #eef7f2; border-color: #176b4b; }

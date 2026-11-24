@@ -169,7 +169,7 @@ function ModuleView({ tenantId }: { tenantId: Id<"tenants"> }) {
   return (
     <article className="academy-module">
       <div className="academy-module-top">
-        <Link className="back-link" href="/dashboard/academy">← {m.academyName}</Link>
+        <span />
         <LanguagePicker />
       </div>
       <DraftNotice />

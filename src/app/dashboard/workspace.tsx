@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
+import { BackButton } from "@/components/BackButton";
 import { useT } from "@/lib/i18n";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useQuery } from "convex/react";
@@ -203,6 +204,7 @@ export function WorkspaceHeader({ role }: { role?: string }) {
         </>
       ) : null}
       </div>
+      {role ? <BackButton /> : null}
       {me && !me.complete && path !== "/profile" ? <ProfilePrompt /> : null}
     </>
   );

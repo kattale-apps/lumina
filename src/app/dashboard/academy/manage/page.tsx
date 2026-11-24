@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -299,7 +298,6 @@ function Manage({ tenantId }: { tenantId: Id<"tenants"> }) {
 
   return (
     <>
-      <p><Link className="back-link" href="/dashboard/academy">← Sales Academy</Link></p>
       <p className="muted">
         Rewrite any module to fit how your company sells. Each module needs at least one lesson and three quiz questions.
       </p>

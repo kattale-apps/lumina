@@ -98,7 +98,6 @@ function Study({ studyId }: { studyId: Id<"upgradeStudies"> }) {
 
   return (
     <>
-      <p><Link className="back-link" href="/dashboard/upgrades">← Upgrade checks</Link></p>
       <section className="lead-block">
         <h2>
           <Link href={`/dashboard/customers/${study.customerId}`}>{study.customerName}</Link> · {study.siteName}

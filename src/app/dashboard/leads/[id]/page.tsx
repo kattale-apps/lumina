@@ -711,7 +711,6 @@ function LeadDetail({ leadId }: { leadId: Id<"quoteRequests"> }) {
   if (lead === undefined) return <p className="muted">Loading request…</p>;
   return (
     <div className="lead-detail">
-      <Link className="back-link" href="/dashboard/leads">← All quote requests</Link>
       <Specs lead={lead} />
       <LeadPhotos lead={lead} />
       {lead.canRespond ? <ResponseEditor key={lead.id} lead={lead} /> : <ReadOnlyResponse lead={lead} />}
