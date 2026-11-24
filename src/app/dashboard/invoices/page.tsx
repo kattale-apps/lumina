@@ -206,7 +206,7 @@ function NewDocument({ tenantId, setup, onCreated }: { tenantId: Id<"tenants">; 
             />
             <input aria-label={`Quantity ${i + 1}`} className="invoice-qty" inputMode="numeric" value={l.quantity} onChange={(e) => set(l.key, { quantity: e.target.value.replace(/[^\d]/g, "") })} />
             <input aria-label={`Unit price ${i + 1}`} className="invoice-price" inputMode="numeric" placeholder={`Price (${setup.currency})`} value={l.unitPrice} onChange={(e) => set(l.key, { unitPrice: withCommas(e.target.value) })} />
-            <span className="invoice-amount">{formatMoney(digits(l.unitPrice) * (Number(l.quantity) || 0) * 10 ** setup.exponent, setup.exponent, setup.currency)}</span>
+            <span className="invoice-amount">Line total: {formatMoney(digits(l.unitPrice) * (Number(l.quantity) || 0) * 10 ** setup.exponent, setup.exponent, setup.currency)}</span>
             {lines.length > 1 ? <button type="button" className="link-button" aria-label={`Remove item ${i + 1}`} onClick={() => setLines((all) => all.filter((x) => x.key !== l.key))}>✕</button> : null}
           </div>
         ))}

@@ -1823,8 +1823,18 @@ html { scroll-padding-top: 96px; }
 .panel-form select { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
 
 /* Invoices & receipts */
-.invoice-lines { display: grid; gap: 8px; }
-.invoice-line { display: grid; grid-template-columns: minmax(0, 1fr) 64px 130px auto auto; gap: 8px; align-items: center; }
+.invoice-lines { display: grid; gap: 12px; }
+.invoice-line + .invoice-line { padding-top: 12px; border-top: 1px dashed #c9d6cf; }
+/* One layout on every screen (the form is never wider than 520px): the item on its own row,
+   then a small quantity box and a wide price box, then the line total. */
+.invoice-line { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.invoice-line > :first-child { grid-column: 1 / -1; }
+.invoice-line .invoice-price { grid-column: 2 / -1; }
+.invoice-amount { grid-column: 1 / 3; }
+/* Quantity stays small; the price is wide, bold and easy to read. */
+.panel-form .invoice-line .invoice-qty { text-align: center; padding-left: 6px; padding-right: 6px; }
+.panel-form .invoice-line .invoice-price { font-size: 18px; font-weight: 700; color: #172923; }
+.panel-form .invoice-line .invoice-price::placeholder { font-size: 15px; font-weight: 400; }
 .invoice-line input { min-height: 42px; }
 .invoice-line { align-items: start; }
 /* The invoice item list: solid, above everything else on the form, and scrolls on its own. */
@@ -1840,12 +1850,8 @@ html { scroll-padding-top: 96px; }
 .item-picker-chosen, .item-picker-free { margin: 4px 2px 0; font-size: 12.5px; line-height: 1.35; }
 .item-picker-chosen { color: #176b4b; }
 .item-picker-free { color: var(--muted); }
-.invoice-amount { font-size: 13px; color: var(--muted); white-space: nowrap; }
-@media (max-width: 640px) {
-  .invoice-line { grid-template-columns: minmax(0, 1fr) 64px; }
-  .invoice-line > :first-child { grid-column: 1 / -1; }
-  .invoice-amount { grid-column: 1 / -1; }
-}
+.invoice-amount { font-size: 14px; color: #176b4b; font-weight: 700; white-space: nowrap; }
+.invoice-line .invoice-amount { grid-column: 1 / 3; }
 .invoice-total { margin: 6px 0 0; font-size: 18px; }
 .proof-picker { display: grid; gap: 8px; }
 .proof-amount { width: 140px; }
