@@ -3,7 +3,7 @@ import { mutation, query, type MutationCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
-import { brandKey, DEFAULT_BRANDS, isLimitedRole, scopeFor } from "./lib/brandAccess";
+import { brandCovered, brandKey, DEFAULT_BRANDS, isLimitedRole, scopeFor } from "./lib/brandAccess";
 import { normaliseEmail } from "./lib/validation";
 import { appRole } from "./schema";
 
@@ -283,7 +283,7 @@ export const setBrands = mutation({
           .withIndex("by_user_tenant", (q) => q.eq("userId", target.managerUserId!).eq("tenantId", target.tenantId))
           .unique();
         const managerScope = manager ? scopeFor(manager) : null;
-        const outside = managerScope ? next.filter((b) => !managerScope.has(b)) : [];
+        const outside = managerScope ? next.filter((b) => !brandCovered(managerScope, b)) : [];
         if (outside.length > 0) {
           throw new ConvexError(
             `This agent's manager does not have ${outside.join(", ")}. Give the manager those brands first, or choose fewer.`

@@ -32,9 +32,27 @@ export function scopeFor(
       : null;
   if (!managerScope) return new Set(membership.allowedBrands ?? DEFAULT_BRANDS);
   if (!membership.allowedBrands) return managerScope;
-  return new Set(membership.allowedBrands.filter((b) => managerScope.has(b)));
+  return new Set(membership.allowedBrands.filter((b) => brandCovered(managerScope, b)));
+}
+
+function escapeRegExp(text: string) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Whether a product's brand is covered by the chosen brands. A chosen brand covers any brand
+ * name that contains it as a whole word, so "Lumina" also covers "Lumina Solar" and
+ * "LUMINA-TECH", and "Star" covers "LC Star", but "Star" does not cover "Starlink".
+ */
+export function brandCovered(chosen: Iterable<string>, brand: string) {
+  const key = brandKey(brand);
+  for (const c of chosen) {
+    if (!c) continue;
+    if (key === c || new RegExp(`(^|[^a-z0-9])${escapeRegExp(c)}($|[^a-z0-9])`).test(key)) return true;
+  }
+  return false;
 }
 
 export function inScope(scope: BrandScope, product: { brand: string }) {
-  return scope === null || scope.has(brandKey(product.brand));
+  return scope === null || brandCovered(scope, product.brand);
 }

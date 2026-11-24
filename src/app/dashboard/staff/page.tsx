@@ -125,6 +125,16 @@ function PendingInvites({ tenantId }: { tenantId: Id<"tenants"> }) {
 
 
 type StaffRow = NonNullable<FunctionReturnType<typeof api.staff.listStaff>>[number];
+
+/** Same rule as the server: a chosen brand covers longer names containing it as a word ("Lumina" covers "Lumina Solar"). */
+function covers(chosen: Iterable<string>, key: string) {
+  for (const c of chosen) {
+    if (!c || c === key) continue;
+    const escaped = c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`(^|[^a-z0-9])${escaped}($|[^a-z0-9])`).test(key)) return c;
+  }
+  return null;
+}
 type BrandChoice = FunctionReturnType<typeof api.staff.brandChoices>["brands"][number];
 
 /**
@@ -152,7 +162,7 @@ function BrandAccess({
 
   const nameOf = (key: string) => choices.find((c) => c.key === key)?.name ?? key;
   const isAgent = person.role === "sales_agent";
-  const limit = isAgent && manager?.brands ? new Set(manager.brands.effective) : null;
+  const limit = isAgent && manager?.brands ? manager.brands.effective : null;
   const usingDefault = person.brands.chosen === null;
   const summary = person.brands.effective.length ? person.brands.effective.map(nameOf).join(", ") : "no brands";
   const defaultLabel = isAgent && manager ? `same as ${manager.displayName}` : `${defaultBrands.map(nameOf).join(", ")} only`;
@@ -188,19 +198,23 @@ function BrandAccess({
             <p className="hint">Only {manager!.displayName}&apos;s brands can be chosen. Give the manager more brands to widen this list.</p>
           ) : null}
           {choices.length === 0 ? <p className="muted">There are no active products yet.</p> : null}
+          <p className="hint">Each brand also covers longer brand names that contain it, so Lumina includes Lumina Solar.</p>
           {choices.map((c) => {
-            const allowed = !limit || limit.has(c.key);
+            const allowed = !limit || limit.includes(c.key) || covers(limit, c.key) !== null;
+            // Already covered by another ticked brand, e.g. "Lumina Solar" when "Lumina" is ticked.
+            const coveredBy = covers(picked, c.key);
             return (
               <label key={c.key} className={allowed ? "check-row" : "check-row brand-off"}>
                 <input
                   type="checkbox"
-                  disabled={!allowed || busy}
-                  checked={picked.includes(c.key)}
+                  disabled={!allowed || busy || coveredBy !== null}
+                  checked={picked.includes(c.key) || coveredBy !== null}
                   onChange={(e) =>
                     setPicked((all) => (e.target.checked ? [...all, c.key] : all.filter((k) => k !== c.key)))
                   }
                 />
                 {c.name} <span className="record-meta">({c.products} product{c.products === 1 ? "" : "s"})</span>
+                {coveredBy ? <span className="record-meta"> · included with {nameOf(coveredBy)}</span> : null}
               </label>
             );
           })}

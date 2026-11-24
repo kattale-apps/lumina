@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { brandKey, inScope, scopeFor } from "./lib/brands";
+import { brandCovered, brandKey, inScope, scopeFor } from "./lib/brands";
 
 const m = (role: string, allowedBrands?: string[], status = "active") =>
   ({ role, allowedBrands, status }) as never;
@@ -12,6 +12,16 @@ describe("which brands staff may see", () => {
     expect(inScope(new Set(["lumina"]), { brand: "Lumina" })).toBe(true);
     expect(inScope(new Set(["lumina"]), { brand: "STAR" })).toBe(false);
     expect(inScope(null, { brand: "STAR" })).toBe(true);
+  });
+
+  test("a chosen brand covers longer brand names containing it as a word", () => {
+    const lumina = new Set(["lumina"]);
+    for (const brand of ["Lumina", "LUMINA SOLAR", "Lumina-Tech", "The Lumina Co"]) expect(inScope(lumina, { brand })).toBe(true);
+    expect(inScope(lumina, { brand: "Luminaire" })).toBe(false);
+    expect(brandCovered(["star"], "LC Star")).toBe(true);
+    expect(brandCovered(["star"], "Starlink")).toBe(false);
+    expect(brandCovered(["lc star"], "LC  STAR Energy")).toBe(true);
+    expect(brandCovered(["c++"], "C++ Power")).toBe(true);
   });
 
   test("admins, inventory and technicians see every brand", () => {

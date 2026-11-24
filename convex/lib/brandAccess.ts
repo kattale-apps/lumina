@@ -12,14 +12,15 @@
  *    manager. An agent without a manager sees their own brands, or Lumina only.
  *
  * Brands are compared by a key (trimmed, single-spaced, lower case), so
- * "LUMINA" and "Lumina" are the same brand.
+ * "LUMINA" and "Lumina" are the same brand, and a chosen brand also covers longer
+ * names containing it as a word ("Lumina" covers "Lumina Solar").
  */
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { findViewerProfile } from "./auth";
 import { inScope, isLimitedRole, scopeFor, type BrandScope } from "./brands";
 
-export { brandKey, DEFAULT_BRANDS, inScope, isLimitedRole, LIMITED_ROLES, scopeFor, type BrandScope } from "./brands";
+export { brandCovered, brandKey, DEFAULT_BRANDS, inScope, isLimitedRole, LIMITED_ROLES, scopeFor, type BrandScope } from "./brands";
 
 type Ctx = QueryCtx | MutationCtx;
 
