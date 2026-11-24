@@ -3,6 +3,7 @@ import type { Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
+import { filterForViewer } from "./lib/brandAccess";
 import {
   RESERVERS,
   STOCK_ADMINS,
@@ -62,10 +63,10 @@ export const stockOverview = query({
       reserved.set(key, (reserved.get(key) ?? 0) + hold.quantity);
     }
 
-    const products = await ctx.db
+    const products = await filterForViewer(ctx, args.tenantId, await ctx.db
       .query("products")
       .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
-      .take(MAX_ROWS);
+      .take(MAX_ROWS));
     const onHandAt = new Map(balances.map((b) => [`${b.productId}:${b.warehouseId}`, b.onHand]));
     const categories = new Map<string, string>();
 

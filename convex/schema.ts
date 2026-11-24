@@ -266,6 +266,9 @@ export default defineSchema({
     status: v.union(v.literal("active"), v.literal("invited"), v.literal("suspended")),
     // For a sales agent: the sales manager they report to. That manager sees the agent's work.
     managerUserId: v.optional(v.id("userProfiles")),
+    // For a sales manager or agent: the product brands they may see, as brand keys (lower
+    // case). Unset means the default (Lumina only; an agent follows their manager).
+    allowedBrands: v.optional(v.array(v.string())),
     createdAt: v.number(),
     createdBy: v.string()
   })

@@ -20,6 +20,7 @@ import {
 } from "./estimator";
 import { recordAudit } from "./lib/audit";
 import { findViewerProfile, requireTenantMembership } from "./lib/auth";
+import { filterForViewer } from "./lib/brandAccess";
 import { canAccessOwned, CRM_READERS, CRM_WRITERS, ownerScope, validateOptionalEmail, validatePhone } from "./lib/crm";
 import { PUBLIC_ASSUMPTIONS } from "./lib/estimate";
 import { currencyExponent } from "./lib/money";
@@ -75,10 +76,10 @@ async function loadCatalogue(ctx: Ctx, tenantId: Id<"tenants">) {
     .collect();
   const keyOf = new Map(categories.map((c) => [c._id, c.key]));
   const products = (
-    await ctx.db
+    await filterForViewer(ctx, tenantId, await ctx.db
       .query("products")
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
-      .collect()
+      .collect())
   ).filter((p) => p.status === "active");
   const catalogue: CatalogueItem[] = withSafeEstimates(products
     .map((p) => ({

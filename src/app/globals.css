@@ -1889,3 +1889,12 @@ html { scroll-padding-top: 96px; }
 }
 .back-button span { font-size: 18px; line-height: 1; }
 .back-button:hover, .back-button:focus-visible { background: #eef7f2; border-color: #176b4b; }
+
+/* Staff page: which product brands a sales manager or agent can see. */
+.brand-access { display: grid; gap: 6px; justify-items: start; margin-top: 6px; }
+.brand-default { color: var(--muted); }
+.brand-picker { display: grid; gap: 6px; min-width: 0; width: 100%; margin: 4px 0 0; padding: 12px; border: 1px solid #c9d6cf; border-radius: 12px; background: #fff; }
+.brand-picker legend { padding: 0 6px; font-weight: 800; }
+.brand-picker .check-row { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+.brand-picker .check-row input { width: 20px; height: 20px; accent-color: #176b4b; }
+.brand-off { opacity: 0.45; }

@@ -59,6 +59,12 @@ async function setup() {
     people[email] = await registerUser(t, email);
     await t.mutation(internal.admin.grantMembership, { tenantSlug: "acme", email, role });
   }
+  // Sales managers and agents see only their chosen brands; give them the brand these tests use.
+  await t.run(async (ctx) => {
+    for (const m of await ctx.db.query("memberships").collect()) {
+      if (m.role === "sales_manager" || m.role === "sales_agent") await ctx.db.patch(m._id, { allowedBrands: ["b"] });
+    }
+  });
   // Every agent here reports to the sales manager, who therefore sees their work.
   await t.run(async (ctx) => {
     const mgr = (await ctx.db.query("userProfiles").collect()).find((p) => p.email === "mgr@acme.ug");

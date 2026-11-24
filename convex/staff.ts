@@ -3,6 +3,7 @@ import { mutation, query, type MutationCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
+import { brandKey, DEFAULT_BRANDS, isLimitedRole, scopeFor } from "./lib/brandAccess";
 import { normaliseEmail } from "./lib/validation";
 import { appRole } from "./schema";
 
@@ -37,9 +38,12 @@ export const listStaff = query({
       .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
       .collect();
 
+    const byUser = new Map(memberships.map((m) => [m.userId, m]));
     const staff = [];
     for (const membership of memberships) {
       const person = await ctx.db.get(membership.userId);
+      const manager = membership.managerUserId ? byUser.get(membership.managerUserId) ?? null : null;
+      const scope = scopeFor(membership, manager);
       staff.push({
         membershipId: membership._id,
         email: person?.email ?? "",
@@ -49,6 +53,10 @@ export const listStaff = query({
         status: membership.status,
         // For a sales agent: the manager they report to.
         managerUserId: membership.managerUserId ?? null,
+        // Product brands: what was chosen for them (null = the default), and what they see now.
+        brands: isLimitedRole(membership.role)
+          ? { chosen: membership.allowedBrands ?? null, effective: scope ? [...scope].sort() : [] }
+          : null,
         isSelf: membership.userId === profile._id
       });
     }
@@ -145,8 +153,12 @@ export const changeRole = mutation({
     const { actor, target, targetLabel } = await loadManageableMembership(ctx, args.membershipId);
     if (target.role === args.role) return { changed: false };
 
-    // Only sales agents report to a manager.
-    await ctx.db.patch(target._id, { role: args.role, ...(args.role !== "sales_agent" ? { managerUserId: undefined } : {}) });
+    // Only sales agents report to a manager; only managers and agents are limited to brands.
+    await ctx.db.patch(target._id, {
+      role: args.role,
+      ...(args.role !== "sales_agent" ? { managerUserId: undefined } : {}),
+      ...(!isLimitedRole(args.role) ? { allowedBrands: undefined } : {})
+    });
     await recordAudit(ctx, actor, {
       tenantId: target.tenantId,
       action: "membership.role_changed",
@@ -208,6 +220,89 @@ export const setAccess = mutation({
       entityId: target._id,
       summary: `${targetLabel} ${args.status === "active" ? "reactivated" : "suspended"}.`,
       metadata: { before: { status: target.status }, after: { status: args.status } }
+    });
+    return { changed: true };
+  }
+});
+
+/**
+ * Every product brand in the catalogue, for choosing what a manager or agent may see.
+ * Brands that differ only in capitals or spacing ("LUMINA", "Lumina") are one brand.
+ */
+export const brandChoices = query({
+  args: { tenantId: v.id("tenants") },
+  handler: async (ctx, args) => {
+    await requireTenantMembership(ctx, args.tenantId, ADMIN_ONLY);
+    const products = await ctx.db
+      .query("products")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .collect();
+    const brands = new Map<string, { key: string; spellings: Map<string, number>; products: number }>();
+    for (const p of products) {
+      if (p.status !== "active" || !p.brand.trim()) continue;
+      const key = brandKey(p.brand);
+      const row = brands.get(key) ?? { key, spellings: new Map(), products: 0 };
+      row.products += 1;
+      row.spellings.set(p.brand.trim(), (row.spellings.get(p.brand.trim()) ?? 0) + 1);
+      brands.set(key, row);
+    }
+    return {
+      defaultBrands: DEFAULT_BRANDS,
+      brands: [...brands.values()]
+        .map((b) => ({
+          key: b.key,
+          // The spelling used most often in the catalogue.
+          name: [...b.spellings.entries()].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))[0][0],
+          products: b.products
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    };
+  }
+});
+
+/**
+ * Chooses the product brands a sales manager or sales agent may see; null goes back to the
+ * default (Lumina only for a manager; an agent follows their manager). An agent can be
+ * narrowed below their manager's brands but never given more.
+ */
+export const setBrands = mutation({
+  args: { membershipId: v.id("memberships"), brands: v.union(v.array(v.string()), v.null()) },
+  handler: async (ctx, args) => {
+    const { actor, target, targetLabel } = await loadManageableMembership(ctx, args.membershipId);
+    if (!isLimitedRole(target.role)) {
+      throw new ConvexError("Only sales managers and sales agents are limited to brands. Everyone else sees every brand.");
+    }
+    let next: string[] | undefined;
+    if (args.brands !== null) {
+      next = [...new Set(args.brands.map(brandKey).filter(Boolean))].sort();
+      if (next.length === 0) throw new ConvexError("Choose at least one brand.");
+      if (next.length > 100) throw new ConvexError("Choose at most 100 brands.");
+      if (target.role === "sales_agent" && target.managerUserId) {
+        const manager = await ctx.db
+          .query("memberships")
+          .withIndex("by_user_tenant", (q) => q.eq("userId", target.managerUserId!).eq("tenantId", target.tenantId))
+          .unique();
+        const managerScope = manager ? scopeFor(manager) : null;
+        const outside = managerScope ? next.filter((b) => !managerScope.has(b)) : [];
+        if (outside.length > 0) {
+          throw new ConvexError(
+            `This agent's manager does not have ${outside.join(", ")}. Give the manager those brands first, or choose fewer.`
+          );
+        }
+      }
+    }
+    const before = target.allowedBrands ?? null;
+    if (JSON.stringify(before) === JSON.stringify(next ?? null)) return { changed: false };
+    await ctx.db.patch(target._id, { allowedBrands: next });
+    await recordAudit(ctx, actor, {
+      tenantId: target.tenantId,
+      action: "membership.brands_set",
+      entityType: "memberships",
+      entityId: target._id,
+      summary: next
+        ? `${targetLabel} may now see: ${next.join(", ")}.`
+        : `${targetLabel} back to the default brands.`,
+      metadata: { before: { allowedBrands: before }, after: { allowedBrands: next ?? null } }
     });
     return { changed: true };
   }

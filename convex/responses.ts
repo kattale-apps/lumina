@@ -12,6 +12,7 @@ import {
 } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { findViewerProfile, requireTenantMembership } from "./lib/auth";
+import { filterForViewer } from "./lib/brandAccess";
 import { MAX_IMAGE_BYTES, sniffFile } from "./lib/files";
 import { computeLoad, scheduledHours } from "./lib/load";
 import { currencyExponent, toMinorUnits } from "./lib/money";
@@ -317,10 +318,10 @@ export const searchCatalogue = query({
     const categoryName = new Map(categories.map((c) => [c._id, c.name]));
 
     const words = searchWords(args.term);
-    const products = await ctx.db
+    const products = await filterForViewer(ctx, lead.tenantId, await ctx.db
       .query("products")
       .withIndex("by_tenant", (q) => q.eq("tenantId", lead.tenantId))
-      .take(PICK_SCAN);
+      .take(PICK_SCAN));
     const matches = products
       .filter((p) => p.status === "active" && categoryName.has(p.categoryId))
       .filter((p) => !args.categoryId || p.categoryId === args.categoryId)
@@ -357,7 +358,7 @@ export const catalogueNames = query({
     ).filter((c) => c.status === "active");
     const active = new Set(categories.map((c) => c._id));
     const products = (
-      await ctx.db.query("products").withIndex("by_tenant", (q) => q.eq("tenantId", lead.tenantId)).take(PICK_SCAN)
+      await filterForViewer(ctx, lead.tenantId, await ctx.db.query("products").withIndex("by_tenant", (q) => q.eq("tenantId", lead.tenantId)).take(PICK_SCAN))
     ).filter((p) => p.status === "active" && active.has(p.categoryId));
     const tally = (values: string[]) => {
       const out = new Map<string, number>();

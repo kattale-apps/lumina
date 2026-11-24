@@ -4,6 +4,7 @@ import type { Doc } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { findViewerProfile, requireTenantMembership } from "./lib/auth";
+import { filterForViewer } from "./lib/brandAccess";
 import { validatePhone } from "./lib/crm";
 import { currencyExponent } from "./lib/money";
 import { productPrice } from "./lib/pricing";
@@ -137,10 +138,10 @@ export const catalogue = query({
   args: {},
   handler: async (ctx) => {
     const tenant = await requireShopStaff(ctx);
-    const products = await ctx.db
+    const products = await filterForViewer(ctx, tenant._id, await ctx.db
       .query("products")
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenant._id))
-      .take(MAX_LISTED);
+      .take(MAX_LISTED));
     const categories = new Map<string, Doc<"productCategories"> | null>();
     const items = [];
     for (const product of products) {

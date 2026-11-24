@@ -38,6 +38,12 @@ async function setup(extra: { email: string; role: ExtraRole }[] = []) {
     people[email] = await registerUser(t, email);
     await t.mutation(internal.admin.grantMembership, { tenantSlug: "acme", email, role });
   }
+  // Sales managers and agents see only their chosen brands; give them the brand these tests use.
+  await t.run(async (ctx) => {
+    for (const m of await ctx.db.query("memberships").collect()) {
+      if (m.role === "sales_manager" || m.role === "sales_agent") await ctx.db.patch(m._id, { allowedBrands: ["jinko"] });
+    }
+  });
   const asOwner = t.withIdentity({ subject: owner.subject });
   await asOwner.mutation(api.catalogue.loadStandardCategories, { tenantId });
   const { categories } = await asOwner.query(api.catalogue.listCategories, { tenantId });

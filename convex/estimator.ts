@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { findViewerProfile, requireTenantMembership } from "./lib/auth";
+import { filterForViewer } from "./lib/brandAccess";
 import { DEFAULT_APPLIANCES } from "./lib/applianceDefaults";
 import { guideByKey } from "./lib/applianceGuide";
 import {
@@ -242,7 +243,8 @@ export async function sizingCatalogue(ctx: QueryCtx, tenantId: Id<"tenants">) {
     .query("products")
     .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
     .collect();
-  const active = products.filter((p) => p.status === "active");
+  // Sales managers and agents see only the brands chosen for them; the public sees every brand.
+  const active = await filterForViewer(ctx, tenantId, products.filter((p) => p.status === "active"));
   const catalogue: CatalogueItem[] = withSafeEstimates(active
     .map((p) => ({
       id: p._id as string,

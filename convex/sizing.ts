@@ -4,6 +4,7 @@ import { mutation, query } from "./_generated/server";
 import { loadAssessment } from "./assessments";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
+import { filterForViewer } from "./lib/brandAccess";
 import { CRM_WRITERS } from "./lib/crm";
 import {
   buildCandidates,
@@ -60,10 +61,10 @@ export const runSizing = mutation({
       .withIndex("by_tenant", (q) => q.eq("tenantId", assessment.tenantId))
       .collect();
     const keyOf = new Map(categories.map((c) => [c._id, c.key]));
-    const products = await ctx.db
+    const products = await filterForViewer(ctx, assessment.tenantId, await ctx.db
       .query("products")
       .withIndex("by_tenant", (q) => q.eq("tenantId", assessment.tenantId))
-      .collect();
+      .collect());
     const catalogue: CatalogueItem[] = withSafeEstimates(products
       .filter((p) => p.status === "active")
       .map((p) => ({

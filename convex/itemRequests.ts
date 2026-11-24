@@ -8,6 +8,7 @@ import type { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { findViewerProfile, requireTenantMembership } from "./lib/auth";
+import { filterForViewer } from "./lib/brandAccess";
 import { validateOptionalEmail, validatePhone } from "./lib/crm";
 import { cleanSpecValue, itemTypeByKey } from "./lib/itemTypes";
 import { requesterAccount } from "./lib/requester";
@@ -35,10 +36,10 @@ export const publicHints = query({
       .withIndex("by_tenant", (q) => q.eq("tenantId", company.tenant._id))
       .collect();
     const byId = new Map(categories.filter((c) => c.status === "active").map((c) => [c._id, c]));
-    const products = await ctx.db
+    const products = await filterForViewer(ctx, company.tenant._id, await ctx.db
       .query("products")
       .withIndex("by_tenant", (q) => q.eq("tenantId", company.tenant._id))
-      .take(PRODUCTS_SCANNED);
+      .take(PRODUCTS_SCANNED));
     const seen = new Map<string, { name: string; categoryKey: string; part: string; brands: string[] }>();
     for (const p of products) {
       const category = byId.get(p.categoryId);

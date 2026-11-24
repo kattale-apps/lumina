@@ -3,6 +3,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
+import { filterForViewer } from "./lib/brandAccess";
 import { formatMinorUnits, toMinorUnits } from "./lib/money";
 import {
   PRICING_ADMINS,
@@ -163,7 +164,7 @@ export const listProducts = query({
 
     const categoryOf = categoryCache(ctx);
     const items = [];
-    for (const product of page.page) {
+    for (const product of await filterForViewer(ctx, args.tenantId, page.page)) {
       const category = await categoryOf(product.categoryId);
       if (!visible(product, category, args.tenantId, admin)) continue;
       items.push(await productView(ctx, product, category!, admin));
@@ -186,10 +187,10 @@ export const productIndex = query({
   handler: async (ctx, args) => {
     const { membership } = await requireTenantMembership(ctx, args.tenantId);
     const admin = isPricingAdmin(membership.role);
-    const products = await ctx.db
+    const products = await filterForViewer(ctx, args.tenantId, await ctx.db
       .query("products")
       .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
-      .take(MAX_INDEXED + 1);
+      .take(MAX_INDEXED + 1));
 
     const categoryOf = categoryCache(ctx);
     const rows = [];

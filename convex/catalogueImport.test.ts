@@ -141,7 +141,14 @@ describe("price list import", () => {
       return `${userId}|s`;
     });
     await t.mutation(internal.admin.grantMembership, { tenantSlug: "acme", email: "agent@acme.ug", role: "sales_agent" });
-    const seen = (await t.withIdentity({ subject: agent }).query(api.products.listProducts, { tenantId })).products[0];
+    // Agents see Lumina only until given more brands.
+    const asAgent = t.withIdentity({ subject: agent });
+    expect((await asAgent.query(api.products.listProducts, { tenantId })).products).toEqual([]);
+    await t.run(async (ctx) => {
+      const m = (await ctx.db.query("memberships").collect()).find((x) => x.role === "sales_agent")!;
+      await ctx.db.patch(m._id, { allowedBrands: ["deye"] });
+    });
+    const seen = (await asAgent.query(api.products.listProducts, { tenantId })).products[0];
     expect(seen.brand).toBe("DEYE");
     expect(seen.supplier).toBe("");
   });

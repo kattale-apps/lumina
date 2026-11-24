@@ -11,6 +11,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { recordAudit } from "./lib/audit";
 import { requireTenantMembership } from "./lib/auth";
+import { filterForViewer } from "./lib/brandAccess";
 import { canAccessOwned, ownedRows, ownerScope } from "./lib/crm";
 import { currencyExponent, toMinorUnits } from "./lib/money";
 import { productPrice } from "./lib/pricing";
@@ -55,10 +56,10 @@ export const formSetup = query({
       .query("publicEstimatorSettings")
       .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
       .unique();
-    const products = await ctx.db
+    const products = await filterForViewer(ctx, args.tenantId, await ctx.db
       .query("products")
       .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
-      .collect();
+      .collect());
     const items = [];
     for (const p of products) {
       if (p.status !== "active") continue;

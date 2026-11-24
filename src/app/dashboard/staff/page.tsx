@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -122,11 +123,114 @@ function PendingInvites({ tenantId }: { tenantId: Id<"tenants"> }) {
   );
 }
 
+
+type StaffRow = NonNullable<FunctionReturnType<typeof api.staff.listStaff>>[number];
+type BrandChoice = FunctionReturnType<typeof api.staff.brandChoices>["brands"][number];
+
+/**
+ * The product brands a sales manager or agent may see. Managers start on Lumina only; an agent
+ * follows their manager, and can be narrowed to fewer of the manager's brands.
+ */
+function BrandAccess({
+  person,
+  manager,
+  choices,
+  defaultBrands,
+  onSave
+}: {
+  person: StaffRow;
+  manager: StaffRow | null;
+  choices: BrandChoice[];
+  defaultBrands: string[];
+  onSave: (brands: string[] | null) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  if (!person.brands) return null;
+
+  const nameOf = (key: string) => choices.find((c) => c.key === key)?.name ?? key;
+  const isAgent = person.role === "sales_agent";
+  const limit = isAgent && manager?.brands ? new Set(manager.brands.effective) : null;
+  const usingDefault = person.brands.chosen === null;
+  const summary = person.brands.effective.length ? person.brands.effective.map(nameOf).join(", ") : "no brands";
+  const defaultLabel = isAgent && manager ? `same as ${manager.displayName}` : `${defaultBrands.map(nameOf).join(", ")} only`;
+
+  function start() {
+    setPicked(person.brands!.effective);
+    setError("");
+    setOpen(true);
+  }
+  async function save(brands: string[] | null) {
+    setBusy(true);
+    setError("");
+    try {
+      await onSave(brands);
+      setOpen(false);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="brand-access">
+      <span className="record-meta">
+        <strong>Brands:</strong> {summary}
+        {usingDefault ? <span className="brand-default"> (default: {defaultLabel})</span> : null}
+      </span>
+      {open ? (
+        <fieldset className="brand-picker">
+          <legend>Brands {person.displayName} can see</legend>
+          {limit ? (
+            <p className="hint">Only {manager!.displayName}&apos;s brands can be chosen. Give the manager more brands to widen this list.</p>
+          ) : null}
+          {choices.length === 0 ? <p className="muted">There are no active products yet.</p> : null}
+          {choices.map((c) => {
+            const allowed = !limit || limit.has(c.key);
+            return (
+              <label key={c.key} className={allowed ? "check-row" : "check-row brand-off"}>
+                <input
+                  type="checkbox"
+                  disabled={!allowed || busy}
+                  checked={picked.includes(c.key)}
+                  onChange={(e) =>
+                    setPicked((all) => (e.target.checked ? [...all, c.key] : all.filter((k) => k !== c.key)))
+                  }
+                />
+                {c.name} <span className="record-meta">({c.products} product{c.products === 1 ? "" : "s"})</span>
+              </label>
+            );
+          })}
+          {error ? <p className="auth-message" role="alert">{error}</p> : null}
+          <div className="response-actions">
+            <button type="button" className="button button-small" disabled={busy || picked.length === 0} onClick={() => save(picked)}>
+              {busy ? "Saving…" : "Save brands"}
+            </button>
+            {!usingDefault ? (
+              <button type="button" className="button button-small button-secondary" disabled={busy} onClick={() => save(null)}>
+                Use default ({defaultLabel})
+              </button>
+            ) : null}
+            <button type="button" className="link-button" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
+          </div>
+        </fieldset>
+      ) : (
+        <button type="button" className="button button-small button-secondary" onClick={start}>Choose brands</button>
+      )}
+    </div>
+  );
+}
+
 function StaffList({ tenantId }: { tenantId: Id<"tenants"> }) {
   const staff = useQuery(api.staff.listStaff, { tenantId });
   const changeRole = useMutation(api.staff.changeRole);
   const setAccess = useMutation(api.staff.setAccess);
   const setManager = useMutation(api.staff.setManager);
+  const setBrands = useMutation(api.staff.setBrands);
+  const brandChoices = useQuery(api.staff.brandChoices, { tenantId });
   const [error, setError] = useState("");
 
   async function run(action: () => Promise<unknown>) {
@@ -165,6 +269,15 @@ function StaffList({ tenantId }: { tenantId: Id<"tenants"> }) {
               ) : null}
               {person.status !== "active" ? (
                 <span className="pill pill-warn">{person.status}</span>
+              ) : null}
+              {person.brands && brandChoices ? (
+                <BrandAccess
+                  person={person}
+                  manager={staff.find((m) => m.userId === person.managerUserId && m.role === "sales_manager") ?? null}
+                  choices={brandChoices.brands}
+                  defaultBrands={brandChoices.defaultBrands}
+                  onSave={async (brands) => { await setBrands({ membershipId: person.membershipId, brands }); }}
+                />
               ) : null}
             </div>
             <div className="record-actions">
